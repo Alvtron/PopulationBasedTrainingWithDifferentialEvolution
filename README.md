@@ -1,4 +1,4 @@
-### PBT: Population Based Training
+### Population Based Training (PBT)
 
 [Population Based Training of Neural Networks, Jaderberg et al. @ DeepMind](https://arxiv.org/abs/1711.09846)
 
