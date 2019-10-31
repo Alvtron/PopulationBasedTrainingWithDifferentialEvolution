@@ -2,7 +2,7 @@
 
 [Population Based Training of Neural Networks, Jaderberg et al. @ DeepMind](https://arxiv.org/abs/1711.09846)
 
-A simple PyTorch implementation of PBT.
+A implementation of PBT in PyTorch.
 
 ### What this code is for
 
@@ -14,9 +14,3 @@ PBT is a novel, Lamarckian evolutionary approach to hyper-parameter optimization
 In order to approach the problem, PBT considers a population consisting of N members, initially formed with different hyper-parameters sampled from a uniform distribution. The goal is to determine the optimal model across the population, which PBT achieves by adapting the hyper-parameters and copying weights based on some criteria. The approach defines two distinct methods, exploit and explore, that influence the hyper-prameters and the weights. In short, the exploit method decides whether the member should continue exploring the current solution or simply abandon it. If exploration is considered, the explore method is used to provide a new set of hyper-parameters $\lambda$. The initiative for exploitation or exploration depends on the individual performances of the entire population where the worst performing members exploits the best performing members, and the best performing members continue exploring.
 
 For more information, see [the paper](https://arxiv.org/abs/1711.09846) or [blog post](https://deepmind.com/blog/population-based-training-neural-networks/).
-
-### Requirements
-- PyTorch >= 1.0.0
-
-### Usage
-`$ python main.py --device cuda --population_size 10 --batch_size 20`
