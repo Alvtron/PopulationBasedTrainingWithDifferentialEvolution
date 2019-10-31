@@ -4,7 +4,7 @@
 
 A implementation of PBT in PyTorch.
 
-### What this code is for
+### Objective
 
 Finding a good hyper-parameter schedule for neural networks.
 
