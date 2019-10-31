@@ -206,8 +206,6 @@ if __name__ == "__main__":
     parser.add_argument("--max_epoch", type=int, default=10, help="")
     parser.add_argument("--clear_checkpoints", type=bool, default=True, help="")
     args = parser.parse_args()
-    #mp.set_start_method("spawn")
-    #mp = mp.get_context('forkserver')
     device = args.device if torch.cuda.is_available() and not os.name == 'nt' else 'cpu'
     population_size = args.population_size
     batch_size = args.batch_size
@@ -217,8 +215,6 @@ if __name__ == "__main__":
     if clear_checkpoints:
         for f in [ f for f in os.listdir('checkpoints') if f.endswith(".pth") ]:
             os.remove(os.path.join('checkpoints', f))
-    # Returns a process shared queue implemented using a pipe and a few locks/semaphores. When a process first puts an item on the queue a feeder thread is started which transfers objects from a buffer into the pipe.
-    population = mp.Queue(maxsize=population_size)
     hyperparameters = {'optimizer': ["lr", "momentum"], "batch_size": True}
     train_data_path = test_data_path = './data'
     train_data = MNIST(train_data_path, True, transforms.ToTensor(), download=True)
@@ -236,7 +232,6 @@ if __name__ == "__main__":
             device,
             1)
         for id in range(population_size)]
-
     # In multiprocessing, processes are spawned by creating a Process object and then calling its start() method
     [w.start() for w in workers]
     # join() blocks the calling thread until the process whose join() method is called terminates or until the optional timeout occurs.
