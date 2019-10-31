@@ -2,7 +2,7 @@
 
 [Population Based Training of Neural Networks, Jaderberg et al. @ DeepMind](https://arxiv.org/abs/1711.09846)
 
-A implementation of PBT in PyTorch.
+An implementation of PBT in PyTorch.
 
 ### Objective
 
