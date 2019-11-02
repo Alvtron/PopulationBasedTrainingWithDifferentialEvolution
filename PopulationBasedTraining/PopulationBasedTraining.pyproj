@@ -22,15 +22,20 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="main - Copy.py" />
+    <Compile Include="checkpoint.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="hyperparameters.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="main.py" />
+    <Compile Include="member.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="model.py" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="CondaEnv|CondaEnv|pytorch" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="README.md" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
