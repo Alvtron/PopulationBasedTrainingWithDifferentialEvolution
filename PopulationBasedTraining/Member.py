@@ -2,26 +2,21 @@ import os
 import torch
 from torch.utils.data import DataLoader
 from database import Checkpoint, Database
-from datetime import datetime
+from utils import get_datetime_string
+from mutator import Mutator
 
 mp = torch.multiprocessing.get_context('spawn')
 
-def get_datetime_string():
-    date_and_time = datetime.now()
-    return date_and_time.strftime('%Y-%m-%d %H:%M:%S')
-
 class Member(mp.Process):
     '''A individual member in the population'''
-    def __init__(self, id, model, optimizer, hyperparameters, mutation_function, ready_condition, end_training_condition, loss_function, train_data, test_data, database, device, verbose):
+    def __init__(self, id, model, optimizer, mutator, hyperparameters, loss_function, train_data, test_data, database, device, verbose):
         super().__init__()
         self.id = id
-        self.hyperparameters = hyperparameters
-        self.mutation_function = mutation_function
-        self.ready_condition = ready_condition
-        self.end_training_condition = end_training_condition
-        self.batch_size = hyperparameters['batch_size'].value
         self.model = model
         self.optimizer = optimizer(self.model.parameters(), lr = 0.1, momentum = 0.9)
+        self.mutator = mutator
+        self.hyperparameters = hyperparameters
+        self.batch_size = hyperparameters['batch_size'].value
         self.loss_function = loss_function
         self.train_data = train_data
         self.test_data = test_data
@@ -33,10 +28,10 @@ class Member(mp.Process):
         self.is_mutated = False
 
     def run(self):
-        while not self.end_training_condition(self.create_checkpoint(), self.database): # not end of training
+        while not self.mutator.is_finished(self.create_checkpoint(), self.database): # not end of training
             self.train() # step
             self.score = self.eval() # eval
-            if self.ready_condition(self.create_checkpoint(), self.database): # if ready-condition
+            if self.mutator.is_ready(self.create_checkpoint(), self.database): # if ready-condition
                 self.mutate() # mutation
                 self.score = self.eval()
             else:
@@ -50,7 +45,7 @@ class Member(mp.Process):
 
     def mutate(self):
         checkpoint = self.create_checkpoint()
-        self.mutation_function(checkpoint, self.database)
+        self.mutator.apply_mutation(checkpoint, self.database)
         checkpoint.is_mutated = True
         self.apply_checkpoint(checkpoint)
 

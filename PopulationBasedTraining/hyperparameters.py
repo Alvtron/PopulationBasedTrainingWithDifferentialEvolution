@@ -38,21 +38,19 @@ class Hyperparameter(object):
         else:
             self.value = random.choice(self.search_space)
 
-    def perturb(self, perturb_factors : tuple = (0.8, 1.2)):
-        ''' Perturbs the hyper-parameter value with a given perturb factors. '''
+    def perturb(self, perturb_factor):
+        ''' Perturbs the hyper-parameter value with the given perturb factor. '''
         # get lower and upper bound from search space
         lower_bound = self.get_lower_bound()
         upper_bound = self.get_upper_bound()
-        # create a random perturbation factor with the given perturb factors
-        perturb_value = random.uniform(perturb_factors[0], perturb_factors[1])
         # sample a new value from the search space with the perturbation value
         if isinstance(lower_bound, float):
-            self.value = float(numpy.clip(self.value * perturb_value, lower_bound, upper_bound))
+            self.value = float(numpy.clip(self.value * perturb_factor, lower_bound, upper_bound))
         elif isinstance(lower_bound, int):
-            self.value = int(numpy.clip(round(self.value * perturb_value), lower_bound, upper_bound))
+            self.value = int(numpy.clip(round(self.value * perturb_factor), lower_bound, upper_bound))
         elif isinstance(lower_bound, bool):
-            self.value = bool(numpy.clip(round(self.value * perturb_value), lower_bound, upper_bound))
+            self.value = bool(numpy.clip(round(self.value * perturb_factor), lower_bound, upper_bound))
         else:
             index = self.search_space.index(self.value)
-            new_index = int(numpy.clip(round(index * perturb_value), 0, len(self.search_space) - 1))
+            new_index = int(numpy.clip(round(index * perturb_factor), 0, len(self.search_space) - 1))
             self.value = self.search_space[new_index]
