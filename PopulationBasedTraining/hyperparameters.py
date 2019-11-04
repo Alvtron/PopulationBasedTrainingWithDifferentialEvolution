@@ -4,7 +4,7 @@ from typing import TypeVar, Generic
 from dataclasses import dataclass
 
 class Hyperparameter(object):
-    '''Class for creating and storing a hyper-parameter in a given, constrained search space. Provide a list of [lower bound, upper bound] as float/int/bool, or categorical elements [obj1, obj2, ..., objn]. '''
+    ''' Class for creating and storing a hyper-parameter in a given, constrained search space. Provide a list of [lower bound, upper bound] as float/int/bool, or categorical elements [obj1, obj2, ..., objn]. '''
     def __init__(self, *args):
         ''' Sets the search space and sorts it, then samples a new candidate from an uniform distribution. '''
         assert args and len(list(args)) > 1, "Hyperparameter initialization needs at least two arguments."

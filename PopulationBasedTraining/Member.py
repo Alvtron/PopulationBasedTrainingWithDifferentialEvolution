@@ -1,48 +1,92 @@
 import os
-import tqdm
 import torch
 from torch.utils.data import DataLoader
-from checkpoint import Checkpoint
+from database import Checkpoint, Database
+from datetime import datetime
 
 mp = torch.multiprocessing.get_context('spawn')
 
+def get_datetime_string():
+    date_and_time = datetime.now()
+    return date_and_time.strftime('%Y-%m-%d %H:%M:%S')
+
 class Member(mp.Process):
-    ''' A individual member in the population '''
-    def __init__(self, id, model, optimizer, hyperparameters, mutation_function, batch_size, max_epoch, train_data, test_data, population_size, device, verbose):
+    '''A individual member in the population'''
+    def __init__(self, id, model, optimizer, hyperparameters, mutation_function, ready_condition, end_training_condition, loss_function, train_data, test_data, database, device, verbose):
         super().__init__()
         self.id = id
         self.hyperparameters = hyperparameters
         self.mutation_function = mutation_function
-        self.population_size = population_size
-        self.epoch = 0
-        self.max_epoch = max_epoch
-        self.batch_size = batch_size
-        self.device = device
+        self.ready_condition = ready_condition
+        self.end_training_condition = end_training_condition
+        self.batch_size = hyperparameters['batch_size'].value
         self.model = model
         self.optimizer = optimizer(self.model.parameters(), lr = 0.1, momentum = 0.9)
-        self.score = None
-        self.loss_fn = torch.nn.CrossEntropyLoss()
+        self.loss_function = loss_function
         self.train_data = train_data
         self.test_data = test_data
+        self.database = database
+        self.device = device
         self.verbose = verbose
+        self.epoch = 1
+        self.score = None
+        self.is_mutated = False
 
     def run(self):
-        #self.load_checkpoint_from_path(f"checkpoints/w{self.id:03d}.pth")
-        while self.epoch < self.max_epoch: #not end of training
+        while not self.end_training_condition(self.create_checkpoint(), self.database): # not end of training
             self.train() # step
             self.score = self.eval() # eval
-            if True: # if ready-condition
-                checkpoint = self.create_checkpoint()
-                population = self.load_population()
-                self.mutation_function(checkpoint, population)
-                self.load_checkpoint(checkpoint)
+            if self.ready_condition(self.create_checkpoint(), self.database): # if ready-condition
+                self.mutate() # mutation
                 self.score = self.eval()
+            else:
+                self.is_mutated = False
             if self.verbose > 0:
-                print(f"Score of w{self.id}: {self.score:.2f}% (e{self.epoch})")
-            self.epoch += 1
+                print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: scored {self.score:.2f}%")
             # save to population
-            self.save_checkpoint(f"checkpoints/w{self.id:03d}.pth")
-        print(f"Worker {self.id} is finished.")
+            self.save_checkpoint()
+            self.epoch += 1
+        print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: finished.")
+
+    def mutate(self):
+        checkpoint = self.create_checkpoint()
+        self.mutation_function(checkpoint, self.database)
+        checkpoint.is_mutated = True
+        self.apply_checkpoint(checkpoint)
+
+    def train(self):
+        """Train the model on the provided training set."""
+        if self.verbose > 0:
+            print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: training...")
+        self.model.train()
+        dataloader = DataLoader(self.train_data, self.batch_size, True)
+        for x, y in dataloader:
+            x, y = x.to(self.device), y.to(self.device)
+            output = self.model(x)
+            loss = self.loss_function(output, y)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+    def eval(self):
+        """Evaluate model on the provided validation or test set."""
+        if self.verbose > 0:
+            print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: evaluating...")
+        self.model.eval()
+        dataloader = DataLoader(self.test_data, self.batch_size, True)
+        correct = 0
+        for x, y in dataloader:
+            x, y = x.to(self.device), y.to(self.device)
+            output = self.model(x)
+            pred = output.argmax(1)
+            correct += pred.eq(y).sum().item()
+        accuracy = 100. * correct / (len(dataloader) * self.batch_size)
+        return accuracy
+     
+    def save_checkpoint(self):
+        """Save checkpoint from member state."""
+        checkpoint = self.create_checkpoint()
+        self.database.save_entry(checkpoint)
 
     def create_checkpoint(self):
         """Create checkpoint from member state."""
@@ -53,21 +97,11 @@ class Member(mp.Process):
             self.optimizer.state_dict(),
             self.hyperparameters,
             self.batch_size,
-            self.score)
+            self.score,
+            self.is_mutated)
         return checkpoint
 
-    def save_checkpoint(self, checkpoint_path):
-        """Save member state to checkpoint_path."""
-        checkpoint = self.create_checkpoint()
-        torch.save(checkpoint, checkpoint_path)
-
-    def load_checkpoint_from_file(self, checkpoint_path):
-        """Load member state from checkpoint path."""
-        assert os.path.isfile(checkpoint_path), f"checkpoint file does not exist on path: {checkpoint_path}"
-        checkpoint = torch.load(checkpoint_path)
-        self.load_checkpoint(checkpoint)
-        
-    def load_checkpoint(self, checkpoint):
+    def apply_checkpoint(self, checkpoint):
         """Load member state from checkpoint object."""
         self.id = checkpoint.id
         self.epoch = checkpoint.epoch
@@ -75,62 +109,6 @@ class Member(mp.Process):
         self.optimizer.load_state_dict(checkpoint.optimizer_state)
         self.batch_size = checkpoint.batch_size
         self.score = checkpoint.score
+        self.is_mutated = checkpoint.is_mutated
         # set dropout and batch normalization layers to evaluation mode before running inference
         self.model.eval()
-
-    def load_population(self):
-        """Load population as list of checkpoints."""
-        checkpoints = []
-        for id in range(self.population_size):
-            checkpoint_path = f"checkpoints/w{id:03d}.pth"
-            if os.path.isfile(checkpoint_path):
-                checkpoint = torch.load(checkpoint_path)
-                checkpoints.append(checkpoint)
-        return checkpoints
-
-    def train(self):
-        """Train the model on the provided training set."""
-        self.model.train()
-        dataloader = None
-        if self.verbose == 1:
-            print(f"Training w{self.id}... (e{self.epoch})")
-        if self.verbose < 2:
-            dataloader = DataLoader(self.train_data, self.batch_size, True)
-        else:
-            dataloader = tqdm.tqdm(
-            DataLoader(self.train_data, self.batch_size, True),
-            desc = f"Training w{self.id} (e{self.epoch})",
-            ncols = 80,
-            leave = True)
-        
-        for x, y in dataloader:
-            x, y = x.to(self.device), y.to(self.device)
-            output = self.model(x)
-            loss = self.loss_fn(output, y)
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-    def eval(self):
-        """Evaluate model on the provided validation or test set."""
-        self.model.eval()
-        dataloader = None
-        if self.verbose == 1:
-            print(f"Evaluating w{self.id}... (e{self.epoch})")
-        if self.verbose < 2:
-            dataloader = DataLoader(self.test_data, self.batch_size, True)
-        else:
-            dataloader = tqdm.tqdm(
-                DataLoader(self.test_data, self.batch_size, True),
-                desc = f"Evaluating w{self.id} (epoch {self.epoch})",
-                ncols = 80,
-                leave = True)
-
-        correct = 0
-        for x, y in dataloader:
-            x, y = x.to(self.device), y.to(self.device)
-            output = self.model(x)
-            pred = output.argmax(1)
-            correct += pred.eq(y).sum().item()
-        accuracy = 100. * correct / (len(dataloader) * self.batch_size)
-        return accuracy

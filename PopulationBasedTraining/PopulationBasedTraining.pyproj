@@ -22,7 +22,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="checkpoint.py">
+    <Compile Include="database.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="hyperparameters.py">
