@@ -14,7 +14,6 @@ class Checkpoint:
     model_state: dict
     optimizer_state: dict
     hyperparameters: dict
-    batch_size: int
     score: float
     is_mutated: bool
     
@@ -28,7 +27,6 @@ class Checkpoint:
         self.model_state = checkpoint.model_state
         self.optimizer_state = checkpoint.optimizer_state
         self.hyperparameters = checkpoint.hyperparameters
-        self.batch_size = checkpoint.batch_size
         score = None
 
 class Database(object):

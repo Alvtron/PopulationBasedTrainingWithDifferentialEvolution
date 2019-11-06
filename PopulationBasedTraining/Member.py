@@ -3,58 +3,66 @@ import torch
 from torch.utils.data import DataLoader
 from database import Checkpoint, Database
 from utils import get_datetime_string
-from mutator import Mutator
+from controller import Controller
+from hyperparameters import hyperparameters_to_value_dict
 
 mp = torch.multiprocessing.get_context('spawn')
 
 class Member(mp.Process):
     '''A individual member in the population'''
-    def __init__(self, id, model, optimizer, mutator, hyperparameters, loss_function, train_data, test_data, database, device, verbose):
+    def __init__(self, id, model, optimizer, controller, hyperparameters, loss_function, train_data, test_data, database, device, verbose):
         super().__init__()
         self.id = id
         self.model = model
-        self.optimizer = optimizer(self.model.parameters(), lr = 0.1, momentum = 0.9)
-        self.mutator = mutator
+        # prepare hyper-parameters with controller
+        controller.prepare(hyperparameters)
+        # create optimizer
+        optimizer_parameters = hyperparameters_to_value_dict(hyperparameters['optimizer'])
+        self.optimizer = optimizer(self.model.parameters(), **optimizer_parameters)
+        self.controller = controller
         self.hyperparameters = hyperparameters
-        self.batch_size = hyperparameters['batch_size'].value
         self.loss_function = loss_function
         self.train_data = train_data
         self.test_data = test_data
         self.database = database
         self.device = device
         self.verbose = verbose
-        self.epoch = 1
-        self.score = None
-        self.is_mutated = False
+        self._epoch = 1
+        self._score = None
+        self._is_mutated = False
+
+    def __str__(self):
+        return f"{get_datetime_string()} - epoch {self._epoch} - member {self.id}"
+
+    def _print(self, message):
+        if self.verbose > 0: print (f"{self}: {message}")
 
     def run(self):
-        while not self.mutator.is_finished(self.create_checkpoint(), self.database): # not end of training
+        while not self.controller.is_finished(self.create_checkpoint(), self.database): # not end of training
             self.train() # step
-            self.score = self.eval() # eval
-            if self.mutator.is_ready(self.create_checkpoint(), self.database): # if ready-condition
+            self._score = self.eval() # eval
+            if self.controller.is_ready(self.create_checkpoint(), self.database): # if ready-condition
                 self.mutate() # mutation
-                self.score = self.eval()
+                self._score = self.eval()
+                self._is_mutated = True
             else:
-                self.is_mutated = False
-            if self.verbose > 0:
-                print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: scored {self.score:.2f}%")
+                self._is_mutated = False
+            self._print(f"{self._score:.2f}%")
             # save to population
             self.save_checkpoint()
-            self.epoch += 1
-        print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: finished.")
+            self._epoch += 1
+        self._print("finished.")
 
     def mutate(self):
         checkpoint = self.create_checkpoint()
-        self.mutator.apply_mutation(checkpoint, self.database)
-        checkpoint.is_mutated = True
-        self.apply_checkpoint(checkpoint)
+        self.controller.evolve(checkpoint, self.database)
+        self.load_checkpoint(checkpoint)
 
     def train(self):
         """Train the model on the provided training set."""
-        if self.verbose > 0:
-            print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: training...")
+        self._print("training...")
         self.model.train()
-        dataloader = DataLoader(self.train_data, self.batch_size, True)
+        dataloader = DataLoader(self.train_data, self.hyperparameters['batch_size'].get_value(), True)
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             output = self.model(x)
@@ -65,17 +73,16 @@ class Member(mp.Process):
 
     def eval(self):
         """Evaluate model on the provided validation or test set."""
-        if self.verbose > 0:
-            print(f"{get_datetime_string()} - epoch {self.epoch} - m{self.id}: evaluating...")
+        self._print(f"evaluating...")
         self.model.eval()
-        dataloader = DataLoader(self.test_data, self.batch_size, True)
+        dataloader = DataLoader(self.test_data, self.hyperparameters['batch_size'].get_value(), True)
         correct = 0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             output = self.model(x)
             pred = output.argmax(1)
             correct += pred.eq(y).sum().item()
-        accuracy = 100. * correct / (len(dataloader) * self.batch_size)
+        accuracy = 100. * correct / (len(dataloader) * self.hyperparameters['batch_size'].get_value())
         return accuracy
      
     def save_checkpoint(self):
@@ -87,23 +94,31 @@ class Member(mp.Process):
         """Create checkpoint from member state."""
         checkpoint = Checkpoint(
             self.id,
-            self.epoch,
+            self._epoch,
             self.model.state_dict(),
             self.optimizer.state_dict(),
             self.hyperparameters,
-            self.batch_size,
-            self.score,
-            self.is_mutated)
+            self._score,
+            self._is_mutated)
         return checkpoint
 
-    def apply_checkpoint(self, checkpoint):
+    def load_checkpoint(self, checkpoint):
         """Load member state from checkpoint object."""
         self.id = checkpoint.id
-        self.epoch = checkpoint.epoch
+        self._epoch = checkpoint.epoch
+        self._score = checkpoint.score
+        self._is_mutated = checkpoint.is_mutated
+        self.hyperparameters = checkpoint.hyperparameters
+        # Load model and optimizer state
         self.model.load_state_dict(checkpoint.model_state)
         self.optimizer.load_state_dict(checkpoint.optimizer_state)
-        self.batch_size = checkpoint.batch_size
-        self.score = checkpoint.score
-        self.is_mutated = checkpoint.is_mutated
+        # apply hyperparameters to model and optimizer
+        self.apply_hyperparameters()
         # set dropout and batch normalization layers to evaluation mode before running inference
         self.model.eval()
+
+    def apply_hyperparameters(self):
+        for hyperparameter_name, hyperparameter in self.hyperparameters['optimizer'].items():
+            for param_group in self.optimizer.param_groups:
+                # create a random perturbation factor with the given perturb factors
+                param_group[hyperparameter_name] = hyperparameter.get_value()

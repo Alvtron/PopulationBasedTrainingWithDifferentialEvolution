@@ -12,7 +12,7 @@ from model import Net
 from member import Member
 from database import Checkpoint, Database
 from hyperparameters import Hyperparameter
-from mutator import ExploitAndExplore
+from controller import ExploitAndExplore
 from utils import get_datetime_string
 
 mp = torch.multiprocessing.get_context('spawn')
@@ -39,23 +39,23 @@ if __name__ == "__main__":
     members = [
         Member(
             id = id,
-            mutator = ExploitAndExplore(
-                exploit_factor = 0.4,
+            controller = ExploitAndExplore(
+                exploit_factor = 0.2,
                 explore_factors = (1.2, 0.8),
-                frequency = 3,
+                frequency = 5,
                 end_criteria = {
-                    'epoch': 20,
-                    #'score': 99.00
+                    'epoch': 10,
+                    'score': 99.50
                     }),
             model = Net().to(device),
             optimizer = torch.optim.SGD,
             hyperparameters = {
-                'batch_size': Hyperparameter(1, 128),
+                'batch_size': Hyperparameter(1, 256),
                 'optimizer': {
-                    'lr': Hyperparameter(1e-5, 1e-0), # Learning rate.
-                    'momentum': Hyperparameter(0.1000, 0.9999), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
+                    'lr': Hyperparameter(1e-6, 1e-0), # Learning rate.
+                    'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
                     'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
-                    'dampening': Hyperparameter(1e-10, 1e-1), # Dampens oscillation from Nesterov momentum.
+                    #'dampening': Hyperparameter(1e-10, 1e-1), # Dampens oscillation from Nesterov momentum.
                     'nesterov': Hyperparameter(False, True) # Whether to apply Nesterov momentum.
                     }
                 },

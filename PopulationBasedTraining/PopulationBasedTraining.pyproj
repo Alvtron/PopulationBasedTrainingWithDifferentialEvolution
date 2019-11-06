@@ -33,7 +33,7 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="model.py" />
-    <Compile Include="mutator.py">
+    <Compile Include="controller.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="utils.py">
