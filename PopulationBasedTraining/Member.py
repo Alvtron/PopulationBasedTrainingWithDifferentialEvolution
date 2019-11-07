@@ -10,15 +10,11 @@ mp = torch.multiprocessing.get_context('spawn')
 
 class Member(mp.Process):
     '''A individual member in the population'''
-    def __init__(self, id, model, optimizer, controller, hyperparameters, loss_function, train_data, test_data, database, device, verbose):
+    def __init__(self, id, model, optimizer_class, controller, hyperparameters, loss_function, train_data, test_data, database, device, verbose):
         super().__init__()
         self.id = id
         self.model = model
-        # prepare hyper-parameters with controller
-        controller.prepare(hyperparameters)
-        # create optimizer
-        optimizer_parameters = hyperparameters_to_value_dict(hyperparameters['optimizer'])
-        self.optimizer = optimizer(self.model.parameters(), **optimizer_parameters)
+        self.optimizer_class = optimizer_class
         self.controller = controller
         self.hyperparameters = hyperparameters
         self.loss_function = loss_function
@@ -34,10 +30,16 @@ class Member(mp.Process):
     def __str__(self):
         return f"{get_datetime_string()} - epoch {self._epoch} - member {self.id}"
 
-    def _print(self, message):
+    def _log(self, message):
         if self.verbose > 0: print (f"{self}: {message}")
 
     def run(self):
+        # prepare hyper-parameters with controller
+        self.controller.prepare(self.hyperparameters, self._log)
+        # create optimizer
+        optimizer_parameters = hyperparameters_to_value_dict(self.hyperparameters['optimizer'])
+        self.optimizer = self.optimizer_class(self.model.parameters(), **optimizer_parameters)
+        # run population-based training loop
         while not self.controller.is_finished(self.create_checkpoint(), self.database): # not end of training
             self.train() # step
             self._score = self.eval() # eval
@@ -47,22 +49,22 @@ class Member(mp.Process):
                 self._is_mutated = True
             else:
                 self._is_mutated = False
-            self._print(f"{self._score:.2f}%")
+            self._log(f"{self._score:.2f}%")
             # save to population
             self.save_checkpoint()
             self._epoch += 1
-        self._print("finished.")
+        self._log("finished.")
 
     def mutate(self):
         checkpoint = self.create_checkpoint()
-        self.controller.evolve(checkpoint, self.database)
+        self.controller.evolve(checkpoint, self.database, self._log)
         self.load_checkpoint(checkpoint)
 
     def train(self):
         """Train the model on the provided training set."""
-        self._print("training...")
+        self._log("training...")
         self.model.train()
-        dataloader = DataLoader(self.train_data, self.hyperparameters['batch_size'].get_value(), True)
+        dataloader = DataLoader(self.train_data, self.hyperparameters['batch_size'].value(), True)
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             output = self.model(x)
@@ -73,16 +75,16 @@ class Member(mp.Process):
 
     def eval(self):
         """Evaluate model on the provided validation or test set."""
-        self._print(f"evaluating...")
+        self._log(f"evaluating...")
         self.model.eval()
-        dataloader = DataLoader(self.test_data, self.hyperparameters['batch_size'].get_value(), True)
+        dataloader = DataLoader(self.test_data, self.hyperparameters['batch_size'].value(), True)
         correct = 0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             output = self.model(x)
             pred = output.argmax(1)
             correct += pred.eq(y).sum().item()
-        accuracy = 100. * correct / (len(dataloader) * self.hyperparameters['batch_size'].get_value())
+        accuracy = 100. * correct / (len(dataloader) * self.hyperparameters['batch_size'].value())
         return accuracy
      
     def save_checkpoint(self):
@@ -121,4 +123,4 @@ class Member(mp.Process):
         for hyperparameter_name, hyperparameter in self.hyperparameters['optimizer'].items():
             for param_group in self.optimizer.param_groups:
                 # create a random perturbation factor with the given perturb factors
-                param_group[hyperparameter_name] = hyperparameter.get_value()
+                param_group[hyperparameter_name] = hyperparameter.value()

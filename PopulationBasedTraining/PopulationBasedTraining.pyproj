@@ -36,6 +36,9 @@
     <Compile Include="controller.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="test_hp.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="utils.py">
       <SubType>Code</SubType>
     </Compile>

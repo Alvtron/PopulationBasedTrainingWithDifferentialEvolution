@@ -35,6 +35,17 @@ if __name__ == "__main__":
     train_data_path = test_data_path = './data'
     train_data = MNIST(train_data_path, True, transforms.ToTensor(), download=True)
     test_data = MNIST(test_data_path, False, transforms.ToTensor(), download=True)
+    # defining hyper-parameter search spaces
+    hyperparameters = {
+        'batch_size': Hyperparameter(1, 256),
+        'optimizer': {
+            'lr': Hyperparameter(1e-6, 1e-0), # Learning rate.
+            'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
+            'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
+            #'dampening': Hyperparameter(1e-10, 1e-1), # Dampens oscillation from Nesterov momentum.
+            'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
+            }
+        }
     # create members
     members = [
         Member(
@@ -48,17 +59,8 @@ if __name__ == "__main__":
                     'score': 99.50
                     }),
             model = Net().to(device),
-            optimizer = torch.optim.SGD,
-            hyperparameters = {
-                'batch_size': Hyperparameter(1, 256),
-                'optimizer': {
-                    'lr': Hyperparameter(1e-6, 1e-0), # Learning rate.
-                    'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
-                    'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
-                    #'dampening': Hyperparameter(1e-10, 1e-1), # Dampens oscillation from Nesterov momentum.
-                    'nesterov': Hyperparameter(False, True) # Whether to apply Nesterov momentum.
-                    }
-                },
+            optimizer_class = torch.optim.SGD,
+            hyperparameters = hyperparameters,
             loss_function = torch.nn.CrossEntropyLoss(),
             train_data = train_data,
             test_data = test_data,
