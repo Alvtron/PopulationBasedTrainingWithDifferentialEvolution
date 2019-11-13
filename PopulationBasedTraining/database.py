@@ -16,7 +16,7 @@ class Checkpoint:
     hyperparameters: dict
     score: float
     is_mutated: bool
-    
+
     def __str__(self):
         if self.is_mutated:
             return f"Member {self.id} - epoch {self.epoch} - {self.score:.2f}% (mutated)"

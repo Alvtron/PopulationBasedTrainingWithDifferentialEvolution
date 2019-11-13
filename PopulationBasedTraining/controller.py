@@ -24,7 +24,11 @@ class Controller(abc.ABC):
 
 class ExploitAndExplore(Controller):
     """ A general, modifiable implementation of PBTs exploitation and exploration method. """
-    def __init__(self, exploit_factor = 0.4, explore_factors = (1.2, 0.8), frequency = 5, end_criteria = {'epoch': 20, 'score': 99.9}):
+    def __init__(self, exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = 5, end_criteria = {'epoch': 20, 'score': 99.9}):
+        assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
+        assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
+        assert isinstance(frequency, int) and frequency > 0, f"Frequency must be of type {int} as 1 or higher."
+        assert isinstance(end_criteria, dict), f"End criteria must be of type {dict}."
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
         self.frequency = frequency
@@ -32,14 +36,9 @@ class ExploitAndExplore(Controller):
 
     def prepare(self, hyperparameters, logger):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
-        # preparing optimizer
-        for hyperparameter_name, hyperparameter in hyperparameters['optimizer'].items():
+        for hyperparameter_name, hyperparameter in hyperparameters:
             hyperparameter.sample_uniform()
-            logger(f"{hyperparameter_name}: {hyperparameter.value():.2f}")
-        # preparing batch_size
-        if hyperparameters['batch_size']:
-            hyperparameters['batch_size'].sample_uniform()
-            logger(f"batch_size: {hyperparameters['batch_size'].value()}")
+            logger(f"{hyperparameter_name}: {hyperparameter.value()}")
 
     def evolve(self, member, database, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -49,32 +48,25 @@ class ExploitAndExplore(Controller):
         # set number of elitists
         n_elitists = math.floor(len(population) * self.exploit_factor)
         if n_elitists > 0 and all(c.id != member.id for c in population[:n_elitists]):
-            # exploit
+            # exploit weights and hyper-parameters if member is not elitist
             self.exploit(member, population[:n_elitists], logger)
-        # explore
+        # explore new hyper-parameters
         self.explore(member, logger)
 
     def exploit(self, member, population, logger):
         """A fraction of the bottom performing members exploit the top performing members."""
         elitist = random.choice(population)
-        logger(f"exploiting w{elitist.id}...")
+        logger(f"exploiting m{elitist.id}...")
         member.update(elitist)
 
     def explore(self, member, logger):
         """Perturb all parameters by the defined explore_factors."""
         logger("exploring...")
-        # exploring optimizer
-        for hyperparameter_name, hyperparameter in member.hyperparameters['optimizer'].items():
+        for hyperparameter_name, hyperparameter in member.hyperparameters:
             old_value = hyperparameter.value()
             hyperparameter *= random.choice(self.explore_factors)
             new_value = hyperparameter.value()
-            logger(f"{hyperparameter_name}: {old_value:.2f} --> {new_value:.2f}")
-        # exploring batch_size
-        if member.hyperparameters['batch_size']:
-            old_value = member.hyperparameters['batch_size'].value()
-            member.hyperparameters['batch_size'] *= random.choice(self.explore_factors)
-            new_value = member.hyperparameters['batch_size'].value()
-            logger(f"batch_size: {old_value} --> {new_value}")
+            logger(f"{hyperparameter_name}: {old_value} --> {new_value}")
 
     def is_ready(self, member, database):
         """True every n-th epoch."""

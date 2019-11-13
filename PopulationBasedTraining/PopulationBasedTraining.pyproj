@@ -12,6 +12,7 @@
     <Name>PopulationBasedTraining</Name>
     <RootNamespace>PopulationBasedTraining</RootNamespace>
     <InterpreterId>CondaEnv|CondaEnv|pytorch</InterpreterId>
+    <TestFramework>Pytest</TestFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>

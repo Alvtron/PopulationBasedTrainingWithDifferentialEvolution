@@ -3,14 +3,12 @@ import torch
 from torch.utils.data import DataLoader
 from database import Checkpoint, Database
 from utils import get_datetime_string
-from controller import Controller
-from hyperparameters import hyperparameters_to_value_dict
 
 mp = torch.multiprocessing.get_context('spawn')
 
 class Member(mp.Process):
     '''A individual member in the population'''
-    def __init__(self, id, model, optimizer_class, controller, hyperparameters, loss_function, train_data, test_data, database, device, verbose):
+    def __init__(self, id, model, optimizer_class, controller, hyperparameters, loss_function, train_data, test_data, database, device, verbose = 0, logging = False):
         super().__init__()
         self.id = id
         self.model = model
@@ -23,6 +21,7 @@ class Member(mp.Process):
         self.database = database
         self.device = device
         self.verbose = verbose
+        self.logging = logging
         self._epoch = 1
         self._score = None
         self._is_mutated = False
@@ -30,15 +29,18 @@ class Member(mp.Process):
     def __str__(self):
         return f"{get_datetime_string()} - epoch {self._epoch} - member {self.id}"
 
-    def _log(self, message):
-        if self.verbose > 0: print (f"{self}: {message}")
+    def __log(self, message):
+        """Logs and prints the provided message in the appropriate syntax."""
+        full_message = f"{self}: {message}"
+        # TODO: Log message to file
+        # if logging: self.database.log(id, message)
+        if self.verbose > 0: print(full_message)
 
     def run(self):
         # prepare hyper-parameters with controller
-        self.controller.prepare(self.hyperparameters, self._log)
+        self.controller.prepare(self.hyperparameters, self.__log)
         # create optimizer
-        optimizer_parameters = hyperparameters_to_value_dict(self.hyperparameters['optimizer'])
-        self.optimizer = self.optimizer_class(self.model.parameters(), **optimizer_parameters)
+        self.optimizer = self.optimizer_class(self.model.parameters(), **self.hyperparameters.get_optimizer_value_dict())
         # run population-based training loop
         while not self.controller.is_finished(self.create_checkpoint(), self.database): # not end of training
             self.train() # step
@@ -49,22 +51,22 @@ class Member(mp.Process):
                 self._is_mutated = True
             else:
                 self._is_mutated = False
-            self._log(f"{self._score:.2f}%")
+            self.__log(f"{self._score:.4f}%")
             # save to population
             self.save_checkpoint()
             self._epoch += 1
-        self._log("finished.")
+        self.__log("finished.")
 
     def mutate(self):
         checkpoint = self.create_checkpoint()
-        self.controller.evolve(checkpoint, self.database, self._log)
+        self.controller.evolve(checkpoint, self.database, self.__log)
         self.load_checkpoint(checkpoint)
 
     def train(self):
         """Train the model on the provided training set."""
-        self._log("training...")
+        self.__log("training...")
         self.model.train()
-        dataloader = DataLoader(self.train_data, self.hyperparameters['batch_size'].value(), True)
+        dataloader = DataLoader(self.train_data, self.hyperparameters.general['batch_size'].value(), True)
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             output = self.model(x)
@@ -75,16 +77,16 @@ class Member(mp.Process):
 
     def eval(self):
         """Evaluate model on the provided validation or test set."""
-        self._log(f"evaluating...")
+        self.__log(f"evaluating...")
         self.model.eval()
-        dataloader = DataLoader(self.test_data, self.hyperparameters['batch_size'].value(), True)
+        dataloader = DataLoader(self.test_data, self.hyperparameters.general['batch_size'].value(), True)
         correct = 0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             output = self.model(x)
             pred = output.argmax(1)
             correct += pred.eq(y).sum().item()
-        accuracy = 100. * correct / (len(dataloader) * self.hyperparameters['batch_size'].value())
+        accuracy = 100. * correct / (len(dataloader) * self.hyperparameters.general['batch_size'].value())
         return accuracy
      
     def save_checkpoint(self):
@@ -120,7 +122,7 @@ class Member(mp.Process):
         self.model.eval()
 
     def apply_hyperparameters(self):
-        for hyperparameter_name, hyperparameter in self.hyperparameters['optimizer'].items():
+        for hyperparameter_name, hyperparameter in self.hyperparameters.optimizer.items():
             for param_group in self.optimizer.param_groups:
                 # create a random perturbation factor with the given perturb factors
                 param_group[hyperparameter_name] = hyperparameter.value()
