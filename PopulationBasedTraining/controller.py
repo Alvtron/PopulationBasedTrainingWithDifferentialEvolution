@@ -86,3 +86,77 @@ class ExploitAndExplore(Controller):
             # score is above the given treshold
             return True
         return False
+
+class DifferentialEvolution(Controller):
+    """A general, modifiable implementation of Differential Evolution (DE)"""
+    def __init__(self, N, F = 0.2, Cr = 0.8, frequency = 5, max_generations = 20):
+        self.N = N
+        self.F = F
+        self.Cr = Cr
+        self.frequency = frequency
+        self.max_generations = max_generations
+
+    def prepare(self, hyperparameters, logger):
+        """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
+        for param_name, param in hyperparameters:
+            param.sample_uniform()
+            logger(f"{param_name}: {param.value()}")
+
+    def evolve(self, member, database, logger):
+        """ Exploit best peforming members and explores all search spaces with random perturbation. """
+        population = database.get_lates()
+        population_size = len(population)
+        hp_dimension_size = len(member.hyperparameters)
+        r0, r1, r2 = random.sample(range(0, population_size), 3)
+        #j_rand = random.sample(range(0, hp_dimension_size))
+        #for j in range(0, hp_dimension_size):
+        #    if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
+        #        u = 
+
+    def update_velocity(self, particle, best_particle_in_generation, best_particle_across_generations, weight, velocity, acc_coeff_p, random_p, acc_coeff_g, random_g):
+        return weight * velocity + acc_coeff_p * random_p * (best_particle_in_generation - particle) + acc_coeff_g * random_g * (best_particle_across_generations - particle)
+    
+    def is_ready(self, member, database):
+        """True every n-th epoch."""
+        return member.epoch % self.frequency == 0
+
+    def is_finished(self, member, database):
+        """ True if a given number of generations have passed"""
+        return member.epoch > self.max_generations
+
+class ParticleSwarm(Controller):
+    """A general, modifiable implementation of Particle Swarm Optimization (PSO)"""
+    def __init__(self, a = 0.2, b = (0.8, 1.2), frequency = 5, max_generations = 20):
+        self.a = a
+        self.b = b
+        self.frequency = frequency
+        self.max_generations = max_generations
+
+    def prepare(self, hyperparameters, logger):
+        """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
+        for hyperparameter_name, hyperparameter in hyperparameters:
+            hyperparameter.sample_uniform()
+            logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+
+    def evolve(self, member, database, logger):
+        """ Exploit best peforming members and explores all search spaces with random perturbation. """
+        random_p = random.uniform(0.0, 1.0)
+        random_g = random.uniform(0.0, 1.0)
+        # get members
+        latest_members = database.get_latest()
+        all_members = database.to_list()
+        # set best member in current generation
+        best_member_in_generation =  max(latest_members, key=operator.attrgetter('score'))
+        # set best member across generations
+        best_overall_member =  max(all_members, key=operator.attrgetter('score'))
+
+    def update_velocity(self, particle, best_particle_in_generation, best_particle_across_generations, weight, velocity, acc_coeff_p, random_p, acc_coeff_g, random_g):
+        return weight * velocity + acc_coeff_p * random_p * (best_particle_in_generation - particle) + acc_coeff_g * random_g * (best_particle_across_generations - particle)
+    
+    def is_ready(self, member, database):
+        """True every n-th epoch."""
+        return member.epoch % self.frequency == 0
+
+    def is_finished(self, member, database):
+        """ True if a given number of generations have passed"""
+        return member.epoch > self.max_generations
