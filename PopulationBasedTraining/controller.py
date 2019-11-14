@@ -108,10 +108,19 @@ class DifferentialEvolution(Controller):
         population_size = len(population)
         hp_dimension_size = len(member.hyperparameters)
         r0, r1, r2 = random.sample(range(0, population_size), 3)
-        #j_rand = random.sample(range(0, hp_dimension_size))
-        #for j in range(0, hp_dimension_size):
-        #    if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
-        #        u = 
+        j_rand = random.sample(range(0, hp_dimension_size))
+        mutation_vector = member.hyperparameters
+        for j in range(0, hp_dimension_size):
+            if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
+                mutation_vector[j] = population[r0][j] + self.F * (population[r1][j] - population[r2][j])
+            else:
+                mutation_vector[j] = member.hyperparameters
+        mutation_score = eval(mutation)
+        if mutation_score >= member.score:
+            member.hyperparameters = mutation_vector
+        else:
+            member.hyperparameters = member.hyperparameters
+
 
     def update_velocity(self, particle, best_particle_in_generation, best_particle_across_generations, weight, velocity, acc_coeff_p, random_p, acc_coeff_g, random_g):
         return weight * velocity + acc_coeff_p * random_p * (best_particle_in_generation - particle) + acc_coeff_g * random_g * (best_particle_across_generations - particle)
