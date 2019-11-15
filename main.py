@@ -4,7 +4,6 @@ import math
 import pathlib
 import random
 import operator
-import numpy as np
 import torch
 import torchvision.transforms as transforms
 from torchvision.datasets import MNIST

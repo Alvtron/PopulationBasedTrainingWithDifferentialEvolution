@@ -27,7 +27,7 @@ class Checkpoint:
         self.model_state = checkpoint.model_state
         self.optimizer_state = checkpoint.optimizer_state
         self.hyperparameters = checkpoint.hyperparameters
-        score = None
+        self.score = None
 
 class Database(object):
     def __init__(self, directory_path):
@@ -64,6 +64,15 @@ class Database(object):
         """ Save new entry to the database. """
         entry_directory_path = self.create_entry_file_path(entry.id, entry.epoch)
         torch.save(entry, entry_directory_path)
+
+    def get_latest_entry(self, id):
+        """ Returns the specific entry stored on the specified id and epoch. If there is no match, None is returned. """
+        entry_directory_path = self.create_entry_directoy_path(id)
+        entry = None
+        with os.scandir(entry_directory_path) as files:
+            for file in files:
+                entry = torch.load(file.path)
+        return entry
 
     def get_entry(self, id, epoch):
         """ Returns the specific entry stored on the specified id and epoch. If there is no match, None is returned. """
