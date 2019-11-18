@@ -1,9 +1,5 @@
 import random
-import numpy
 import copy
-import operator
-from dataclasses import dataclass
-from utils import unwrap_iterable
 
 def translate(value, left_min, left_max, right_min, right_max):
     # Calculate the span of each range
@@ -15,9 +11,9 @@ def translate(value, left_min, left_max, right_min, right_max):
     return right_min + (value_normalized * right_span)
 
 def clip(value, min_value, max_value):
-    if value < min_value:
+    if value <= min_value:
         return min_value
-    elif value > max_value:
+    elif value >= max_value:
         return max_value
     else:
         return value
@@ -320,8 +316,10 @@ class Hyperparameters(object):
         return [i[0] for i in self]
 
     def set(self, list):
-        assert len(list) == len(self), "The provided hyperparameter list must be of same length as this configuration."
-        for index, param_entry in enumerate(self):
+        length = len(self)
+        if len(list) != length:
+            raise ValueError("The provided hyperparameter list must be of same length as this configuration.")
+        for index in range(length):
             self[index] += list[index]
 
     def get_general_value_dict(self):
@@ -349,21 +347,22 @@ class Hyperparameters(object):
         if self.optimizer.keys() != other.optimizer.keys():
             return False
         # Check if every hyperparameter dimension is of equal search space.
-        for index, param_entry in enumerate(self):
+        for index in range(len(self)):
             if not self[index].equal_search_space(other[index]):
                 return False
         return True
 
     def __add__(self, other):
         new_hp = copy.deepcopy(self)
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not new_hp.equal_search_space(other):
                 raise ValueError("Addition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] + other[index]
             return new_hp
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] + other
             return new_hp
         else:
@@ -371,14 +370,15 @@ class Hyperparameters(object):
 
     def __sub__(self, other):
         new_hp = copy.deepcopy(self)
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not new_hp.equal_search_space(other):
                 raise ValueError("Subtraction is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] - other[index]
             return new_hp
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] - other
             return new_hp
         else:
@@ -386,14 +386,15 @@ class Hyperparameters(object):
 
     def __mul__(self, other):
         new_hp = copy.deepcopy(self)
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not new_hp.equal_search_space(other):
                 raise ValueError("Multiplication is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] * other[index]
             return new_hp
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] * other
             return new_hp
         else:
@@ -401,14 +402,15 @@ class Hyperparameters(object):
 
     def __truediv__(self, other):
         new_hp = copy.deepcopy(self)
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not new_hp.equal_search_space(other):
                 raise ValueError("Divition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] / other[index]
             return new_hp
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] / other
             return new_hp
         else:
@@ -416,84 +418,90 @@ class Hyperparameters(object):
 
     def __pow__(self, other):
         new_hp = copy.deepcopy(self)
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not new_hp.equal_search_space(other):
                 raise ValueError("Exponentiation is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] ** other[index]
             return new_hp
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 new_hp[index] = self[index] ** other
             return new_hp
         else:
             raise ValueError(f"Exponentiation is supported for values of type {Hyperparameters}, {float} or {int}.")
 
     def __iadd__(self, other):
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not self.equal_search_space(other):
                 raise ValueError("Addition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] += other[index]
             return self
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] += other
             return self
         else:
             raise ValueError(f"Addition is supported for values of type {Hyperparameters}, {float} or {int}.")
 
     def __isub__(self, other):
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not self.equal_search_space(other):
                 raise ValueError("Subtraction is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] -= other[index]
             return self
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] -= other
             return self
         else:
             raise ValueError(f"Subtraction is supported for values of type {Hyperparameters}, {float} or {int}.")
 
     def __imul__(self, other):
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not self.equal_search_space(other):
                 raise ValueError("Multiplication is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] *= other[index]
             return self
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] *= other
             return self
         else:
             raise ValueError(f"Multiplication is supported for values of type {Hyperparameters}, {float} or {int}.")
 
     def __idiv__(self, other):
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not self.equal_search_space(other):
                 raise ValueError("Divition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] /= other[index]
             return self
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] /= other
             return self
         else:
             raise ValueError(f"Divition is supported for values of type {Hyperparameters}, {float} or {int}.")
 
     def __ipow__(self, other):
+        length = len(self)
         if isinstance(other, Hyperparameters):
             if not self.equal_search_space(other):
                 raise ValueError("Exponentiation is not supported for hyperparameter configurations of unequal search spaces.")
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] **= other[index]
             return self
         elif isinstance(other, (float, int)):
-            for index, param_entry in enumerate(self):
+            for index in range(length):
                 self[index] **= other
             return self
         else:

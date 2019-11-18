@@ -113,7 +113,7 @@ def hyperparameter_configuration_testing():
     print("--")
     print(hp1.get_optimizer_value_dict())
 
-# MAIN ENTRY
-#hyperparameter_math_testing()
-#categorical_hyperparameter_testing()
-hyperparameter_configuration_testing()
+if __name__ == "__main__":
+    hyperparameter_math_testing()
+    categorical_hyperparameter_testing()
+    hyperparameter_configuration_testing()
