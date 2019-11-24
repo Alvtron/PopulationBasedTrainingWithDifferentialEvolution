@@ -74,8 +74,11 @@ class ExploitAndExplore(Controller):
 
     def is_finished(self, checkpoint, database):
         """ True if a given number of epochs have passed or if the score reaches above 99%. """
-        if 'epoch' in self.end_criteria and checkpoint.epochs >= self.end_criteria['epoch']:
-            # the number of epochs is above the given treshold
+        if 'epochs' in self.end_criteria and checkpoint.epochs >= self.end_criteria['epochs']:
+            # the number of epochs is equal or above the given treshold
+            return True
+        if 'steps' in self.end_criteria and checkpoint.steps >= self.end_criteria['steps']:
+            # the number of steps is equal or above the given treshold
             return True
         all_members = database.to_list()
         if not all_members:
@@ -104,7 +107,7 @@ class DifferentialEvolution(Controller):
 
     def evolve(self, member, database, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
-        population = database.get_lates()
+        population = database.get_latest()
         population_size = len(population)
         hp_dimension_size = len(member.hyper_parameters)
         r0, r1, r2 = random.sample(range(0, population_size), 3)

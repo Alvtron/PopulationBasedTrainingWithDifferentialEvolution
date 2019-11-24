@@ -15,7 +15,7 @@ class Checkpoint:
     score: float
 
     def __str__(self):
-        return f"Member {self.id} - epoch {self.epochs}/step {self.steps} - {self.score:.2f}%"
+        return f"Member {self.id} - epoch {self.epochs} / step {self.steps} - {self.score:.2f}%"
 
     def update(self, checkpoint):
         self.model_state = checkpoint.model_state
@@ -34,12 +34,14 @@ class SharedDatabase(object):
         self.data = shared_memory_dict
 
     def create(self):
+        """ Create database directory """
         if not os.path.isdir(self.directory_path):
             os.mkdir(self.directory_path)
         if not os.path.isdir(self.database_path):
             os.mkdir(self.database_path)
 
     def delete(self):
+        """ Delete database directory """
         if os.path.isdir(self.directory_path):
             os.rmdir(self.directory_path)
         if os.path.isdir(self.database_path):

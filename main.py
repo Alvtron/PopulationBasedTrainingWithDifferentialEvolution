@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Population Based Training")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
-    parser.add_argument("--batch_size", type=int, default= 512, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--batch_size", type=int, default= 128, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     # import arguments
     args = parser.parse_args()
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     database_path = args.database_path
     # prepare database
     manager = mp.Manager()
-    data = manager.dict()
-    database = SharedDatabase(directory_path = 'checkpoints', shared_memory_dict = data)
+    shared_memory_dict = manager.dict()
+    database = SharedDatabase(directory_path = 'checkpoints', shared_memory_dict = shared_memory_dict)
     # prepare training and testing data
     train_data_path = test_data_path = './data'
     train_data = MNIST(train_data_path, True, transforms.ToTensor(), download=True)
@@ -36,15 +36,19 @@ if __name__ == "__main__":
     controller = ExploitAndExplore(
         exploit_factor = 0.2,
         explore_factors = (0.8, 1.2),
-        frequency = 10,
+        frequency = 200, #2*10**3,
         end_criteria = {
-            'epoch': 50,
-            #'score': 99.5
+            #'epochs': 50,
+            'steps': 400*10**3,
+            'score': 100.0
             })
     # define hyper-parameter search space
     hyper_parameters = Hyperparameters(
         general_params = None,
-        model_params = None,
+        model_params = {
+            'dropout_rate_1': Hyperparameter(0.0, 1.0),
+            'dropout_rate_2': Hyperparameter(0.0, 1.0)
+            },
         optimizer_params = {
             'lr': Hyperparameter(1e-6, 1e-0), # Learning rate.
             'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
