@@ -16,6 +16,7 @@ from hyperparameters import Hyperparameter, Hyperparameters
 from controller import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from trainer import Trainer
 from evaluator import Evaluator
+from analyze import Analyzer
 
 mp = torch.multiprocessing.get_context('spawn')
 
@@ -38,7 +39,6 @@ def create_mnist_members(population_size, batch_size, step_size, controller, dat
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.1307,), (0.3081,))
         ]))
-    train_data, eval_data = split_dataset(train_data, 0.9)
     test_data = MNIST(
         test_data_path,
         train=False,
@@ -47,6 +47,9 @@ def create_mnist_members(population_size, batch_size, step_size, controller, dat
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.1307,), (0.3081,))
         ]))
+    # split training set into training set and validation set
+    train_data, eval_data = split_dataset(train_data, 0.9)
+    # create trainer and evaluator
     trainer = Trainer(
         model_class = MnistNet,
         optimizer_class = torch.optim.SGD,
@@ -59,6 +62,12 @@ def create_mnist_members(population_size, batch_size, step_size, controller, dat
         model_class = MnistNet,
         batch_size = batch_size,
         test_data = eval_data,
+        device = device,
+        verbose = verbose)
+    tester = Evaluator(
+        model_class = MnistNet,
+        batch_size = batch_size,
+        test_data = test_data,
         device = device,
         verbose = verbose)
     # define hyper-parameter search space
@@ -91,7 +100,8 @@ def create_mnist_members(population_size, batch_size, step_size, controller, dat
             verbose = verbose,
             logging = logging)
         for id in range(population_size)]
-    return members
+    analyzer = Analyzer(database, tester)
+    return members, analyzer
     
 def create_fraud_members(population_size, batch_size, step_size, controller, database, device, verbose, logging):
     # prepare training and testing data
@@ -122,6 +132,12 @@ def create_fraud_members(population_size, batch_size, step_size, controller, dat
         model_class = FraudNet,
         batch_size = batch_size,
         test_data = eval_data,
+        device = device,
+        verbose = verbose)
+    tester = Evaluator(
+        model_class = FraudNet,
+        batch_size = batch_size,
+        test_data = test_data,
         device = device,
         verbose = verbose)
     # define hyper-parameter search space
@@ -155,7 +171,8 @@ def create_fraud_members(population_size, batch_size, step_size, controller, dat
             verbose = verbose,
             logging = logging)
         for id in range(population_size)]
-    return members
+    analyzer = Analyzer(database, tester)
+    return members, analyzer
 
 if __name__ == "__main__": 
     # request arguments
@@ -175,12 +192,12 @@ if __name__ == "__main__":
     shared_memory_dict = manager.dict()
     database = SharedDatabase(directory_path = 'checkpoints', shared_memory_dict = shared_memory_dict)
     # define controller
-    steps = 2*10**2 #2*10**3
-    end_steps_criterium = steps*5 #400*10**3
+    steps = 1000 #2*10**3
+    end_steps_criterium = 10*steps #400*10**3
     controller = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
     #controller = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8, frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
     # create members
-    members = create_mnist_members(
+    members, analyzer = create_mnist_members(
         population_size=population_size,
         batch_size=batch_size,
         step_size=steps,
@@ -190,13 +207,16 @@ if __name__ == "__main__":
         verbose=True,
         logging=True)
     # spawn members
-    [w.start() for w in members]
+    [m.start() for m in members]
     # block the calling thread until the members are finished
-    [w.join() for w in members]
+    [m.join() for m in members]
     # print database and best member
     print("Database entries:")
     database.print()
-    print("Best member:")
-    all_checkpoints = database.to_list()
+    print("Analyzing population...")
+    all_checkpoints = analyzer.test(limit=30)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.score)
-    print(f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.score:.2f}%")
+    print("Results...")
+    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.score:.2f}%"
+    database.save_to_file("results.txt", result)
+    print(result)
