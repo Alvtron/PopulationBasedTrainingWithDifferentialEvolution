@@ -23,15 +23,15 @@ class Checkpoint:
         self.hyper_parameters = checkpoint.hyper_parameters
         self.score = None
 
-
 class SharedDatabase(object):
-    def __init__(self, directory_path, shared_memory_dict):
+    def __init__(self, directory_path, shared_memory_dict, save_population = True):
         self.date_created = datetime.now()
         self.directory_path = directory_path
         date_time_string = self.date_created.strftime('%Y%m%d%H%M%S')
         self.database_path = f"{directory_path}/{date_time_string}"
         self.create()
         self.data = shared_memory_dict
+        self.save_population = save_population
 
     def create(self):
         """ Create database directory """
@@ -47,54 +47,71 @@ class SharedDatabase(object):
         if os.path.isdir(self.database_path):
             os.rmdir(self.database_path)
 
+    def save_to_file(self, filename, text):
+        if not isinstance(text, str):
+            raise ValueError("The provided text must be of type string!")
+        file_path = f"{self.database_path}/{filename}"
+        with open(file_path, 'a+') as file:
+            file.write(text + '\n')
+
+    def create_entry_directoy_path(self, id):
+        entry_directory = f"{self.database_path}/{id:03d}"
+        # create entry directory if not exist
+        if not os.path.isdir(entry_directory):
+            os.mkdir(entry_directory)
+        return entry_directory
+
+    def create_entry_file_path(self, id, steps):
+        entry_directory = self.create_entry_directoy_path(id)
+        return f"{entry_directory}/{steps:05d}.pth"
+
     def save_entry_to_file(self, entry):
-        file_path = f"{self.database_path}/{entry.id:03d}-{entry.steps:04d}.pth"
-        torch.save(entry, file_path)
+        entry_file_path = self.create_entry_file_path(entry.id, entry.steps)
+        torch.save(entry, entry_file_path)
 
     def save_entry(self, entry):
         """ Save new entry to the database. """
-        if not entry.id in self.data:
-            self.data[entry.id] = list()
-        self.data[entry.id] += [entry]
+        self.data[entry.id] = entry
+        if self.save_population:
+            self.save_entry_to_file(entry)
 
-    def get_entry(self, id, steps):
-        """ Returns the specific entry stored on the specified id and step. If there is no match, None is returned. """
-        if 0 <= steps < len(self.data[id]):
-            return self.data[id][steps]
-        else: return None
-
-    def get_latest_entry(self, id):
-        """ Returns the specific entry stored on the specified id and step. If there is no match, None is returned. """
-        return self.data[id][-1]
-
-    def get_entries(self, id):
-        """ Returns all entries stored on the specified id. If there is no match, None is returned. """
-        if id in self.data:
-            return self.data[id]
-        else: return None
+    def get_entry(self, id):
+        """ Returns the specific entry stored on the specified id. If there is no match, None is returned. """
+        return self.data[id] if self.data[id] else None
 
     def get_latest(self):
         """ Returns a list containing the latest entry from every member. """
         list_of_entries = []
-        for entries in self.data.values():
-            if len(entries) > 0:
-                list_of_entries.append(entries[-1])
+        for entry in self.data.values():
+            list_of_entries.append(entry)
         return list_of_entries
+
+    def get_entries_from_files(self, id):
+        entry_directory_path = self.create_entry_directoy_path(id)
+        entries = []
+        with os.scandir(entry_directory_path) as files:
+            for file in files:
+                entry = torch.load(file.path)
+                entries.append(entry)
+        return entries
 
     def to_dict(self):
         """ Returns a the database converted to a dictionary grouped by id/step/entry"""
-        dict_of_entries = {}
-        for entries in self.data.values():
+        dict_of_entries = dict()
+        for id in self.data.keys():
+            entries = self.get_entries_from_files(id)
+            if not dict_of_entries[id]:
+                dict_of_entries[id] = dict()
             for entry in entries:
-                entries[entry.id][entry.steps] = entry
+                dict_of_entries[id][entry.steps] = entry
         return dict_of_entries
         
     def to_list(self):
         """ Returns a the database converted to a list of all entries """
         list_of_entries = []
-        for entries in self.data.values():
-            for entry in entries:
-                list_of_entries.append(entry)
+        for id in self.data.keys():
+            entries = self.get_entries_from_files(id)
+            list_of_entries.extend(entries)
         return list_of_entries
 
     def print(self):

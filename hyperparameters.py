@@ -28,7 +28,7 @@ class Hyperparameter(object):
 
     def __init__(self, *args, is_categorical = False):
         ''' Provide a set of [lower bound, upper bound] as float/int, or categorical elements [obj1, obj2, ..., objn]. Make sure to set is_categorical = True if categorical values are provided. Sets the search space and sorts it, then samples a new candidate from an uniform distribution. '''
-        assert args and len(list(args)) > 1, "Hyperparameter initialization needs at least two arguments."
+        args = args if args and len(list(args)) > 1 else (0.0, 1.0)
         assert is_categorical or isinstance(args[0], (float, int)), f"Non-categorical hyperparameters must be of type {float} or {int}."
         self.search_space = list(args)
         self.is_categorical = is_categorical
@@ -279,6 +279,12 @@ class Hyperparameters(object):
         self.general = general_params  if general_params else {}
         self.model = model_params if model_params else {}
         self.optimizer = optimizer_params if optimizer_params else {}
+
+    def __str__(self):
+        info = []
+        for name, value in self:
+            info.append(f"{name}: {value}\n")
+        return ''.join(info)
 
     def __iter__(self):
         for parameter in self.general.items():
