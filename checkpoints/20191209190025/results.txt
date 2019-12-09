@@ -1,1 +1,0 @@
-Member 3 performed best on epoch 11 / step 10000 with an accuracy of 95.41%
