@@ -28,7 +28,7 @@ def split_dataset(dataset, fraction):
         first_set, second_set = torch.utils.data.random_split(dataset, (first_set_length, second_set_length))
         return first_set, second_set
 
-def create_mnist_members(population_size, batch_size, step_size, controller, database, device, verbose, logging):
+def setup_mnist(population_size, batch_size, step_size, controller, database, device, verbose, logging):
     # prepare training and testing data
     train_data_path = test_data_path = './data'
     train_data = MNIST(
@@ -57,19 +57,19 @@ def create_mnist_members(population_size, batch_size, step_size, controller, dat
         batch_size = batch_size,
         train_data = train_data,
         device = device,
-        verbose = verbose)
+        verbose = False)
     evaluator = Evaluator(
         model_class = MnistNet,
         batch_size = batch_size,
         test_data = eval_data,
         device = device,
-        verbose = verbose)
+        verbose = False)
     tester = Evaluator(
         model_class = MnistNet,
         batch_size = batch_size,
         test_data = test_data,
         device = device,
-        verbose = verbose)
+        verbose = False)
     # define hyper-parameter search space
     hyper_parameters = Hyperparameters(
         general_params = None,
@@ -103,7 +103,7 @@ def create_mnist_members(population_size, batch_size, step_size, controller, dat
     analyzer = Analyzer(database, tester)
     return members, analyzer
     
-def create_fraud_members(population_size, batch_size, step_size, controller, database, device, verbose, logging):
+def setup_fraud(population_size, batch_size, step_size, controller, database, device, verbose, logging):
     # prepare training and testing data
     df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
     X = df.iloc[:, :-1].values # extracting features
@@ -127,19 +127,19 @@ def create_fraud_members(population_size, batch_size, step_size, controller, dat
         batch_size = batch_size,
         train_data = train_data,
         device = device,
-        verbose = verbose)
+        verbose = False)
     evaluator = Evaluator(
         model_class = FraudNet,
         batch_size = batch_size,
         test_data = eval_data,
         device = device,
-        verbose = verbose)
+        verbose = False)
     tester = Evaluator(
         model_class = FraudNet,
         batch_size = batch_size,
         test_data = test_data,
         device = device,
-        verbose = verbose)
+        verbose = False)
     # define hyper-parameter search space
     hyper_parameters = Hyperparameters(
         general_params = None,
@@ -188,16 +188,17 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     database_path = args.database_path
     # prepare database
+    database_directory_path = 'checkpoints/mnist'
     manager = mp.Manager()
     shared_memory_dict = manager.dict()
-    database = SharedDatabase(directory_path = 'checkpoints', shared_memory_dict = shared_memory_dict)
+    database = SharedDatabase(directory_path = database_directory_path, shared_memory_dict = shared_memory_dict)
     # define controller
-    steps = 1000 #2*10**3
+    steps = 100 #2*10**3
     end_steps_criterium = 10*steps #400*10**3
-    controller = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
-    #controller = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8, frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
+    #controller = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
+    controller = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8, frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
     # create members
-    members, analyzer = create_mnist_members(
+    members, analyzer = setup_mnist(
         population_size=population_size,
         batch_size=batch_size,
         step_size=steps,
@@ -214,9 +215,10 @@ if __name__ == "__main__":
     print("Database entries:")
     database.print()
     print("Analyzing population...")
-    all_checkpoints = analyzer.test(limit=30)
+    all_checkpoints = analyzer.test(limit=25)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.score)
+    analyzer.plot_hyperparams(0)
     print("Results...")
-    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.score:.2f}%"
+    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.score:.4f}%"
     database.save_to_file("results.txt", result)
     print(result)

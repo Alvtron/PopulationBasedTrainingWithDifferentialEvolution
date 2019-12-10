@@ -35,6 +35,7 @@ class Trainer(object):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        if self.verbose: print(f"Epochs: {self.epochs}, step: {self.steps}, loss: {loss}")
 
     def train(self, hyper_parameters, model_state = None, optimizer_state = None, num_steps = 1, register = True):
         if num_steps < 1:

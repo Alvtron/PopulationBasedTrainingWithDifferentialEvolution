@@ -100,7 +100,7 @@ class SharedDatabase(object):
         dict_of_entries = dict()
         for id in self.data.keys():
             entries = self.get_entries_from_files(id)
-            if not dict_of_entries[id]:
+            if not id in dict_of_entries:
                 dict_of_entries[id] = dict()
             for entry in entries:
                 dict_of_entries[id][entry.steps] = entry

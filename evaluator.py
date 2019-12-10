@@ -23,7 +23,9 @@ class Evaluator(object):
         for x, y in self.test_data:
             x, y = x.to(self.device), y.to(self.device)
             outputs = model(x)
-            _, predicted = torch.max(outputs.data, 1)
-            correct += predicted.eq(y).sum().item()
-        accuracy = 100. * correct / (len(self.test_data) * self.batch_size)
+            _, predicted = torch.max(outputs.data, 1) # argmax, ex. [0.1, 0.3, 0.5, 0.1] --> 2th index
+            correct += predicted.eq(y).sum().item() # add 1 for each correct predict of the batch
+        dataset_length = len(self.test_data) * self.batch_size
+        accuracy = 100. * (correct / dataset_length)
+        if self.verbose: print(f"Accuracy: {accuracy:.4f}%")
         return accuracy
