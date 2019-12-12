@@ -69,6 +69,9 @@ def hyperparameter_configuration_testing():
     print(hp1 == hp2)
     print(hp1 != hp2)
 
+    print(hp1.values())
+    print(hp1.normalized())
+
     for param_name, param_value in hp1:
         print(param_name, param_value)
     for param_name, param_value in hp2:

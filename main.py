@@ -179,7 +179,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Population Based Training")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
-    parser.add_argument("--batch_size", type=int, default= 64, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--batch_size", type=int, default= 128, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     # import arguments
     args = parser.parse_args()
@@ -193,10 +193,10 @@ if __name__ == "__main__":
     shared_memory_dict = manager.dict()
     database = SharedDatabase(directory_path = database_directory_path, shared_memory_dict = shared_memory_dict)
     # define controller
-    steps = 100 #2*10**3
+    steps = 10 #2*10**3
     end_steps_criterium = 10*steps #400*10**3
-    #controller = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
-    controller = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8, frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
+    controller = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
+    #controller = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8, frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
     # create members
     members, analyzer = setup_mnist(
         population_size=population_size,
@@ -215,9 +215,9 @@ if __name__ == "__main__":
     print("Database entries:")
     database.print()
     print("Analyzing population...")
-    all_checkpoints = analyzer.test(limit=25)
+    all_checkpoints = analyzer.test(limit=50)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.score)
-    analyzer.plot_hyperparams(0)
+    analyzer.create_plot_files()
     print("Results...")
     result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.score:.4f}%"
     database.save_to_file("results.txt", result)

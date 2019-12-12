@@ -61,6 +61,9 @@ class SharedDatabase(object):
             os.mkdir(entry_directory)
         return entry_directory
 
+    def create_file_path(self, file_name):
+        return f"{self.database_path}/{file_name}"
+
     def create_entry_file_path(self, id, steps):
         entry_directory = self.create_entry_directoy_path(id)
         return f"{entry_directory}/{steps:05d}.pth"

@@ -2,7 +2,6 @@ import os
 import copy
 import torch
 import math
-import time
 from torch.multiprocessing import Queue
 from torch.utils.data import DataLoader
 from database import Checkpoint, SharedDatabase
@@ -37,7 +36,7 @@ class Member(mp.Process):
         """Logs and prints the provided message in the appropriate syntax."""
         full_message = f"{self}: {message}"
         if self.logging:
-            log_file_name = f"log_{self.id}.txt"
+            log_file_name = f"{self.id:03d}_log.txt"
             self.database.save_to_file(log_file_name, full_message)
         if self.verbose:
             print(full_message)

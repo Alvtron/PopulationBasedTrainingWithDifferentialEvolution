@@ -321,6 +321,12 @@ class Hyperparameters(object):
     def parameter_names(self):
         return [i[0] for i in self]
 
+    def values(self):
+        return [i[1].value() for i in self]
+    
+    def normalized(self):
+        return [i[1].normalized() for i in self]
+
     def set(self, list):
         length = len(self)
         if len(list) != length:
