@@ -4,24 +4,36 @@ from datetime import datetime
 from dataclasses import dataclass
 
 @dataclass
-class Checkpoint:
+class Checkpoint(object):
     '''Class for keeping track of a worker.'''
-    id: int
-    epochs: int
-    steps: int
-    model_state: dict
-    optimizer_state: dict
-    hyper_parameters: dict
-    score: float
+    def __init__(self, id, hyper_parameters):
+        self.id = id
+        self.epochs = 0
+        self.steps = 0
+        self.hyper_parameters = hyper_parameters
+        self.model_state = None
+        self.optimizer_state = None
+        self.train_loss = None
+        self.eval_score = None
+        self.test_score = None
 
     def __str__(self):
-        return f"Member {self.id} - epoch {self.epochs} / step {self.steps} - {self.score:.2f}%"
+        string = f"Member {self.id} - epoch {self.epochs}, step {self.steps}"
+        if self.train_loss:
+            string += f", loss {self.train_loss:.5f}"
+        if self.eval_score:
+            string += f", eval {self.eval_score:.5f}"
+        if self.test_score:
+            string += f", test {self.test_score:.5f}"
+        return string
 
     def update(self, checkpoint):
         self.model_state = checkpoint.model_state
         self.optimizer_state = checkpoint.optimizer_state
         self.hyper_parameters = checkpoint.hyper_parameters
-        self.score = None
+        self.train_loss = checkpoint.train_loss
+        self.eval_score = checkpoint.eval_score
+        self.test_score = checkpoint.test_score
 
 class SharedDatabase(object):
     def __init__(self, directory_path, shared_memory_dict, save_population = True):
@@ -87,6 +99,14 @@ class SharedDatabase(object):
         list_of_entries = []
         for entry in self.data.values():
             list_of_entries.append(entry)
+        return list_of_entries
+
+    def get_all(self):
+        """ Returns a list containing the latest entry from every member. """
+        list_of_entries = []
+        for id in self.data.keys():
+            entries = self.get_entries_from_files(id)
+            list_of_entries.extend(entries)
         return list_of_entries
 
     def get_entries_from_files(self, id):

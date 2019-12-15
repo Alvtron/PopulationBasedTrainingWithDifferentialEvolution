@@ -1,5 +1,6 @@
-import argparse
 import os
+import sys
+import argparse
 import math
 import torch
 import torchvision
@@ -10,15 +11,13 @@ import sklearn.model_selection
 import torchvision.transforms as transforms
 from torchvision.datasets import MNIST
 from model import MnistNet, FraudNet
-from member import Member
 from database import SharedDatabase
 from hyperparameters import Hyperparameter, Hyperparameters
-from controller import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
-from trainer import Trainer
+from controller import Controller
 from evaluator import Evaluator
+from trainer import Trainer
+from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from analyze import Analyzer
-
-mp = torch.multiprocessing.get_context('spawn')
 
 def split_dataset(dataset, fraction):
         assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"
@@ -28,7 +27,10 @@ def split_dataset(dataset, fraction):
         first_set, second_set = torch.utils.data.random_split(dataset, (first_set_length, second_set_length))
         return first_set, second_set
 
-def setup_mnist(population_size, batch_size, step_size, controller, database, device, verbose, logging):
+def setup_mnist():
+    model_class = MnistNet
+    optimizer_class = torch.optim.SGD
+    loss_function = torch.nn.CrossEntropyLoss()
     # prepare training and testing data
     train_data_path = test_data_path = './data'
     train_data = MNIST(
@@ -49,27 +51,6 @@ def setup_mnist(population_size, batch_size, step_size, controller, database, de
         ]))
     # split training set into training set and validation set
     train_data, eval_data = split_dataset(train_data, 0.9)
-    # create trainer and evaluator
-    trainer = Trainer(
-        model_class = MnistNet,
-        optimizer_class = torch.optim.SGD,
-        loss_function = torch.nn.CrossEntropyLoss(),
-        batch_size = batch_size,
-        train_data = train_data,
-        device = device,
-        verbose = False)
-    evaluator = Evaluator(
-        model_class = MnistNet,
-        batch_size = batch_size,
-        test_data = eval_data,
-        device = device,
-        verbose = False)
-    tester = Evaluator(
-        model_class = MnistNet,
-        batch_size = batch_size,
-        test_data = test_data,
-        device = device,
-        verbose = False)
     # define hyper-parameter search space
     hyper_parameters = Hyperparameters(
         general_params = None,
@@ -86,24 +67,12 @@ def setup_mnist(population_size, batch_size, step_size, controller, database, de
             #'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
             'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
             })
-    # create members
-    members = [
-        Member(
-            id = id,
-            controller = controller,
-            hyper_parameters = hyper_parameters,
-            trainer = trainer,
-            evaluator = evaluator,
-            database = database,
-            step_size = step_size,
-            device = device,
-            verbose = verbose,
-            logging = logging)
-        for id in range(population_size)]
-    analyzer = Analyzer(database, tester)
-    return members, analyzer
+    return model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters
     
-def setup_fraud(population_size, batch_size, step_size, controller, database, device, verbose, logging):
+def setup_fraud():
+    model_class = FraudNet
+    optimizer_class = torch.optim.SGD
+    loss_function = torch.nn.BCELoss()
     # prepare training and testing data
     df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
     X = df.iloc[:, :-1].values # extracting features
@@ -119,27 +88,6 @@ def setup_fraud(population_size, batch_size, step_size, controller, database, de
     test_data = torch.utils.data.TensorDataset(X_test, Y_test)
     # split training set into training set and validation set
     train_data, eval_data = split_dataset(train_data, 0.9)
-    # create trainer and evaluator
-    trainer = Trainer(
-        model_class = FraudNet,
-        optimizer_class = torch.optim.SGD,
-        loss_function = torch.nn.BCELoss(),
-        batch_size = batch_size,
-        train_data = train_data,
-        device = device,
-        verbose = False)
-    evaluator = Evaluator(
-        model_class = FraudNet,
-        batch_size = batch_size,
-        test_data = eval_data,
-        device = device,
-        verbose = False)
-    tester = Evaluator(
-        model_class = FraudNet,
-        batch_size = batch_size,
-        test_data = test_data,
-        device = device,
-        verbose = False)
     # define hyper-parameter search space
     hyper_parameters = Hyperparameters(
         general_params = None,
@@ -157,29 +105,14 @@ def setup_fraud(population_size, batch_size, step_size, controller, database, de
             'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
             'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
             })
-    # create members
-    members = [
-        Member(
-            id = id,
-            controller = controller,
-            hyper_parameters = hyper_parameters,
-            trainer = trainer,
-            evaluator = evaluator,
-            database = database,
-            step_size = step_size,
-            device = device,
-            verbose = verbose,
-            logging = logging)
-        for id in range(population_size)]
-    analyzer = Analyzer(database, tester)
-    return members, analyzer
+    return model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters
 
 if __name__ == "__main__": 
     # request arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
-    parser.add_argument("--batch_size", type=int, default= 128, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--batch_size", type=int, default= 32, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     # import arguments
     args = parser.parse_args()
@@ -188,37 +121,66 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     database_path = args.database_path
     # prepare database
+    mp = torch.multiprocessing.get_context('spawn')
     database_directory_path = 'checkpoints/mnist'
     manager = mp.Manager()
     shared_memory_dict = manager.dict()
     database = SharedDatabase(directory_path = database_directory_path, shared_memory_dict = shared_memory_dict)
+    # prepare objective
+    model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
+    # create trainer, evaluator and tester
+    trainer = Trainer(
+        model_class = model_class,
+        optimizer_class = optimizer_class,
+        loss_function = loss_function,
+        batch_size = batch_size,
+        train_data = train_data,
+        device = device,
+        verbose = False)
+    evaluator = Evaluator(
+        model_class = model_class,
+        batch_size = batch_size,
+        test_data = eval_data,
+        device = device,
+        verbose = False)
+    tester = Evaluator(
+        model_class = model_class,
+        batch_size = batch_size,
+        test_data = test_data,
+        device = device,
+        verbose = False)
     # define controller
     steps = 10 #2*10**3
-    end_steps_criterium = 10*steps #400*10**3
-    controller = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2), frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
-    #controller = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8, frequency = steps, end_criteria = {'steps': end_steps_criterium, 'score': 100.0})
-    # create members
-    members, analyzer = setup_mnist(
+    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
+    evolver = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    #evolver = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8)
+    # create controller
+    controller = Controller(
         population_size=population_size,
-        batch_size=batch_size,
-        step_size=steps,
-        controller=controller,
+        hyper_parameters=hyper_parameters,
+        trainer=trainer,
+        evaluator=evaluator,
+        tester=tester,
+        evolver=evolver,
         database=database,
+        step_size=steps,
+        evolve_frequency=steps,
+        end_criteria=end_criteria,
         device=device,
         verbose=True,
         logging=True)
-    # spawn members
-    [m.start() for m in members]
-    # block the calling thread until the members are finished
-    [m.join() for m in members]
-    # print database and best member
+    # run controller
+    controller.start()
+    # analyze results stored in database
+    analyzer = Analyzer(database, tester)
     print("Database entries:")
     database.print()
     print("Analyzing population...")
     all_checkpoints = analyzer.test(limit=50)
-    best_checkpoint = max(all_checkpoints, key=lambda c: c.score)
-    analyzer.create_plot_files()
-    print("Results...")
-    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.score:.4f}%"
-    database.save_to_file("results.txt", result)
-    print(result)
+    if all_checkpoints:
+        best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
+        analyzer.create_plot_files()
+        print("Results...")
+        result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
+        database.save_to_file("results.txt", result)
+        print(result)

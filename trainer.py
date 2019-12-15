@@ -1,4 +1,5 @@
 import torch
+import itertools
 from torch.utils.data import DataLoader
 
 class Trainer(object):
@@ -9,7 +10,6 @@ class Trainer(object):
         self.loss_function = loss_function
         self.batch_size = batch_size
         self.train_data = DataLoader(dataset = train_data, batch_size = batch_size, shuffle = False)
-        self.iterator = None
         self.device = device
         self.verbose = verbose
         self.steps = 0
@@ -35,26 +35,29 @@ class Trainer(object):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if self.verbose: print(f"Epochs: {self.epochs}, step: {self.steps}, loss: {loss}")
+        return loss.item()
 
-    def train(self, hyper_parameters, model_state = None, optimizer_state = None, num_steps = 1, register = True):
-        if num_steps < 1:
+    def train(self, hyper_parameters, model_state, optimizer_state, epochs, steps, step_size = 1):
+        if step_size < 1:
             raise Exception("The number of steps must be at least one or higher.")
-        # creating iterator if not created
-        if not self.iterator:
-            self.iterator = iter(self.train_data)
+        # creating iterator
+        num_steps_this_epoch = steps % len(self.train_data)
+        iterator = itertools.islice(self.train_data, num_steps_this_epoch, None)
         # preparing model and optimizer
         model = self.create_model(model_state)
         model.apply_hyper_parameters(hyper_parameters.model)
         optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
-        steps_left = num_steps
+        steps_left = step_size
+        total_loss = 0
         while steps_left > 0:
             try:
-                x, y = next(self.iterator)
-                self.step(model, optimizer, x, y)
+                x, y = next(iterator)
+                total_loss += self.step(model, optimizer, x, y)
                 steps_left -= 1
-                if register: self.steps += 1
+                steps += 1
+                if self.verbose: print(f"Epochs: {self.epochs}, steps: {self.steps}, loss: {loss}")
             except StopIteration:
-                self.iterator = iter(self.train_data)
-                if register: self.epochs += 1
-        return model.state_dict(), optimizer.state_dict()
+                iterator = iter(self.train_data)
+                epochs += 1
+        avg_loss = total_loss / step_size
+        return model.state_dict(), optimizer.state_dict(), epochs, steps, avg_loss

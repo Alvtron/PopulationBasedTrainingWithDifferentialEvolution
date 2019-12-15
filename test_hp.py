@@ -5,21 +5,21 @@ from hyperparameters import Hyperparameter, Hyperparameters
 from utils import unwrap_iterable
 
 def hyperparameter_math_testing():
-    a = Hyperparameter(0, 1000)
-    b = Hyperparameter(0, 1000)
+    a = Hyperparameter(0, 1000000)
+    b = Hyperparameter(0, 1000000)
     print(f"a = {a}")
     print(f"b = {b}")
-    print(f"a + b = {a + b}")
-    print(f"a - b = {a - b}")
-    print(f"a * b = {a * b}")
-    print(f"a / b = {a / b}")
-    print(f"a ** b = {a ** b}")
+    print(f"{a} + {b} = {a + b}")
+    print(f"{a} - {b} = {a - b}")
+    print(f"{a} * {b} = {a * b}")
+    print(f"{a} / {b} = {a / b}")
+    print(f"{a} ** {b} = {a ** b}")
 
-    print(f"a + 0.1 = {a + 0.1}")
-    print(f"a - 0.1 = {a - 0.1}")
-    print(f"a * 2 = {a * 2}")
-    print(f"a / 2 = {a / 2}")
-    print(f"a ** 2 = {a ** 2}")
+    print(f"{a} + 0.1 = {a + 0.1}")
+    print(f"{a} - 0.1 = {a - 0.1}")
+    print(f"{a} * 2 = {a * 2}")
+    print(f"{a} / 2 = {a / 2}")
+    print(f"{a} ** 2 = {a ** 2}")
 
 def categorical_hyperparameter_testing():
     categorical = Hyperparameter("A","B","C","D","E","F","G","H","I", is_categorical = True)
@@ -89,6 +89,12 @@ def hyperparameter_configuration_testing():
     for param_name, param_value in b:
         print(param_name, param_value)
 
+    print("hp1 - 0.5:")
+    c = hp1 - 0.5
+
+    for param_name, param_value in c:
+        print(param_name, param_value)
+
     print("hp1 += hp2:")
     hp1 += hp2
 
@@ -115,9 +121,19 @@ def hyperparameter_configuration_testing():
     print("hp1[1] =", hp1[1])
 
     print("--")
+    print("optimizer value dict:")
     print(hp1.get_optimizer_value_dict())
 
+    print("--")
+    print("print with for loop with indices:")
+    for index in range(len(hp1)):
+        print(f"hp1[{index}]: {hp1[index]}")
+    print("change with for loop with indices:")
+    for index in range(len(hp1)):
+        hp1[index] = Hyperparameter(1, 256)
+        print(f"hp1[{index}]: {hp1[index]}")
+
 if __name__ == "__main__":
-    hyperparameter_math_testing()
-    categorical_hyperparameter_testing()
+    #hyperparameter_math_testing()
+    #categorical_hyperparameter_testing()
     hyperparameter_configuration_testing()

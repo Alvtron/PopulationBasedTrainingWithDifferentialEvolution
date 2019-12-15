@@ -43,7 +43,9 @@ class Hyperparameter(object):
 
     def value(self):
         """Returns the representative hyperparameter value."""
-        return self.get_value(self.__value) if self.__value else None
+        if self.__value == None:
+            raise ValueError("Developer error. '__value' is None.")
+        return self.get_value(self.__value)
 
     def get_normalized_value(self, value):
         """Returns a normalized version of the provided hyperparameter value."""
