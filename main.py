@@ -150,7 +150,7 @@ if __name__ == "__main__":
         device = device,
         verbose = False)
     # define controller
-    steps = 10 #2*10**3
+    steps = 100 #2*10**3
     end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
     evolver = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     #evolver = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8)
@@ -176,10 +176,15 @@ if __name__ == "__main__":
     print("Database entries:")
     database.print()
     print("Analyzing population...")
+    analyzer.create_plot_files(
+        n_hyper_parameters=len(hyper_parameters),
+        min_score=0,
+        max_score=100,
+        annotate=False,
+        transparent=False)
     all_checkpoints = analyzer.test(limit=50)
     if all_checkpoints:
         best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
-        analyzer.create_plot_files()
         print("Results...")
         result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
         database.save_to_file("results.txt", result)

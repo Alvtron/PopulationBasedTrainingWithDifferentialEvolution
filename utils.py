@@ -24,3 +24,16 @@ def translate(value, left_min, left_max, right_min, right_max):
     value_normalized = float(value - left_min) / float(left_span)
     # Convert the normalize value range into a value in the right range.
     return right_min + (value_normalized * right_span)
+
+def clip(value, min_value, max_value):
+    if value <= min_value:
+        return min_value
+    elif value >= max_value:
+        return max_value
+    else:
+        return value
+
+def translate_and_clip(value, left_min, left_max, right_min, right_max):
+    translated_value = translate(value, left_min, left_max, right_min, right_max)
+    clipped_value = clip(translated_value, right_min, right_max)
+    return clipped_value
