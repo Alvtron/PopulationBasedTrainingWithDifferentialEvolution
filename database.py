@@ -18,7 +18,7 @@ class Checkpoint(object):
         self.test_score = None
 
     def __str__(self):
-        string = f"Member {self.id} - epoch {self.epochs}, step {self.steps}"
+        string = f"Member {self.id:03d}, epoch {self.epochs}, step {self.steps}"
         if self.train_loss:
             string += f", loss {self.train_loss:.5f}"
         if self.eval_score:

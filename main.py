@@ -9,6 +9,8 @@ import pandas
 import sklearn.preprocessing
 import sklearn.model_selection
 import torchvision.transforms as transforms
+from tensorboard import program
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import MNIST
 from model import MnistNet, FraudNet
 from database import SharedDatabase
@@ -114,19 +116,40 @@ if __name__ == "__main__":
     parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default= 32, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
+    parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
+    parser.add_argument("--logging", type=bool, default=True, help="Logging level")
     # import arguments
+    print(f"Importing user arguments...")
     args = parser.parse_args()
     device = args.device if torch.cuda.is_available() and not os.name == 'nt' else 'cpu'
     population_size = args.population_size
     batch_size = args.batch_size
     database_path = args.database_path
+    enable_tensorboard = args.tensorboard
+    verbose = args.verbose
+    logging = args.logging
     # prepare database
+    print(f"Preparing database...")
     mp = torch.multiprocessing.get_context('spawn')
     database_directory_path = 'checkpoints/mnist'
     manager = mp.Manager()
     shared_memory_dict = manager.dict()
-    database = SharedDatabase(directory_path = database_directory_path, shared_memory_dict = shared_memory_dict)
+    database = SharedDatabase(
+        directory_path = database_directory_path,
+        shared_memory_dict = shared_memory_dict)
+    # prepare tensorboard writer
+    tensorboard_writer = None
+    if enable_tensorboard:
+        print(f"Launching tensorboard...")
+        tensorboard_log_path = f"{database.database_path}/tensorboard_log"
+        tb = program.TensorBoard()
+        tb.configure(argv=[None, '--logdir', tensorboard_log_path])
+        url = tb.launch()
+        print(f"Tensoboard is launched and accessible at: {url}")
+        tensorboard_writer = SummaryWriter(tensorboard_log_path)
     # prepare objective
+    print(f"Preparing model and datasets...")
     model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
     # create trainer, evaluator and tester
     trainer = Trainer(
@@ -150,11 +173,13 @@ if __name__ == "__main__":
         device = device,
         verbose = False)
     # define controller
+    print(f"Creating evolver...")
     steps = 100 #2*10**3
-    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
+    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
     evolver = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     #evolver = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8)
     # create controller
+    print(f"Creating controller...")
     controller = Controller(
         population_size=population_size,
         hyper_parameters=hyper_parameters,
@@ -163,13 +188,15 @@ if __name__ == "__main__":
         tester=tester,
         evolver=evolver,
         database=database,
+        tensorboard_writer=tensorboard_writer,
         step_size=steps,
         evolve_frequency=steps,
         end_criteria=end_criteria,
         device=device,
-        verbose=True,
-        logging=True)
+        verbose=verbose,
+        logging=logging)
     # run controller
+    print(f"Starting controller...")
     controller.start()
     # analyze results stored in database
     analyzer = Analyzer(database, tester)

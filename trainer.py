@@ -48,16 +48,17 @@ class Trainer(object):
         model.apply_hyper_parameters(hyper_parameters.model)
         optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
         steps_left = step_size
-        total_loss = 0
+        running_loss = 0
         while steps_left > 0:
             try:
                 x, y = next(iterator)
-                total_loss += self.step(model, optimizer, x, y)
+                loss = self.step(model, optimizer, x, y)
+                if loss: running_loss += loss
                 steps_left -= 1
                 steps += 1
                 if self.verbose: print(f"Epochs: {self.epochs}, steps: {self.steps}, loss: {loss}")
             except StopIteration:
                 iterator = iter(self.train_data)
                 epochs += 1
-        avg_loss = total_loss / step_size
+        avg_loss = running_loss / step_size
         return model.state_dict(), optimizer.state_dict(), epochs, steps, avg_loss

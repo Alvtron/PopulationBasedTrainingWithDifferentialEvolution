@@ -41,14 +41,16 @@ class Analyzer(object):
                     ax.set_title(param_name)
                     ax.set_ylim(bottom=0.0, top=1.0, auto=False)
                     ax.set(xlabel='steps', ylabel='value')
-                    score_decimal = (entry.eval_score-min_score)/(max_score-min_score)
-                    color = color_map(score_decimal ** 3)
-                    marker_size = 12 * (score_decimal ** 3)
+                    score_decimal = (entry.eval_score - min_score) / (max_score - min_score)
+                    color = color_map(score_decimal ** 4)
+                    marker_size = 12 * (score_decimal ** 4)
                     x, y = (entry.steps, param.normalized())
                     # plot
                     ax.plot(x, y, marker='o', markersize=marker_size, color=color)
                     if annotate: ax.annotate(f"{entry.eval_score:.2f}", (x, y))
+            # align y-labels, TODO: if y is normalized hyper-parameter
             figure.align_ylabels()
+            # save figures to database directory
             file_path_png = self.database.create_file_path(f"{entry_id:03d}_hyper_parameter_plot.png")
             file_path_svg = self.database.create_file_path(f"{entry_id:03d}_hyper_parameter_plot.svg")
             plt.savefig(fname=file_path_png, format='png', transparent=transparent)
