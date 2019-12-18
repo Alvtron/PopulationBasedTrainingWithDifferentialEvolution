@@ -51,6 +51,8 @@ class Controller(object):
             self.database.save_to_file(log_file_name, full_message)
         if self.verbose:
             print(full_message)
+        if self.__tensorboard_writer:
+            self.__tensorboard_writer.add_text(tag="controller", text_string=full_message, global_step=checkpoint.steps)
 
     def eval_function(self, checkpoint):
         current_model_state, _, _, _ , _ = self.trainer.train(

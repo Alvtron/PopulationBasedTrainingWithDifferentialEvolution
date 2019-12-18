@@ -176,8 +176,8 @@ if __name__ == "__main__":
     print(f"Creating evolver...")
     steps = 100 #2*10**3
     end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
-    evolver = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
-    #evolver = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8)
+    #evolver = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    evolver = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
