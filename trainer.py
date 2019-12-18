@@ -12,8 +12,6 @@ class Trainer(object):
         self.train_data = DataLoader(dataset = train_data, batch_size = batch_size, shuffle = False)
         self.device = device
         self.verbose = verbose
-        self.steps = 0
-        self.epochs = 0
 
     def create_model(self, model_state = None):
         model = self.model_class().to(self.device)

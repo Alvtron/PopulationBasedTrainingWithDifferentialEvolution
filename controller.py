@@ -41,7 +41,6 @@ class Controller(object):
         self.finish_queue = mp.Queue(population_size)
         self.__workers = []
         self.__tensorboard_writer = tensorboard_writer
-        self.__resource_distribution = {"init": 0, "tensorboard": 0, "evolve": 0}
 
     def log(self, checkpoint, message):
         """Logs and prints the provided message in the appropriate syntax."""
@@ -83,7 +82,6 @@ class Controller(object):
         return False
 
     def start_training_procedure(self):
-        start_time = time.time()
         print("Creating worker processes...")
         self.__workers = [
             Member(
@@ -98,22 +96,22 @@ class Controller(object):
             for _ in range(self.population_size)]
         # Starting workers
         for index, worker in enumerate(self.__workers, start=1):
-            print(f"Starting worker {index} of {self.population_size}", end="\r", flush=True)
+            print(f"Starting worker {index}/{self.population_size}", end="\r", flush=True)
             worker.start()
         # queue checkpoints
         for id in range(self.population_size):
-            print(f"Queuing checkpoint {id} of {self.population_size - 1}...")
+            print(f"Queuing checkpoint {id + 1}/{self.population_size}", end="\r", flush=True)
+            # copy hyper-parameters
             hyper_parameters = copy.deepcopy(self.hyper_parameters)
-            # prepare hyper_parameters
-            for _, hyper_parameter in hyper_parameters:
-                hyper_parameter.sample_uniform()
+            # create new checkpoint object
             checkpoint = Checkpoint(id, hyper_parameters)
+            # prepare hyper-parameters
+            self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.log, checkpoint))
+            # queue checkpoint for training
             self.train_queue.put(checkpoint)
-        self.__resource_distribution["init"] += time.time() - start_time
 
     def write_to_tensorflow(self, checkpoint):
         """Plots loss and eval metric to tensorboard"""
-        start_time = time.time()
         # train loss
         self.__tensorboard_writer.add_scalar(
             tag=f"Loss/train/{checkpoint.id:03d}",
@@ -131,11 +129,18 @@ class Controller(object):
                 scalar_value=hparam.value(),
                 global_step=checkpoint.steps)
         # resource distribution
-        self.__tensorboard_writer.add_scalars(
-            main_tag=f"Resource_usage",
-            tag_scalar_dict=self.__resource_distribution,
+        self.__tensorboard_writer.add_scalar(
+            tag=f"Time/train/{checkpoint.id:03d}",
+            scalar_value=checkpoint.train_time if checkpoint.train_time else 0,
             global_step=checkpoint.steps)
-        self.__resource_distribution["tensorboard"] += time.time() - start_time
+        self.__tensorboard_writer.add_scalar(
+            tag=f"Time/eval/{checkpoint.id:03d}",
+            scalar_value=checkpoint.eval_time if checkpoint.eval_time else 0,
+            global_step=checkpoint.steps)
+        self.__tensorboard_writer.add_scalar(
+            tag=f"Time/evolve/{checkpoint.id:03d}",
+            scalar_value=checkpoint.evolve_time if checkpoint.evolve_time else 0,
+            global_step=checkpoint.steps)
 
     def start(self):
         try:
@@ -149,12 +154,15 @@ class Controller(object):
                 checkpoint = self.evolve_queue.get()
                 # save checkpoint to database
                 self.database.save_entry(checkpoint)
+                # write to tensorboard if enabled
                 if self.__tensorboard_writer:
                     self.write_to_tensorflow(checkpoint)
+                # check if population is finished
                 if self.is_population_finished(checkpoint):
                     self.log(checkpoint, "End criterium reached.")
                     self.end_event.set()
                     break
+                # check if member is finished
                 if self.is_member_finished(checkpoint):
                     self.log(checkpoint, "finished.")
                     self.finish_queue.put(checkpoint)
@@ -166,14 +174,15 @@ class Controller(object):
                 # evolve member if ready
                 if self.is_member_ready(checkpoint):
                     self.log(checkpoint, "evolving...")
-                    start_time = time.time()
+                    start_evolve_time_ns = time.time_ns()
                     self.evolver.evolve(
                         member=checkpoint,
                         generation=self.database.get_latest,
-                        population=self.database.get_all,
+                        population=self.database.to_list,
                         function=self.eval_function,
                         logger=partial(self.log, checkpoint))
-                    self.__resource_distribution["evolve"] += time.time() - start_time
+                    checkpoint.evolve_time = float(time.time_ns() - start_evolve_time_ns) * float(10**(-9))
+                # queue member for training
                 self.log(checkpoint, "training...")
                 self.train_queue.put(checkpoint)
             # terminate worker processes

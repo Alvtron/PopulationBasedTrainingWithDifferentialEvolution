@@ -2,6 +2,7 @@ import os
 import copy
 import torch
 import math
+import time
 from torch.multiprocessing import Queue
 from torch.utils.data import DataLoader
 from database import Checkpoint, SharedDatabase
@@ -26,8 +27,10 @@ class Member(mp.Process):
         while not self.end_event.is_set():
             if self.train_queue.empty():
                 continue
+            # get next checkpoint from train queue
             checkpoint = self.train_queue.get()
-            # train
+            # train checkpoint model
+            start_train_time_ns = time.time_ns()
             checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.train_loss = self.trainer.train(
                 hyper_parameters=checkpoint.hyper_parameters,
                 model_state=checkpoint.model_state,
@@ -35,6 +38,9 @@ class Member(mp.Process):
                 epochs=checkpoint.epochs,
                 steps=checkpoint.steps,
                 step_size=self.step_size)
-            # eval
+            checkpoint.train_time = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
+            # evaluate checkpoint model
+            start_eval_time_ns = time.time_ns()
             checkpoint.eval_score = self.evaluator.eval(checkpoint.model_state)
+            checkpoint.eval_time = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
             self.evolve_queue.put(checkpoint)

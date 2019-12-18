@@ -14,7 +14,7 @@ from utils import get_datetime_string
 mp = torch.multiprocessing.get_context('spawn')
 
 class EvolveEngine(ABC):
-    def prepare(self, hyper_parameters, logger):
+    def prepare(self, hyper_parameters, logger = None):
         pass
 
     def evolve(self, member, generation, population, function, logger):
@@ -28,12 +28,12 @@ class ExploitAndExplore(EvolveEngine):
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
 
-    def prepare(self, hyper_parameters, logger):
+    def prepare(self, hyper_parameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value()}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -71,12 +71,12 @@ class DifferentialEvolution(EvolveEngine):
         self.F = F
         self.Cr = Cr
 
-    def prepare(self, hyper_parameters, logger):
+    def prepare(self, hyper_parameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value()}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -111,12 +111,12 @@ class ParticleSwarm(EvolveEngine):
         self.a = a
         self.b = b
 
-    def prepare(self, hyper_parameters, logger):
+    def prepare(self, hyper_parameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value()}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
