@@ -60,7 +60,9 @@ class Controller(object):
             model_state=checkpoint.model_state,
             optimizer_state=checkpoint.optimizer_state,
             epochs=checkpoint.epochs,
-            steps=checkpoint.steps)
+            steps=checkpoint.steps,
+            step_size=1
+            )
         score = self.evaluator.eval(current_model_state)
         return score
 
@@ -154,6 +156,7 @@ class Controller(object):
                     continue
                 # get next checkpoint
                 checkpoint = self.evolve_queue.get()
+                print(f"Queue length: {self.evolve_queue.qsize()}")
                 # save checkpoint to database
                 self.database.save_entry(checkpoint)
                 # write to tensorboard if enabled

@@ -6,6 +6,8 @@ import torch
 import torchvision
 import torch.utils.data
 import pandas
+import numpy
+import random
 import sklearn.preprocessing
 import sklearn.model_selection
 import torchvision.transforms as transforms
@@ -20,6 +22,13 @@ from evaluator import Evaluator
 from trainer import Trainer
 from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from analyze import Analyzer
+
+# reproducibility
+random.seed(0)
+numpy.random.seed(0)
+torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 def split_dataset(dataset, fraction):
         assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"
@@ -52,7 +61,7 @@ def setup_mnist():
             torchvision.transforms.Normalize((0.1307,), (0.3081,))
         ]))
     # split training set into training set and validation set
-    train_data, eval_data = split_dataset(train_data, 0.9)
+    train_data, eval_data = split_dataset(train_data, 0.90)
     # define hyper-parameter search space
     hyper_parameters = Hyperparameters(
         general_params = None,
@@ -66,7 +75,7 @@ def setup_mnist():
         optimizer_params = {
             'lr': Hyperparameter(1e-6, 1e-2), # Learning rate.
             'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
-            #'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
+            'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
             'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
             })
     return model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters
@@ -109,38 +118,42 @@ def setup_fraud():
             })
     return model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters
 
-if __name__ == "__main__": 
-    # request arguments
+def import_user_arguments():
+    # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
-    parser.add_argument("--batch_size", type=int, default= 32, help="The number of batches in which the training set will be divided into.")
-    parser.add_argument("--database_path", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--batch_size", type=int, default=32, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/mnist', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
     parser.add_argument("--logging", type=bool, default=True, help="Logging level")
-    # import arguments
-    print(f"Importing user arguments...")
     args = parser.parse_args()
-    device = args.device if torch.cuda.is_available() and not os.name == 'nt' else 'cpu'
-    population_size = args.population_size
-    batch_size = args.batch_size
-    database_path = args.database_path
-    enable_tensorboard = args.tensorboard
-    verbose = args.verbose
-    logging = args.logging
+    # argument error handling
+    if (args.device == 'cuda' and not torch.cuda.is_available()):
+        raise ValueError("CUDA is not available on your machine.")
+    if (args.device == 'cuda' and os.name == 'nt'):
+        raise NotImplementedError("Pytorch with CUDA is not supported on Windows.")
+    if (args.population_size < 1):
+        raise ValueError("Population size must be at least 1.")
+    if (args.batch_size < 1):
+        raise ValueError("Batch size must be at least 1.")
+    return args
+
+if __name__ == "__main__":
+    print(f"Importing user arguments...")
+    args = import_user_arguments()
     # prepare database
     print(f"Preparing database...")
     mp = torch.multiprocessing.get_context('spawn')
-    database_directory_path = 'checkpoints/mnist'
     manager = mp.Manager()
     shared_memory_dict = manager.dict()
     database = SharedDatabase(
-        directory_path = database_directory_path,
+        directory_path = args.database_path,
         shared_memory_dict = shared_memory_dict)
     # prepare tensorboard writer
     tensorboard_writer = None
-    if enable_tensorboard:
+    if args.tensorboard:
         print(f"Launching tensorboard...")
         tensorboard_log_path = f"{database.database_path}/tensorboard_log"
         tb = program.TensorBoard()
@@ -156,32 +169,32 @@ if __name__ == "__main__":
         model_class = model_class,
         optimizer_class = optimizer_class,
         loss_function = loss_function,
-        batch_size = batch_size,
+        batch_size = args.batch_size,
         train_data = train_data,
-        device = device,
+        device = args.device,
         verbose = False)
     evaluator = Evaluator(
         model_class = model_class,
-        batch_size = batch_size,
+        batch_size = args.batch_size,
         test_data = eval_data,
-        device = device,
+        device = args.device,
         verbose = False)
     tester = Evaluator(
         model_class = model_class,
-        batch_size = batch_size,
+        batch_size = args.batch_size,
         test_data = test_data,
-        device = device,
+        device = args.device,
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 100 #2*10**3
+    steps = 100#2*10**3
     end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
-    #evolver = ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
-    evolver = DifferentialEvolution(N = population_size, F = 0.2, Cr = 0.8)
+    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
-        population_size=population_size,
+        population_size=args.population_size,
         hyper_parameters=hyper_parameters,
         trainer=trainer,
         evaluator=evaluator,
@@ -192,9 +205,9 @@ if __name__ == "__main__":
         step_size=steps,
         evolve_frequency=steps,
         end_criteria=end_criteria,
-        device=device,
-        verbose=verbose,
-        logging=logging)
+        device=args.device,
+        verbose=args.verbose,
+        logging=args.logging)
     # run controller
     print(f"Starting controller...")
     controller.start()

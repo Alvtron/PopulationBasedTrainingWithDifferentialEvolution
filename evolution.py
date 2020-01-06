@@ -22,9 +22,10 @@ class EvolveEngine(ABC):
 
 class ExploitAndExplore(EvolveEngine):
     """ A general, modifiable implementation of PBTs exploitation and exploration method. """
-    def __init__(self, exploit_factor = 0.2, explore_factors = (0.8, 1.2)):
+    def __init__(self, N, exploit_factor = 0.2, explore_factors = (0.8, 1.2)):
         assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
         assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
+        self.N = N
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
 
@@ -38,6 +39,11 @@ class ExploitAndExplore(EvolveEngine):
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
         generation = generation()
+        # check population size
+        generation_size = len(generation)
+        if generation_size != self.N:
+            logger(f"The current generation available is not equal to the targeted generation size. ({generation_size} != {self.N})")
+            return
         # set number of elitists
         n_elitists = math.floor(len(generation) * self.exploit_factor)
         if n_elitists > 0:
@@ -59,10 +65,8 @@ class ExploitAndExplore(EvolveEngine):
         """Perturb all parameters by the defined explore_factors."""
         logger("exploring...")
         for _, hp in member.hyper_parameters:
-            #perturb_factor = random.choice(self.explore_factors)
-            #hp *= perturb_factor
-            perturb_factor = random.uniform(-0.2, 0.2)
-            hp += perturb_factor
+            perturb_factor = random.choice(self.explore_factors)
+            hp *= perturb_factor
 
 class DifferentialEvolution(EvolveEngine):
     """A general, modifiable implementation of Differential Evolution (DE)"""
@@ -81,6 +85,7 @@ class DifferentialEvolution(EvolveEngine):
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
         generation = generation()
+        # check population size
         generation_size = len(generation)
         if generation_size != self.N:
             logger(f"The current generation available is not equal to the targeted generation size. ({generation_size} != {self.N})")
@@ -97,7 +102,8 @@ class DifferentialEvolution(EvolveEngine):
                 mutation.hyper_parameters[j] = x_r0 + (x_r1 - x_r2) * self.F
             else:
                 mutation.hyper_parameters[j] = member.hyper_parameters[j]
-        member_score = function(member)
+        # TODO: test en eller begge
+        member_score = member.eval_score#function(member)
         mutation_score = function(mutation)
         if mutation_score >= member_score:
             logger(f"Mutated member. (u {mutation_score:.4f} >= x {member_score:.4f})")
