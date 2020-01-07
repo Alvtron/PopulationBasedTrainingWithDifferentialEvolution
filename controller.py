@@ -48,7 +48,7 @@ class Controller(object):
         full_message = f"{time} {checkpoint}: {message}"
         if self.logging:
             log_file_name = f"{checkpoint.id:03d}_log.txt"
-            self.database.save_to_file(log_file_name, full_message)
+            self.database.append_to_file(tag='logs', file_name=log_file_name, text=full_message)
         if self.verbose:
             print(full_message)
         if self.__tensorboard_writer:

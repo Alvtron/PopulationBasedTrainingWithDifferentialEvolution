@@ -63,5 +63,5 @@ if all_checkpoints:
     best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
     print("Results...")
     result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
-    database.save_to_file("results.txt", result)
+    database.append_to_file("results.txt", result)
     print(result)

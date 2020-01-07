@@ -151,7 +151,7 @@ if __name__ == "__main__":
     tensorboard_writer = None
     if args.tensorboard:
         print(f"Launching tensorboard...")
-        tensorboard_log_path = f"{database.path}/tensorboard_log"
+        tensorboard_log_path = f"{database.path}/tensorboard"
         tb = program.TensorBoard()
         tb.configure(argv=[None, '--logdir', tensorboard_log_path])
         url = tb.launch()
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 1#2*10**3
-    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
+    end_criteria = {'steps': steps * 5, 'score': 100.0} #400*10**3
     evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
@@ -223,5 +223,5 @@ if __name__ == "__main__":
         best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
         print("Results...")
         result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
-        database.save_to_file("results.txt", result)
+        database.append_to_file("results.txt", result)
         print(result)

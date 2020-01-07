@@ -38,14 +38,12 @@ class Checkpoint(object):
         self.eval_score = checkpoint.eval_score
         self.test_score = checkpoint.test_score
 
-#class ReadOnlyDatabase(object):
-
-
 class SharedDatabase(object):
     def __init__(self, directory_path):
+        self.ENTRIES_TAG = 'entries'
         self.date_created = datetime.now()
         date_time_string = self.date_created.strftime('%Y%m%d%H%M%S')
-        self.path = f"{directory_path}/{date_time_string}"
+        self.path = Path(f"{directory_path}/{date_time_string}")
         self.create()
         mp = torch.multiprocessing.get_context('spawn')
         manager = mp.Manager() 
@@ -55,38 +53,28 @@ class SharedDatabase(object):
         """ Create database directory """
         Path(self.path).mkdir(parents=True, exist_ok=True)
 
-    def delete(self):
-        """ Delete database directory """
-        if os.path.isdir(self.path):
-            os.rmdir(self.path)
-
-    def save_to_file(self, filename, text):
-        """ Append the provided string to the specified filename. The file will be saved in the database directory. """
+    def append_to_file(self, tag, file_name, text):
+        """ Append the provided string to the specified filename. The file will be saved in a folder named after the specified tag-string, which is located in the database directory. """
         if not isinstance(text, str):
             raise ValueError("The provided text must be of type string!")
-        file_path = f"{self.path}/{filename}"
-        with open(file_path, 'a+') as file:
+        file_path = Path(f"{self.path}/{tag}/{file_name}")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with file_path.open('a+') as file:
             file.write(text + '\n')
 
-    def create_file_path(self, file_name):
-        """ Creates and returns a filepath originating from the main database directory. """
-        return f"{self.path}/{file_name}"
-
     def create_entry_directoy_path(self, id):
-        """ Creates and returns a new entry directory file path. If the directory does not exists, create a new one. """
-        entry_directory = f"{self.path}/{id:03d}"
-        # create entry directory if not exist
-        Path(entry_directory).mkdir(exist_ok=True)
-        return entry_directory
+        """ Creates a new entry directory file path. """
+        return Path(self.path, self.ENTRIES_TAG, f"{id:03d}")
 
     def create_entry_file_path(self, id, steps):
-        """ Creates and returns a new database entry file path in the appropriate entry directory """
+        """ Creates and returns a new database entry file path in the appropriate entry directory. """
         entry_directory = self.create_entry_directoy_path(id)
-        return f"{entry_directory}/{steps:05d}.pth"
+        return Path(entry_directory, f"{steps:05d}.pth")
 
     def save_entry_to_file(self, entry):
         """ Save the provided database entry to a file inside the database directory. """
         entry_file_path = self.create_entry_file_path(entry.id, entry.steps)
+        entry_file_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(entry, entry_file_path)
 
     def save_entry(self, entry):
@@ -100,35 +88,29 @@ class SharedDatabase(object):
         """ Returns the specific entry stored on the specified id. If there is no match, None is returned. """
         if steps == None:
             return self.cache[id] if self.cache[id] else None
-        else:
-            entry_file_path = self.create_entry_file_path(id, steps)
-            if not os.path.isfile(entry_file_path):
-                return None
-            entry = torch.load(entry_file_path)
-            return entry
+        entry_file_path = self.create_entry_file_path(id, steps)
+        if not entry_file_path.is_file():
+            return None
+        entry = torch.load(entry_file_path)
+        return entry
 
     def get_latest(self):
         """ Returns a list containing the latest entry from every member. """
-        list_of_entries = []
-        for entry in self.cache.values():
-            list_of_entries.append(entry)
-        return list_of_entries
+        return self.cache.values()
 
-    def get_entries_from_files(self, id):
+    def get_entry_directories(self):
+        entries_path = Path(self.path, self.ENTRIES_TAG)
+        return [content for content in entries_path.iterdir() if content.is_dir()]
+            
+    def get_entries(self, entry_directory):
         """ Retrieve all entries made on the specified id. """
-        entry_directory_path = self.create_entry_directoy_path(id)
-        entries = []
-        with os.scandir(entry_directory_path) as files:
-            for file in files:
-                entry = torch.load(file.path)
-                entries.append(entry)
-        return entries
+        return [torch.load(content) for content in entry_directory.iterdir()]
 
     def to_dict(self):
-        """ Returns a the database converted to a dictionary grouped by id/step/entry"""
+        """ Returns a the database converted to a dictionary grouped by id/filename/entry"""
         dict_of_entries = dict()
-        for id in self.cache.keys():
-            entries = self.get_entries_from_files(id)
+        for directory in self.get_entry_directories():
+            entries = self.get_entries(directory)
             if not id in dict_of_entries:
                 dict_of_entries[id] = dict()
             for entry in entries:
@@ -138,8 +120,8 @@ class SharedDatabase(object):
     def to_list(self):
         """ Returns a the database converted to a list of all entries """
         list_of_entries = []
-        for id in self.cache.keys():
-            entries = self.get_entries_from_files(id)
+        for directory in self.get_entry_directories():
+            entries = self.get_entries(directory)
             list_of_entries.extend(entries)
         return list_of_entries
 
