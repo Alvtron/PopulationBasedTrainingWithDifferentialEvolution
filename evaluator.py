@@ -3,15 +3,14 @@ from torch.utils.data import DataLoader
         
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
-    def __init__(self, model_class, batch_size, test_data, device, num_workers=0, verbose = False):
+    def __init__(self, model_class, batch_size, test_data, device, load_in_memory=False, verbose = False):
         self.model_class = model_class
         self.batch_size = batch_size
         self.test_data = DataLoader(
             dataset=test_data,
             batch_size = batch_size,
-            shuffle = False,
-            num_workers=num_workers)
-        if device == 'cuda': self.test_data.pin_memory = True
+            shuffle = False)
+        if load_in_memory: self.test_data = list(self.test_data)
         self.device = device
         self.verbose = verbose
 

@@ -122,8 +122,8 @@ def setup_fraud():
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
-    parser.add_argument("--batch_size", type=int, default=32, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--population_size", type=int, default=8, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints/mnist', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
@@ -165,7 +165,13 @@ if __name__ == "__main__":
     # prepare objective
     print(f"Preparing model and datasets...")
     model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
+    # objective info
+    print(f"Number of hyper-parameters: {len(hyper_parameters)}")
+    print(f"Train set length: {len(train_data)}")
+    print(f"Eval set length: {len(eval_data)}")
+    print(f"Test set length: {len(test_data)}")
     # create trainer, evaluator and tester
+    print(f"Creating trainer...")
     trainer = Trainer(
         model_class = model_class,
         optimizer_class = optimizer_class,
@@ -173,23 +179,28 @@ if __name__ == "__main__":
         batch_size = args.batch_size,
         train_data = train_data,
         device = args.device,
+        load_in_memory=True,
         verbose = False)
+    print(f"Creating evaluator...")
     evaluator = Evaluator(
         model_class = model_class,
         batch_size = args.batch_size,
         test_data = eval_data,
         device = args.device,
+        load_in_memory=True,
         verbose = False)
+    print(f"Creating tester...")
     tester = Evaluator(
         model_class = model_class,
         batch_size = args.batch_size,
         test_data = test_data,
         device = args.device,
+        load_in_memory=True,
         verbose = False)
     # define controller
     print(f"Creating evolver...")
     steps = 100#2*10**3
-    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
+    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
     evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
