@@ -39,25 +39,21 @@ class Checkpoint(object):
         self.test_score = checkpoint.test_score
 
 class SharedDatabase(object):
-    def __init__(self, directory_path):
+    def __init__(self, directory_path, database_name=None):
         self.ENTRIES_TAG = 'entries'
-        self.date_created = datetime.now()
-        date_time_string = self.date_created.strftime('%Y%m%d%H%M%S')
-        self.path = Path(f"{directory_path}/{date_time_string}")
-        self.create()
+        self.DATE_CREATED = datetime.now()
+        database_name = self.DATE_CREATED.strftime('%Y%m%d%H%M%S') if not database_name else database_name
+        self.path = Path(f"{directory_path}/{database_name}")
+        self.path.mkdir(parents=True, exist_ok=True)
         mp = torch.multiprocessing.get_context('spawn')
         manager = mp.Manager() 
         self.cache = manager.dict()
-
-    def create(self):
-        """ Create database directory """
-        Path(self.path).mkdir(parents=True, exist_ok=True)
 
     def append_to_file(self, tag, file_name, text):
         """ Append the provided string to the specified filename. The file will be saved in a folder named after the specified tag-string, which is located in the database directory. """
         if not isinstance(text, str):
             raise ValueError("The provided text must be of type string!")
-        file_path = Path(f"{self.path}/{tag}/{file_name}")
+        file_path = Path(self.path, tag, file_name)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open('a+') as file:
             file.write(text + '\n')
