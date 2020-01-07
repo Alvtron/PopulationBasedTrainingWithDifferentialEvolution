@@ -11,6 +11,7 @@ import random
 import sklearn.preprocessing
 import sklearn.model_selection
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import MNIST
@@ -146,8 +147,8 @@ if __name__ == "__main__":
     # prepare database
     print(f"Preparing database...")
     database = SharedDatabase(
-        directory_path = args.database_path,
         context=torch.multiprocessing.get_context('spawn'),
+        directory_path = args.database_path,
         read_function=torch.load,
         write_function=torch.save)
     print(f"The shared database is available at: {database.path}")
@@ -187,8 +188,8 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 1#2*10**3
-    end_criteria = {'steps': steps * 5, 'score': 100.0} #400*10**3
+    steps = 100#2*10**3
+    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
     evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
@@ -217,15 +218,20 @@ if __name__ == "__main__":
     database.print()
     print("Analyzing population...")
     analyzer.create_plot_files(
+        save_directory=database.create_folder("results/plots"),
         n_hyper_parameters=len(hyper_parameters),
         min_score=0,
         max_score=100,
         annotate=False,
-        transparent=False)
-    all_checkpoints = analyzer.test(limit=50)
-    if all_checkpoints:
-        best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
-        print("Results...")
-        result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
-        database.append_to_file("results.txt", result)
-        print(result)
+        sensitivity=4)
+    n_members_to_be_tested = 10
+    print(f"Testing the top {n_members_to_be_tested} members on the full test set of {len(test_data)} samples...")
+    all_checkpoints = analyzer.test(limit=n_members_to_be_tested)
+    best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
+    print("Results...")
+    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
+    database.create_file("results", "best_member.txt").write_text(result)
+    with database.create_file("results", "top_members.txt").open('a+') as f:
+        for checkpoint in all_checkpoints:
+            f.write(str(checkpoint) + "\n")
+    print(result)

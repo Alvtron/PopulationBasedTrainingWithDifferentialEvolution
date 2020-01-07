@@ -39,12 +39,9 @@ class Checkpoint(object):
         self.test_score = checkpoint.test_score
 
 class ReadOnlyDatabase(object):
-    def __init__(self, directory_path, database_name=None, read_function=None):
+    def __init__(self, database_path, read_function=None):
         self.ENTRIES_TAG = 'entries'
-        # create database path
-        self.DATE_CREATED = datetime.now()
-        database_name = self.DATE_CREATED.strftime('%Y%m%d%H%M%S') if not database_name else database_name
-        self.path = Path(f"{directory_path}/{database_name}")
+        self.path = database_path
         # set read function
         def read(path): return pickle.load(path.open('rb'))
         self.read = read if not read_function else read_function
@@ -83,10 +80,10 @@ class ReadOnlyDatabase(object):
         dict_of_entries = dict()
         for directory in self.get_entry_directories():
             entries = self.get_entries(directory)
-            if not id in dict_of_entries:
-                dict_of_entries[id] = dict()
+            if not directory.name in dict_of_entries:
+                dict_of_entries[directory.name] = dict()
             for entry in entries:
-                dict_of_entries[id][entry.steps] = entry
+                dict_of_entries[directory.name][entry.steps] = entry
         return dict_of_entries
         
     def to_list(self):
@@ -106,15 +103,22 @@ class ReadOnlyDatabase(object):
 
 class Database(ReadOnlyDatabase):
     def __init__(self, directory_path, database_name=None, read_function=None, write_function=None):
-        super().__init__(
-            directory_path=directory_path,
-            database_name=database_name,
-            read_function=read_function)
+        # create database path
+        self.DATE_CREATED = datetime.now()
+        database_name = self.DATE_CREATED.strftime('%Y%m%d%H%M%S') if not database_name else database_name
+        # create parent object
+        super().__init__(database_path=Path(directory_path, database_name), read_function=read_function)
         # create database directory
         self.path.mkdir(parents=True, exist_ok=True)
         # set write function
         def write(entry, path): pickle.dump(entry, path.open('wb'))
         self.write = write if not write_function else write_function
+
+    def create_folder(self, name):
+        """ Create a new folder located in the database base directory. Name supports nested directories of type dir/sub_dir/sub_sub_dir/etc. """
+        folder_path = Path(self.path, name)
+        folder_path.mkdir(parents=True, exist_ok=True)
+        return folder_path
 
     def create_file(self, tag, file_name):
         """ Create a new file in a folder named after the specified tag-string, which is located in the database directory. """
@@ -129,7 +133,7 @@ class Database(ReadOnlyDatabase):
         self.write(entry, entry_file_path)
 
 class SharedDatabase(Database):
-    def __init__(self, directory_path, context, database_name=None, read_function=None, write_function=None):
+    def __init__(self, context, directory_path, database_name=None, read_function=None, write_function=None):
         super().__init__(
             directory_path=directory_path,
             database_name=database_name,
