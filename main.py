@@ -145,17 +145,13 @@ if __name__ == "__main__":
     args = import_user_arguments()
     # prepare database
     print(f"Preparing database...")
-    mp = torch.multiprocessing.get_context('spawn')
-    manager = mp.Manager()
-    shared_memory_dict = manager.dict()
-    database = SharedDatabase(
-        directory_path = args.database_path,
-        shared_memory_dict = shared_memory_dict)
+    database = SharedDatabase(directory_path = args.database_path)
+    print(f"The shared database is available at: {database.path}")
     # prepare tensorboard writer
     tensorboard_writer = None
     if args.tensorboard:
         print(f"Launching tensorboard...")
-        tensorboard_log_path = f"{database.database_path}/tensorboard_log"
+        tensorboard_log_path = f"{database.path}/tensorboard_log"
         tb = program.TensorBoard()
         tb.configure(argv=[None, '--logdir', tensorboard_log_path])
         url = tb.launch()
@@ -187,8 +183,8 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 100#2*10**3
-    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
+    steps = 1#2*10**3
+    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
     evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller

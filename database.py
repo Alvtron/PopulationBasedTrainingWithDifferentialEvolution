@@ -1,5 +1,6 @@
 import os
 import torch
+from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -37,47 +38,45 @@ class Checkpoint(object):
         self.eval_score = checkpoint.eval_score
         self.test_score = checkpoint.test_score
 
+#class ReadOnlyDatabase(object):
+
+
 class SharedDatabase(object):
-    def __init__(self, directory_path, shared_memory_dict):
+    def __init__(self, directory_path):
         self.date_created = datetime.now()
-        self.directory_path = directory_path
         date_time_string = self.date_created.strftime('%Y%m%d%H%M%S')
-        self.database_path = f"{directory_path}/{date_time_string}"
+        self.path = f"{directory_path}/{date_time_string}"
         self.create()
-        self.data = shared_memory_dict
+        mp = torch.multiprocessing.get_context('spawn')
+        manager = mp.Manager() 
+        self.cache = manager.dict()
 
     def create(self):
         """ Create database directory """
-        if not os.path.isdir(self.directory_path):
-            os.mkdir(self.directory_path)
-        if not os.path.isdir(self.database_path):
-            os.mkdir(self.database_path)
+        Path(self.path).mkdir(parents=True, exist_ok=True)
 
     def delete(self):
         """ Delete database directory """
-        if os.path.isdir(self.directory_path):
-            os.rmdir(self.directory_path)
-        if os.path.isdir(self.database_path):
-            os.rmdir(self.database_path)
+        if os.path.isdir(self.path):
+            os.rmdir(self.path)
 
     def save_to_file(self, filename, text):
         """ Append the provided string to the specified filename. The file will be saved in the database directory. """
         if not isinstance(text, str):
             raise ValueError("The provided text must be of type string!")
-        file_path = f"{self.database_path}/{filename}"
+        file_path = f"{self.path}/{filename}"
         with open(file_path, 'a+') as file:
             file.write(text + '\n')
 
     def create_file_path(self, file_name):
         """ Creates and returns a filepath originating from the main database directory. """
-        return f"{self.database_path}/{file_name}"
+        return f"{self.path}/{file_name}"
 
     def create_entry_directoy_path(self, id):
         """ Creates and returns a new entry directory file path. If the directory does not exists, create a new one. """
-        entry_directory = f"{self.database_path}/{id:03d}"
+        entry_directory = f"{self.path}/{id:03d}"
         # create entry directory if not exist
-        if not os.path.isdir(entry_directory):
-            os.mkdir(entry_directory)
+        Path(entry_directory).mkdir(exist_ok=True)
         return entry_directory
 
     def create_entry_file_path(self, id, steps):
@@ -93,14 +92,14 @@ class SharedDatabase(object):
     def save_entry(self, entry):
         """ Saves the provided entry to the database. This method saves entry to memory, and will replace any old entry. In addition, the method saves the provided entry to the database directory. """
         # Save entry to memory. This replaces the old entry.
-        self.data[entry.id] = entry
+        self.cache[entry.id] = entry
         # Save entry to database directory.
         self.save_entry_to_file(entry)
 
     def get_entry(self, id, steps=None):
         """ Returns the specific entry stored on the specified id. If there is no match, None is returned. """
         if steps == None:
-            return self.data[id] if self.data[id] else None
+            return self.cache[id] if self.cache[id] else None
         else:
             entry_file_path = self.create_entry_file_path(id, steps)
             if not os.path.isfile(entry_file_path):
@@ -111,7 +110,7 @@ class SharedDatabase(object):
     def get_latest(self):
         """ Returns a list containing the latest entry from every member. """
         list_of_entries = []
-        for entry in self.data.values():
+        for entry in self.cache.values():
             list_of_entries.append(entry)
         return list_of_entries
 
@@ -128,7 +127,7 @@ class SharedDatabase(object):
     def to_dict(self):
         """ Returns a the database converted to a dictionary grouped by id/step/entry"""
         dict_of_entries = dict()
-        for id in self.data.keys():
+        for id in self.cache.keys():
             entries = self.get_entries_from_files(id)
             if not id in dict_of_entries:
                 dict_of_entries[id] = dict()
@@ -139,7 +138,7 @@ class SharedDatabase(object):
     def to_list(self):
         """ Returns a the database converted to a list of all entries """
         list_of_entries = []
-        for id in self.data.keys():
+        for id in self.cache.keys():
             entries = self.get_entries_from_files(id)
             list_of_entries.extend(entries)
         return list_of_entries
