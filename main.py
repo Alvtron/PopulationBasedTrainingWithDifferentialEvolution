@@ -145,7 +145,11 @@ if __name__ == "__main__":
     args = import_user_arguments()
     # prepare database
     print(f"Preparing database...")
-    database = SharedDatabase(directory_path = args.database_path)
+    database = SharedDatabase(
+        directory_path = args.database_path,
+        context=torch.multiprocessing.get_context('spawn'),
+        read_function=torch.load,
+        write_function=torch.save)
     print(f"The shared database is available at: {database.path}")
     # prepare tensorboard writer
     tensorboard_writer = None

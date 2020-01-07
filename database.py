@@ -1,5 +1,5 @@
 import os
-import torch
+import pickle
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
@@ -39,11 +39,15 @@ class Checkpoint(object):
         self.test_score = checkpoint.test_score
 
 class ReadOnlyDatabase(object):
-    def __init__(self, directory_path, database_name=None):
+    def __init__(self, directory_path, database_name=None, read_function=None):
         self.ENTRIES_TAG = 'entries'
+        # create database path
         self.DATE_CREATED = datetime.now()
         database_name = self.DATE_CREATED.strftime('%Y%m%d%H%M%S') if not database_name else database_name
         self.path = Path(f"{directory_path}/{database_name}")
+        # set read function
+        def read(path): return pickle.load(path.open('rb'))
+        self.read = read if not read_function else read_function
 
     @property
     def exists(self):
@@ -63,7 +67,7 @@ class ReadOnlyDatabase(object):
         entry_file_path = self.create_entry_file_path(id, steps)
         if not entry_file_path.is_file():
             return None
-        entry = torch.load(entry_file_path)
+        entry = self.read(entry_file_path)
         return entry
 
     def get_entry_directories(self):
@@ -72,7 +76,7 @@ class ReadOnlyDatabase(object):
             
     def get_entries(self, entry_directory):
         """ Retrieve all entries made on the specified id. """
-        return [torch.load(content) for content in entry_directory.iterdir()]
+        return [self.read(content) for content in entry_directory.iterdir()]
 
     def to_dict(self):
         """ Returns a the database converted to a dictionary grouped by id/filename/entry"""
@@ -100,35 +104,52 @@ class ReadOnlyDatabase(object):
         for entry in database_list_sorted:
             print(entry)
 
-class SharedDatabase(ReadOnlyDatabase):
-    def __init__(self, directory_path, database_name=None):
-        super().__init__(directory_path, database_name)
+class Database(ReadOnlyDatabase):
+    def __init__(self, directory_path, database_name=None, read_function=None, write_function=None):
+        super().__init__(
+            directory_path=directory_path,
+            database_name=database_name,
+            read_function=read_function)
+        # create database directory
         self.path.mkdir(parents=True, exist_ok=True)
-        mp = torch.multiprocessing.get_context('spawn')
-        manager = mp.Manager() 
-        self.cache = manager.dict()
+        # set write function
+        def write(entry, path): pickle.dump(entry, path.open('wb'))
+        self.write = write if not write_function else write_function
 
-    def append_to_file(self, tag, file_name, text):
-        """ Append the provided string to the specified filename. The file will be saved in a folder named after the specified tag-string, which is located in the database directory. """
-        if not isinstance(text, str):
-            raise ValueError("The provided text must be of type string!")
+    def create_file(self, tag, file_name):
+        """ Create a new file in a folder named after the specified tag-string, which is located in the database directory. """
         file_path = Path(self.path, tag, file_name)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with file_path.open('a+') as file:
-            file.write(text + '\n')
+        return file_path
+
+    def save_entry(self, entry):
+        """ Save the provided database entry to a file inside the database directory. """
+        entry_file_path = self.create_entry_file_path(entry.id, entry.steps)
+        entry_file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write(entry, entry_file_path)
+
+class SharedDatabase(Database):
+    def __init__(self, directory_path, context, database_name=None, read_function=None, write_function=None):
+        super().__init__(
+            directory_path=directory_path,
+            database_name=database_name,
+            read_function=read_function,
+            write_function=write_function)
+        manager = context.Manager() 
+        self.cache = manager.dict()
 
     def save_entry_to_file(self, entry):
         """ Save the provided database entry to a file inside the database directory. """
         entry_file_path = self.create_entry_file_path(entry.id, entry.steps)
         entry_file_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(entry, entry_file_path)
+        self.write(entry, entry_file_path)
 
     def save_entry(self, entry):
-        """ Saves the provided entry to the database. This method saves entry to memory, and will replace any old entry. In addition, the method saves the provided entry to the database directory. """
-        # Save entry to memory. This replaces the old entry.
+        """ Saves entry to memory, and will replace any old entry. In addition, the method saves the provided entry to the database directory. """
+        # Save entry to cache memory. This replaces the old entry.
         self.cache[entry.id] = entry
         # Save entry to database directory.
-        self.save_entry_to_file(entry)
+        super().save_entry(entry)
 
     def get_entry(self, id, steps=None):
         """ Returns the specific entry stored on the specified id. If there is no match, None is returned. """
