@@ -224,23 +224,23 @@ if __name__ == "__main__":
     print(f"Starting controller...")
     controller.start()
     # analyze results stored in database
-    analyzer = Analyzer(database, tester)
+    analyzer = Analyzer(database)
     print("Database entries:")
     database.print()
     print("Analyzing population...")
     print("Creating statistics...")
-    analyzer.create_statistics(save_directory=database.create_folder("results/statistics"), verbose=True)
+    analyzer.create_statistics(save_directory=database.create_folder("results/statistics"), verbose=False)
     print("Creating plot-files...")
-    analyzer.create_plot_files(
+    analyzer.create_plot_files(save_directory=database.create_folder("results/plots"))
+    analyzer.create_hyper_parameter_plot_files(
         save_directory=database.create_folder("results/plots"),
-        n_hyper_parameters=len(hyper_parameters),
         min_score=0,
         max_score=100,
         annotate=False,
         sensitivity=4)
-    n_members_to_be_tested = 10
+    n_members_to_be_tested = 50
     print(f"Testing the top {n_members_to_be_tested} members on the test set of {len(test_data)} samples...")
-    all_checkpoints = analyzer.test(limit=n_members_to_be_tested)
+    all_checkpoints = analyzer.test(evaluator=tester, limit=n_members_to_be_tested)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
     result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
     database.create_file("results", "best_member.txt").write_text(result)

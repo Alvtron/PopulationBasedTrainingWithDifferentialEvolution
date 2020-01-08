@@ -2,6 +2,7 @@ import os
 import math
 import operator
 import random
+import pickle
 import copy
 import argparse
 import time
@@ -41,6 +42,21 @@ class Controller(object):
         self.finish_queue = mp.Queue(population_size)
         self.__workers = []
         self.__tensorboard_writer = tensorboard_writer
+        # TODO: implement save and load function for controller
+        self.save_objective_info()
+
+    def save_objective_info(self):
+        parameters = {
+            'population_size': self.population_size,
+            'batch_size': self.trainer.batch_size,
+            'device': self.device,
+            'n_hyper_parameters': len(self.hyper_parameters),
+            'hyper_parameters': self.hyper_parameters.parameter_names(),
+            'step_size': self.step_size,
+            'evolve_frequency': self.evolve_frequency,
+            'end_criteria': self.end_criteria
+        }
+        pickle.dump(parameters, self.database.create_file("info", "parameters.obj").open("wb"))
 
     def log(self, checkpoint, message):
         """Logs and prints the provided message in the appropriate syntax."""

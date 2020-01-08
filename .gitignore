@@ -1,4 +1,4 @@
-# Ignore data folder
+# Ignore folders
 data/
-# Ignore checkpoints folder
 checkpoints/
+test/

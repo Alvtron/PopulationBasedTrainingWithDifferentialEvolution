@@ -2,24 +2,37 @@ import math
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
+import pickle
 from pathlib import Path
 from database import ReadOnlyDatabase
 from evaluator import Evaluator
 from hyperparameters import Hyperparameter, Hyperparameters
-from utils import clip
+from utils import clip, mergeDict
 
 class Analyzer(object):
-    def __init__(self, database : ReadOnlyDatabase, evaluator : Evaluator):
+    def __init__(self, database : ReadOnlyDatabase):
         self.database = database
-        self.evaluator = evaluator
 
-    def test(self, limit = None):
+    def create_progression_dict(self):
+        population_entries = self.database.to_dict()
+        checkpoint_progression = dict()
+        for entry_id, entries in population_entries.items():
+            checkpoint_progression[entry_id] = dict()
+            for entry in entries.values():
+                entry_dict = entry.__dict__
+                for attribute, value in entry_dict.items():
+                    if not attribute in checkpoint_progression[entry_id]:
+                        checkpoint_progression[entry_id][attribute] = list()
+                    checkpoint_progression[entry_id][attribute] += [value]
+        return checkpoint_progression
+
+    def test(self, evaluator : Evaluator, limit = None):
         entries = self.database.to_list()
         if limit:
             entries.sort(key=lambda e: e.eval_score, reverse=True)
             entries = entries[:limit]
         for entry in entries:
-            entry.test_score = self.evaluator.eval(entry.model_state)
+            entry.test_score = evaluator.eval(entry.model_state)
         return entries
 
     def create_statistics(self, save_directory, verbose=False):
@@ -100,10 +113,26 @@ class Analyzer(object):
                 if verbose: print(info)
                 file.write(info + "\n")
 
-    def create_plot_files(self, save_directory, n_hyper_parameters, min_score, max_score, annotate=False, sensitivity=1):
+    def create_plot_files(self, save_directory):
+        plot_attributes = {'train_loss', 'eval_score', 'test_score', 'train_time', 'eval_time', 'evolve_time'}
+        plt.xlabel("steps")
+        progression_dict = self.create_progression_dict()
+        for attribute in plot_attributes:
+            plt.ylabel(attribute)
+            plt.title(attribute)
+            for id in progression_dict:
+                plt.plot(progression_dict[id][attribute], label=f"id: {id}")
+            plt.legend()
+            plt.savefig(fname=Path(save_directory, f"{attribute}_plot.png"), format='png', transparent=False)
+            plt.savefig(fname=Path(save_directory, f"{attribute}_plot.svg"), format='svg', transparent=True)
+            plt.clf()
+
+    def create_hyper_parameter_plot_files(self, save_directory, min_score, max_score, annotate=False, sensitivity=1):
         color_map_key = "rainbow_r"
         color_map = plt.get_cmap(color_map_key)
         population_entries = self.database.to_dict()
+        objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
+        n_hyper_parameters = objective_info['n_hyper_parameters']
         # set nubmer of rows and columns
         n_rows = round(math.sqrt(n_hyper_parameters))
         n_columns = math.ceil(n_hyper_parameters / n_rows)
@@ -135,3 +164,5 @@ class Analyzer(object):
             # save figures to database directory
             plt.savefig(fname=Path(save_directory, f"{entry_id}_hyper_parameter_plot.png"), format='png', transparent=False)
             plt.savefig(fname=Path(save_directory, f"{entry_id}_hyper_parameter_plot.svg"), format='svg', transparent=True)
+            # clear current figure and axes
+            plt.clf()

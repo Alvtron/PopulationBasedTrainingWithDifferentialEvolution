@@ -37,3 +37,12 @@ def translate_and_clip(value, left_min, left_max, right_min, right_max):
     translated_value = translate(value, left_min, left_max, right_min, right_max)
     clipped_value = clip(translated_value, right_min, right_max)
     return clipped_value
+
+def mergeDict(dict1, dict2):
+   ''' Merge dictionaries and keep values of common keys in list'''
+   dict3 = {**dict1, **dict2}
+   for key, value in dict3.items():
+       if key in dict1 and key in dict2:
+               dict3[key] = [value , dict1[key]]
+ 
+   return dict3
