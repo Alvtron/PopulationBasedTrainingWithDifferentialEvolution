@@ -18,6 +18,7 @@ class Checkpoint(object):
         self.eval_score = None
         self.test_score = None
         self.train_time = None
+        self.eval_time = None
         self.evolve_time = None
 
     def __str__(self):

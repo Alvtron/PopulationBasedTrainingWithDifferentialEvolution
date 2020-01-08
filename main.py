@@ -122,7 +122,7 @@ def setup_fraud():
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=8, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints/mnist', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
@@ -200,9 +200,9 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 100#2*10**3
-    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
-    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
-    #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
+    end_criteria = {'steps': steps * 1000, 'score': 100.0} #400*10**3
+    #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -228,6 +228,7 @@ if __name__ == "__main__":
     print("Database entries:")
     database.print()
     print("Analyzing population...")
+    analyzer.create_statistics("kek")
     analyzer.create_plot_files(
         save_directory=database.create_folder("results/plots"),
         n_hyper_parameters=len(hyper_parameters),
