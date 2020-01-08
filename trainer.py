@@ -30,6 +30,9 @@ class Trainer(object):
         optimizer = self.optimizer_class(model.parameters(), **hyper_parameters.get_optimizer_value_dict())
         if optimizer_state:
             optimizer.load_state_dict(optimizer_state)
+            for param_name, param_value in hyper_parameters.optimizer.items():
+                for param_group in optimizer.param_groups:
+                    param_group[param_name] = param_value.value()
         return optimizer
 
     def step(self, model, optimizer, x, y):

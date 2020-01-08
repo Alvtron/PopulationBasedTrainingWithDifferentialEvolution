@@ -51,7 +51,7 @@ class Controller(object):
             'batch_size': self.trainer.batch_size,
             'device': self.device,
             'n_hyper_parameters': len(self.hyper_parameters),
-            'hyper_parameters': self.hyper_parameters.parameter_names(),
+            'hyper_parameters': self.hyper_parameters.parameter_paths(),
             'step_size': self.step_size,
             'evolve_frequency': self.evolve_frequency,
             'end_criteria': self.end_criteria

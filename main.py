@@ -200,9 +200,9 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 100#2*10**3
-    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
-    #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
-    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
+    end_criteria = {'steps': steps * 50, 'score': 100.0} #400*10**3
+    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -232,11 +232,15 @@ if __name__ == "__main__":
     analyzer.create_statistics(save_directory=database.create_folder("results/statistics"), verbose=False)
     print("Creating plot-files...")
     analyzer.create_plot_files(save_directory=database.create_folder("results/plots"))
-    analyzer.create_hyper_parameter_plot_files(
-        save_directory=database.create_folder("results/plots"),
+    analyzer.create_hyper_parameter_multi_plot_files(
+        save_directory=database.create_folder("results/plots/hyper_parameters"),
         min_score=0,
         max_score=100,
-        annotate=False,
+        sensitivity=4)
+    analyzer.create_hyper_parameter_single_plot_files(
+        save_directory=database.create_folder("results/plots/hyper_parameters"),
+        min_score=0,
+        max_score=100,
         sensitivity=4)
     n_members_to_be_tested = 50
     print(f"Testing the top {n_members_to_be_tested} members on the test set of {len(test_data)} samples...")

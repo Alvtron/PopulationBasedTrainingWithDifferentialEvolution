@@ -279,9 +279,17 @@ class Hyperparameters(object):
         return len(self.general) + len(self.model) + len(self.optimizer)
 
     def __getitem__(self, key):
-        if not 0 <= key < len(self):
-            raise IndexError("The provided key is out of bounds.")
-        return list(self)[key][1]
+        if isinstance(key, int):
+            if not 0 <= key < len(self):
+                raise IndexError("The provided key is out of bounds.")
+            return list(self)[key][1]
+        if isinstance(key, str):
+            split_key = key.split("/")
+            if len(split_key) != 2:
+                raise IndexError("Key string with bad syntax. Use 'param_group/param_name'.")
+            group = getattr(self, split_key[0])
+            return group[split_key[1]]
+        raise ValueError("Key types supported are int and str of syntax 'param_group/param_name'.")
 
     def __setitem__(self, key, value):
         if not 0 <= key < len(self):
@@ -301,6 +309,12 @@ class Hyperparameters(object):
 
     def parameter_names(self):
         return [i[0] for i in self]
+
+    def parameter_paths(self):
+        general_paths = [f"general/{parameter}" for parameter in self.general]
+        model_paths = [f"model/{parameter}" for parameter in self.model]
+        optimizer_paths = [f"optimizer/{parameter}" for parameter in self.optimizer]
+        return general_paths + model_paths + optimizer_paths
 
     def values(self):
         return [i[1].value() for i in self]
