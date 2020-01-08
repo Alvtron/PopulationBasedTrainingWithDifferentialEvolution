@@ -2,12 +2,9 @@
 Priority level: [Low, Medium, High]
 What: [Explain what needs to be done]
 Why: [Explain why it needs to be done]
---
+Possible solution: [Explain what could be done]
 
-Priority level: High
-What: Implement dataset that can withdraw any sample (size: batch) at the provided index.
-Why: Reduces training time as iterator.islice is too slow for dataloader iterator generation.
-Possible solution: Create custom DataLoader with __get_item__ method (hard), or use dataset directly with sample-to-tensor conversion.
+-- Pending
 
 Priority level: High
 What: Reduce evolve time or make evolver an asynchronous process class to run evolving on a different thread.
@@ -24,3 +21,11 @@ Why: Provides more compact visualization of the training process, as well as all
 Priority level: Low
 What: Implement extraction of hyper-parameter scheduele.
 Why: This is the main purpose of this project. This is nescessary for achieving reproducibility.
+
+-- Completed
+
+Priority level: High
+What: Implement dataset that can withdraw any sample (size: batch) at the provided index.
+Why: Reduces training time as iterator.islice is too slow for dataloader iterator generation.
+Possible solution: Create custom DataLoader with __get_item__ method (hard), or use dataset directly with sample-to-tensor conversion.
+Actual solution: Added option for loading dataset into memory. This was achieved by casting the dataloader to a list-object. This significantly decreased training time, but may increase RAM usage for datasets that are not loaded into memory.

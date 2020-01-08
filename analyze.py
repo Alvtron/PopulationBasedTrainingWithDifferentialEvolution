@@ -22,12 +22,13 @@ class Analyzer(object):
             entry.test_score = self.evaluator.eval(entry.model_state)
         return entries
 
-    def create_statistics(self, save_directory):
+    def create_statistics(self, save_directory, verbose=False):
         population_entries = self.database.to_dict()
         # get member statistics
         checkpoint_summaries = dict()
         for entry_id, entries in population_entries.items():
             num_entries = len(entries.values())
+            total_train_loss = sum(c.train_loss for c in entries.values())
             total_eval_score = sum(c.eval_score for c in entries.values())
             total_train_time = sum(c.train_time for c in entries.values())
             total_eval_time = sum(c.eval_time for c in entries.values())
@@ -36,49 +37,68 @@ class Analyzer(object):
                 'num_entries':num_entries,
                 'steps':max(c.steps for c in entries.values()),
                 'epochs':max(c.epochs for c in entries.values()),
-                'max_eval_score':max(c.eval_score for c in entries.values()),
-                'avg_eval_score':total_eval_score/num_entries,
-                'total_eval_score':total_eval_score,
-                'max_train_time':max(c.train_time for c in entries.values()),
-                'avg_train_time':total_train_time/num_entries,
                 'total_train_time':total_train_time,
-                'max_eval_time':max(c.eval_time for c in entries.values()),
-                'avg_eval_time':total_eval_time/num_entries,
                 'total_eval_time':total_eval_time,
+                'total_evolve_time':total_evolve_time,
+                'max_train_loss':max(c.train_loss for c in entries.values()),
+                'max_eval_score':max(c.eval_score for c in entries.values()),
+                'max_train_time':max(c.train_time for c in entries.values()),
+                'max_eval_time':max(c.eval_time for c in entries.values()),
                 'max_evolve_time':max(c.evolve_time for c in entries.values() if c.evolve_time),
-                'avg_evolve_time':total_evolve_time/num_entries,
-                'total_evolve_time':total_evolve_time
+                'min_train_loss':min(c.train_loss for c in entries.values()),
+                'min_eval_score':min(c.eval_score for c in entries.values()),
+                'min_train_time':min(c.train_time for c in entries.values()),
+                'min_eval_time':min(c.eval_time for c in entries.values()),
+                'min_evolve_time':min(c.evolve_time for c in entries.values() if c.evolve_time),
+                'avg_train_loss':total_train_loss/num_entries,
+                'avg_eval_score':total_eval_score/num_entries,
+                'avg_train_time':total_train_time/num_entries,
+                'avg_eval_time':total_eval_time/num_entries,
+                'avg_evolve_time':total_evolve_time/num_entries
             }
-        # print member statistics
+        # save/print member statistics
         for entry_id, checkpoint_summary in checkpoint_summaries.items():
-            print(f"Statistics for member {entry_id}:")
-            for tag, statistic in checkpoint_summary.items():
-                print(f"{tag}:{statistic}")
+            if verbose: print(f"Statistics for member {entry_id}:")
+            with open(f"{save_directory}/{entry_id}_statistics.txt", "a+") as file:
+                for tag, statistic in checkpoint_summary.items():
+                    info = f"{tag}:{statistic}"
+                    if verbose: print(info)
+                    file.write(info + "\n")
         # get global statistics
         print(f"Statistics for member {entry_id}:")
         global_avg_num_entries=sum(d['num_entries'] for d in checkpoint_summaries.values() if d)/len(checkpoint_summaries)
-        global_total_eval_score=sum(d['total_eval_score'] for d in checkpoint_summaries.values() if d)
+        global_total_train_loss=sum(d['avg_train_loss'] for d in checkpoint_summaries.values() if d)
+        global_total_eval_score=sum(d['avg_eval_score'] for d in checkpoint_summaries.values() if d)
         global_total_train_time=sum(d['total_train_time'] for d in checkpoint_summaries.values() if d)
         global_total_eval_time=sum(d['total_eval_time'] for d in checkpoint_summaries.values() if d)
         global_total_evolve_time=sum(d['total_evolve_time'] for d in checkpoint_summaries.values() if d)
         global_checkpoint_summaries = {
             'avg_num_entries':global_avg_num_entries,
-            'total_eval_score':global_total_eval_score,
             'total_train_time':global_total_train_time,
             'total_eval_time':global_total_eval_time,
             'total_evolve_time':global_total_evolve_time,
+            'max_train_loss':max(d['max_train_loss'] for d in checkpoint_summaries.values() if d),
             'max_eval_score':max(d['max_eval_score'] for d in checkpoint_summaries.values() if d),
             'max_train_time':max(d['max_train_time'] for d in checkpoint_summaries.values() if d),
             'max_eval_time':max(d['max_eval_time'] for d in checkpoint_summaries.values() if d),
             'max_evolve_time':max(d['max_evolve_time'] for d in checkpoint_summaries.values() if d),
+            'min_train_loss':min(d['min_train_loss'] for d in checkpoint_summaries.values() if d),
+            'min_eval_score':min(d['min_eval_score'] for d in checkpoint_summaries.values() if d),
+            'min_train_time':min(d['min_train_time'] for d in checkpoint_summaries.values() if d),
+            'min_eval_time':min(d['min_eval_time'] for d in checkpoint_summaries.values() if d),
+            'min_evolve_time':min(d['min_evolve_time'] for d in checkpoint_summaries.values() if d),
+            'avg_train_loss':global_total_train_loss/global_avg_num_entries,
             'avg_eval_score':global_total_eval_score/global_avg_num_entries,
             'avg_train_time':global_total_train_time/global_avg_num_entries,
             'avg_eval_time':global_total_eval_time/global_avg_num_entries,
             'avg_evolve_time':global_total_evolve_time/global_avg_num_entries
         }
-        # print global statistics
-        for tag, statistic in global_checkpoint_summaries.items():
-            print(f"{tag}:{statistic}")
+        # save/print global statistics
+        with open(f"{save_directory}/global_summary.txt", "a+") as file:
+            for tag, statistic in global_checkpoint_summaries.items():
+                info = f"{tag}:{statistic}"
+                if verbose: print(info)
+                file.write(info + "\n")
 
     def create_plot_files(self, save_directory, n_hyper_parameters, min_score, max_score, annotate=False, sensitivity=1):
         color_map_key = "rainbow_r"

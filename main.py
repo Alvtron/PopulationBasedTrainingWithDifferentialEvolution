@@ -122,7 +122,7 @@ def setup_fraud():
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--database_path", type=str, default='checkpoints/mnist', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 100#2*10**3
-    end_criteria = {'steps': steps * 1000, 'score': 100.0} #400*10**3
+    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
     #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
@@ -228,7 +228,9 @@ if __name__ == "__main__":
     print("Database entries:")
     database.print()
     print("Analyzing population...")
-    analyzer.create_statistics("kek")
+    print("Creating statistics...")
+    analyzer.create_statistics(save_directory=database.create_folder("results/statistics"), verbose=True)
+    print("Creating plot-files...")
     analyzer.create_plot_files(
         save_directory=database.create_folder("results/plots"),
         n_hyper_parameters=len(hyper_parameters),
@@ -237,10 +239,9 @@ if __name__ == "__main__":
         annotate=False,
         sensitivity=4)
     n_members_to_be_tested = 10
-    print(f"Testing the top {n_members_to_be_tested} members on the full test set of {len(test_data)} samples...")
+    print(f"Testing the top {n_members_to_be_tested} members on the test set of {len(test_data)} samples...")
     all_checkpoints = analyzer.test(limit=n_members_to_be_tested)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
-    print("Results...")
     result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
     database.create_file("results", "best_member.txt").write_text(result)
     with database.create_file("results", "top_members.txt").open('a+') as f:
