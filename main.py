@@ -166,10 +166,11 @@ if __name__ == "__main__":
     print(f"Preparing model and datasets...")
     model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
     # objective info
+    print(f"Population size: {args.population_size}")
     print(f"Number of hyper-parameters: {len(hyper_parameters)}")
-    print(f"Train set length: {len(train_data)}")
-    print(f"Eval set length: {len(eval_data)}")
-    print(f"Test set length: {len(test_data)}")
+    print(f"Train data length: {len(train_data)}")
+    print(f"Eval data length: {len(eval_data)}")
+    print(f"Test data length: {len(test_data)}")
     # create trainer, evaluator and tester
     print(f"Creating trainer...")
     trainer = Trainer(
@@ -200,9 +201,9 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 100#2*10**3
-    end_criteria = {'steps': steps * 50, 'score': 100.0} #400*10**3
-    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
-    #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
+    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
+    #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
     controller = Controller(

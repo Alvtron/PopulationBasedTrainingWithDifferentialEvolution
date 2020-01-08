@@ -32,12 +32,15 @@ class Checkpoint(object):
         return string
 
     def update(self, checkpoint):
+        self.hyper_parameters = checkpoint.hyper_parameters
         self.model_state = checkpoint.model_state
         self.optimizer_state = checkpoint.optimizer_state
-        self.hyper_parameters = checkpoint.hyper_parameters
-        self.train_loss = checkpoint.train_loss
-        self.eval_score = checkpoint.eval_score
-        self.test_score = checkpoint.test_score
+        self.train_loss = None
+        self.eval_score = None
+        self.test_score = None
+        self.train_time = None
+        self.eval_time = None
+        self.evolve_time = None
 
 class ReadOnlyDatabase(object):
     def __init__(self, database_path, read_function=None):
@@ -160,7 +163,7 @@ class SharedDatabase(Database):
         """ Returns the specific entry stored on the specified id. If there is no match, None is returned. """
         if steps == None:
             return self.cache[id] if self.cache[id] else None
-        return super.get_entry(id, steps)
+        return super().get_entry(id, steps)
 
     def get_latest(self):
         """ Returns a list containing the latest entry from every member. """
