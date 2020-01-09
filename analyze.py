@@ -7,19 +7,22 @@ from pathlib import Path
 from database import ReadOnlyDatabase
 from evaluator import Evaluator
 from hyperparameters import Hyperparameter, Hyperparameters
-from utils import clip, mergeDict
+from utils import clip, flatten_dict
 
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase):
         self.database = database
 
     def create_progression_dict(self):
+        attributes = {'steps','epochs','hyper_parameters','eval_metric','loss','time'}
         population_entries = self.database.to_dict()
         checkpoint_progression = dict()
         for entry_id, entries in population_entries.items():
             checkpoint_progression[entry_id] = dict()
             for entry in entries.values():
-                entry_dict = entry.__dict__
+                entry_dict = { attribute: entry.__dict__[attribute] for attribute in attributes }
+                entry_dict['score'] = entry.score
+                entry_dict = flatten_dict(entry_dict, exclude=['hyper_parameters'], delimiter='_')
                 for attribute, value in entry_dict.items():
                     if not attribute in checkpoint_progression[entry_id]:
                         checkpoint_progression[entry_id][attribute] = list()
@@ -29,10 +32,10 @@ class Analyzer(object):
     def test(self, evaluator : Evaluator, limit = None):
         entries = self.database.to_list()
         if limit:
-            entries.sort(key=lambda e: e.eval_score, reverse=True)
+            entries.sort(key=lambda e: e.score, reverse=True)
             entries = entries[:limit]
         for entry in entries:
-            entry.test_score = evaluator.eval(entry.model_state)
+            entry.loss['test'] = evaluator.eval(entry.model_state)
         return entries
 
     def create_statistics(self, save_directory, verbose=False):
@@ -40,35 +43,41 @@ class Analyzer(object):
         # get member statistics
         checkpoint_summaries = dict()
         for entry_id, entries in population_entries.items():
-            num_entries = len(entries.values())
-            total_train_loss = sum(c.train_loss for c in entries.values())
-            total_eval_score = sum(c.eval_score for c in entries.values())
-            total_train_time = sum(c.train_time for c in entries.values())
-            total_eval_time = sum(c.eval_time for c in entries.values())
-            total_evolve_time = sum(c.evolve_time for c in entries.values() if c.evolve_time)
-            checkpoint_summaries[entry_id] = {
-                'num_entries':num_entries,
-                'steps':max(c.steps for c in entries.values()),
-                'epochs':max(c.epochs for c in entries.values()),
-                'total_train_time':total_train_time,
-                'total_eval_time':total_eval_time,
-                'total_evolve_time':total_evolve_time,
-                'max_train_loss':max(c.train_loss for c in entries.values()),
-                'max_eval_score':max(c.eval_score for c in entries.values()),
-                'max_train_time':max(c.train_time for c in entries.values()),
-                'max_eval_time':max(c.eval_time for c in entries.values()),
-                'max_evolve_time':max(c.evolve_time for c in entries.values() if c.evolve_time),
-                'min_train_loss':min(c.train_loss for c in entries.values()),
-                'min_eval_score':min(c.eval_score for c in entries.values()),
-                'min_train_time':min(c.train_time for c in entries.values()),
-                'min_eval_time':min(c.eval_time for c in entries.values()),
-                'min_evolve_time':min(c.evolve_time for c in entries.values() if c.evolve_time),
-                'avg_train_loss':total_train_loss/num_entries,
-                'avg_eval_score':total_eval_score/num_entries,
-                'avg_train_time':total_train_time/num_entries,
-                'avg_eval_time':total_eval_time/num_entries,
-                'avg_evolve_time':total_evolve_time/num_entries
-            }
+            entries = entries.values()
+            checkpoint_summaries[entry_id] = dict()
+            summary = checkpoint_summaries[entry_id]
+            summary['num_entries'] = len(entries)
+            for checkpoint in entries:
+                for time_type, time_value in checkpoint.time.items():
+                    max_key = f"time_{time_type}_max"
+                    min_key = f"time_{time_type}_min"
+                    avg_key = f"time_{time_type}_avg"
+                    total_key = f"time_{time_type}_total"
+                    if max_key not in summary or time_value > summary[max_key]:
+                        summary[max_key] = time_value
+                    if min_key not in summary or time_value > summary[min_key]:
+                        summary[min_key] = time_value
+                    if avg_key not in summary:
+                        summary[avg_key] = time_value / summary['num_entries']
+                    else:
+                        summary[avg_key] += time_value / summary['num_entries']
+                    if total_key not in summary:
+                        summary[total_key] = time_value
+                    else:
+                        summary[total_key] += time_value
+                for loss_group, loss_values in checkpoint.loss.items():
+                    for loss_type, loss_value in loss_values.items():
+                        max_key = f"loss_{loss_group}_{loss_type}_max"
+                        min_key = f"loss_{loss_group}_{loss_type}_min"
+                        avg_key = f"loss_{loss_group}_{loss_type}_avg"
+                        if max_key not in summary or loss_value > summary[max_key]:
+                            summary[max_key] = loss_value
+                        if min_key not in summary or loss_value > summary[min_key]:
+                            summary[min_key] = loss_value
+                        if avg_key not in summary:
+                            summary[avg_key] = loss_value / summary['num_entries']
+                        else:
+                            summary[avg_key] += loss_value / summary['num_entries']
         # save/print member statistics
         for entry_id, checkpoint_summary in checkpoint_summaries.items():
             if verbose: print(f"Statistics for member {entry_id}:")
@@ -77,47 +86,16 @@ class Analyzer(object):
                     info = f"{tag}:{statistic}"
                     if verbose: print(info)
                     file.write(info + "\n")
-        # get global statistics
-        global_avg_num_entries=sum(d['num_entries'] for d in checkpoint_summaries.values() if d)/len(checkpoint_summaries)
-        global_total_train_loss=sum(d['avg_train_loss'] for d in checkpoint_summaries.values() if d)
-        global_total_eval_score=sum(d['avg_eval_score'] for d in checkpoint_summaries.values() if d)
-        global_total_train_time=sum(d['total_train_time'] for d in checkpoint_summaries.values() if d)
-        global_total_eval_time=sum(d['total_eval_time'] for d in checkpoint_summaries.values() if d)
-        global_total_evolve_time=sum(d['total_evolve_time'] for d in checkpoint_summaries.values() if d)
-        global_checkpoint_summaries = {
-            'avg_num_entries':global_avg_num_entries,
-            'total_train_time':global_total_train_time,
-            'total_eval_time':global_total_eval_time,
-            'total_evolve_time':global_total_evolve_time,
-            'max_train_loss':max(d['max_train_loss'] for d in checkpoint_summaries.values() if d),
-            'max_eval_score':max(d['max_eval_score'] for d in checkpoint_summaries.values() if d),
-            'max_train_time':max(d['max_train_time'] for d in checkpoint_summaries.values() if d),
-            'max_eval_time':max(d['max_eval_time'] for d in checkpoint_summaries.values() if d),
-            'max_evolve_time':max(d['max_evolve_time'] for d in checkpoint_summaries.values() if d),
-            'min_train_loss':min(d['min_train_loss'] for d in checkpoint_summaries.values() if d),
-            'min_eval_score':min(d['min_eval_score'] for d in checkpoint_summaries.values() if d),
-            'min_train_time':min(d['min_train_time'] for d in checkpoint_summaries.values() if d),
-            'min_eval_time':min(d['min_eval_time'] for d in checkpoint_summaries.values() if d),
-            'min_evolve_time':min(d['min_evolve_time'] for d in checkpoint_summaries.values() if d),
-            'avg_train_loss':global_total_train_loss/global_avg_num_entries,
-            'avg_eval_score':global_total_eval_score/global_avg_num_entries,
-            'avg_train_time':global_total_train_time/global_avg_num_entries,
-            'avg_eval_time':global_total_eval_time/global_avg_num_entries,
-            'avg_evolve_time':global_total_evolve_time/global_avg_num_entries
-        }
-        # save/print global statistics
-        with open(f"{save_directory}/global_summary.txt", "a+") as file:
-            for tag, statistic in global_checkpoint_summaries.items():
-                info = f"{tag}:{statistic}"
-                if verbose: print(info)
-                file.write(info + "\n")
 
     def create_plot_files(self, save_directory):
-        plot_attributes = {'train_loss', 'eval_score', 'test_score', 'train_time', 'eval_time', 'evolve_time'}
-        plt.xlabel("steps")
+        exclude_attributes = ['steps','epochs','hyper_parameters','eval_metric','hyper_parameters','score']
         progression_dict = self.create_progression_dict()
-        for attribute in plot_attributes:
-            plt.ylabel(attribute)
+        attributes = next(iter(progression_dict.values())).keys()
+        for attribute in attributes:
+            if attribute in exclude_attributes:
+                continue
+            plt.xlabel("steps")
+            plt.ylabel("value")
             plt.title(attribute)
             for id in progression_dict:
                 plt.plot(progression_dict[id][attribute], label=f"m_{id}")
@@ -144,7 +122,7 @@ class Analyzer(object):
             for id in progression_dict:
                 steps = [step for step in progression_dict[id]['steps']]
                 parameter_values = [hp[param_name].normalized() for hp in progression_dict[id]['hyper_parameters']]
-                scores = [score for score in progression_dict[id]['eval_score']]
+                scores = [score for score in progression_dict[id]['score']]
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
                     score_decimal = (score - min_score) / (max_score - min_score)
@@ -187,7 +165,7 @@ class Analyzer(object):
             for id in progression_dict:
                 steps = [step for step in progression_dict[id]['steps']]
                 parameter_values = [hp[param_name].normalized() for hp in progression_dict[id]['hyper_parameters']]
-                scores = [score for score in progression_dict[id]['eval_score']]
+                scores = [score for score in progression_dict[id]['score']]
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
                     score_decimal = (score - min_score) / (max_score - min_score)

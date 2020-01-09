@@ -3,8 +3,9 @@ from torch.utils.data import DataLoader
         
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
-    def __init__(self, model_class, batch_size, test_data, device, load_in_memory=False, verbose = False):
+    def __init__(self, model_class, eval_metrics, batch_size, test_data, device, load_in_memory=False, verbose = False):
         self.model_class = model_class
+        self.eval_metrics = eval_metrics
         self.batch_size = batch_size
         self.test_data = DataLoader(
             dataset=test_data,
@@ -23,13 +24,12 @@ class Evaluator(object):
     def eval(self, model_state):
         """Evaluate model on the provided validation or test set."""
         model = self.create_model(model_state)
-        correct = 0
+        dataset_length = len(self.test_data)
+        metric_values = dict.fromkeys(self.eval_metrics, 0.0)
         for x, y in self.test_data:
             x, y = x.to(self.device), y.to(self.device)
-            outputs = model(x)
-            _, predicted = torch.max(outputs.data, 1) # argmax, ex. [0.1, 0.3, 0.5, 0.1] --> 2th index
-            correct += predicted.eq(y).sum().item() # add 1 for each correct predict of the batch
-        dataset_length = len(self.test_data) * self.batch_size
-        accuracy = 100. * (correct / dataset_length)
-        if self.verbose: print(f"Accuracy: {accuracy:.4f}%")
-        return accuracy
+            output = model(x)
+            # compute losses
+            for metric_type, metric_function in self.eval_metrics.items():
+                metric_values[metric_type] += metric_function(output, y).item() / dataset_length
+        return metric_values

@@ -13,7 +13,7 @@ statistics_save_directory.mkdir(exist_ok=True, parents=True)
 plot_save_directory.mkdir(exist_ok=True, parents=True)
 hp_plot_save_directory.mkdir(exist_ok=True, parents=True)
 database = ReadOnlyDatabase(
-    database_path="checkpoints/mnist/20200108183708",
+    database_path="checkpoints/mnist/20200109111837",
     read_function=torch.load)
 analyzer = Analyzer(database)
 print(f"Database consists of {len(database.to_list())} entries.")

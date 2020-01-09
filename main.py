@@ -23,6 +23,7 @@ from evaluator import Evaluator
 from trainer import Trainer
 from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from analyze import Analyzer
+from performance import accuracy
 
 # reproducibility
 random.seed(0)
@@ -42,7 +43,13 @@ def split_dataset(dataset, fraction):
 def setup_mnist():
     model_class = MnistNet
     optimizer_class = torch.optim.SGD
-    loss_function = torch.nn.CrossEntropyLoss()
+    loss_metric = 'cross_entropy'
+    eval_metric = 'accuracy'
+    eval_metrics = {
+        'cross_entropy': torch.nn.CrossEntropyLoss(),
+        'accuracy': accuracy
+    } 
+    
     # prepare training and testing data
     train_data_path = test_data_path = './data'
     train_data = MNIST(
@@ -79,7 +86,7 @@ def setup_mnist():
             'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
             'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
             })
-    return model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters
+    return model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters
     
 def setup_fraud():
     model_class = FraudNet
@@ -164,7 +171,7 @@ if __name__ == "__main__":
         tensorboard_writer = SummaryWriter(tensorboard_log_path)
     # prepare objective
     print(f"Preparing model and datasets...")
-    model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
+    model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
     # objective info
     print(f"Population size: {args.population_size}")
     print(f"Number of hyper-parameters: {len(hyper_parameters)}")
@@ -176,7 +183,8 @@ if __name__ == "__main__":
     trainer = Trainer(
         model_class = model_class,
         optimizer_class = optimizer_class,
-        loss_function = loss_function,
+        loss_metric = loss_metric,
+        eval_metrics = eval_metrics,
         batch_size = args.batch_size,
         train_data = train_data,
         device = args.device,
@@ -185,6 +193,7 @@ if __name__ == "__main__":
     print(f"Creating evaluator...")
     evaluator = Evaluator(
         model_class = model_class,
+        eval_metrics = eval_metrics,
         batch_size = args.batch_size,
         test_data = eval_data,
         device = args.device,
@@ -193,6 +202,7 @@ if __name__ == "__main__":
     print(f"Creating tester...")
     tester = Evaluator(
         model_class = model_class,
+        eval_metrics = eval_metrics,
         batch_size = args.batch_size,
         test_data = test_data,
         device = args.device,
@@ -201,9 +211,9 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 100#2*10**3
-    end_criteria = {'steps': steps * 10, 'score': 100.0} #400*10**3
-    #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
-    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
+    end_criteria = {'steps': steps * 50, 'score': 100.0} #400*10**3
+    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -213,6 +223,7 @@ if __name__ == "__main__":
         evaluator=evaluator,
         tester=tester,
         evolver=evolver,
+        eval_metric=eval_metric,
         database=database,
         tensorboard_writer=tensorboard_writer,
         step_size=steps,
@@ -246,8 +257,10 @@ if __name__ == "__main__":
     n_members_to_be_tested = 50
     print(f"Testing the top {n_members_to_be_tested} members on the test set of {len(test_data)} samples...")
     all_checkpoints = analyzer.test(evaluator=tester, limit=n_members_to_be_tested)
-    best_checkpoint = max(all_checkpoints, key=lambda c: c.test_score)
-    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.test_score:.4f}%"
+    for checkpoint in all_checkpoints:
+        database.save_entry(checkpoint)
+    best_checkpoint = max(all_checkpoints, key=lambda c: c.loss['test'][eval_metric])
+    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.loss['test'][eval_metric]:.4f}%"
     database.create_file("results", "best_member.txt").write_text(result)
     with database.create_file("results", "top_members.txt").open('a+') as f:
         for checkpoint in all_checkpoints:

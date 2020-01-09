@@ -48,7 +48,7 @@ class ExploitAndExplore(EvolveEngine):
         n_elitists = math.floor(len(generation) * self.exploit_factor)
         if n_elitists > 0:
             # sort members from best to worst on score
-            generation.sort(key=lambda m: m.eval_score, reverse=True)
+            generation.sort(key=lambda m: m.score, reverse=True)
             if all(c.id != member.id for c in generation[:n_elitists]):
                 # exploit weights and hyper-parameters if member is not elitist
                 self.exploit(member, generation[:n_elitists], logger)
@@ -102,14 +102,13 @@ class DifferentialEvolution(EvolveEngine):
                 mutation.hyper_parameters[j] = x_r0 + (x_r1 - x_r2) * self.F
             else:
                 mutation.hyper_parameters[j] = member.hyper_parameters[j]
-        # TODO: test en eller begge
-        member_score = member.eval_score#function(member)
+        # eval mutation
         mutation_score = function(mutation)
-        if mutation_score >= member_score:
-            logger(f"Mutated member. (u {mutation_score:.4f} >= x {member_score:.4f})")
+        if mutation_score >= member.score:
+            logger(f"Mutated member. (u {mutation_score:.4f} >= x {member.score:.4f})")
             member.update(mutation)
         else:
-            logger(f"Maintained member. (u {mutation_score:.4f} < x {member_score:.4f})")
+            logger(f"Maintained member. (u {mutation_score:.4f} < x {member.score:.4f})")
 
 class ParticleSwarm(EvolveEngine):
     """A general, modifiable implementation of Particle Swarm Optimization (PSO)"""
@@ -132,9 +131,9 @@ class ParticleSwarm(EvolveEngine):
         generation = generation()
         population = population()
         # set best member in current generation
-        best_member_in_generation =  max(generation, key=lambda m: m.eval_score)
+        best_member_in_generation =  max(generation, key=lambda m: m.score)
         # set best member across generations
-        best_overall_in_population =  max(population, key=lambda m: m.eval_score)
+        best_overall_in_population =  max(population, key=lambda m: m.score)
 
     def update_velocity(self, particle, best_particle_in_generation, best_particle_across_generations, weight, velocity, acc_coeff_p, random_p, acc_coeff_g, random_g):
         return weight * velocity + acc_coeff_p * random_p * (best_particle_in_generation - particle) + acc_coeff_g * random_g * (best_particle_across_generations - particle)

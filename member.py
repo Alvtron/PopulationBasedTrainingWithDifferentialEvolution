@@ -31,16 +31,16 @@ class Member(mp.Process):
             checkpoint = self.train_queue.get()
             # train checkpoint model
             start_train_time_ns = time.time_ns()
-            checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.train_loss = self.trainer.train(
+            checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = self.trainer.train(
                 hyper_parameters=checkpoint.hyper_parameters,
                 model_state=checkpoint.model_state,
                 optimizer_state=checkpoint.optimizer_state,
                 epochs=checkpoint.epochs,
                 steps=checkpoint.steps,
                 step_size=self.step_size)
-            checkpoint.train_time = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
+            checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
             # evaluate checkpoint model
             start_eval_time_ns = time.time_ns()
-            checkpoint.eval_score = self.evaluator.eval(checkpoint.model_state)
-            checkpoint.eval_time = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
+            checkpoint.loss['eval'] = self.evaluator.eval(checkpoint.model_state)
+            checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
             self.evolve_queue.put(checkpoint)
