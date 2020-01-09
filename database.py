@@ -5,13 +5,14 @@ from datetime import datetime
 
 class Checkpoint(object):
     '''Class for keeping track of a worker.'''
-    def __init__(self, id, hyper_parameters, eval_metric):
+    def __init__(self, id, hyper_parameters, loss_metric, eval_metric):
         self.id = id
         self.epochs = 0
         self.steps = 0
         self.hyper_parameters = hyper_parameters
         self.model_state = None
         self.optimizer_state = None
+        self.loss_metric = loss_metric
         self.eval_metric = eval_metric
         self.loss = dict()
         self.time = dict()

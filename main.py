@@ -23,7 +23,7 @@ from evaluator import Evaluator
 from trainer import Trainer
 from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from analyze import Analyzer
-from performance import accuracy
+from loss import CrossEntropy, BinaryCrossEntropy, Accuracy, F1
 
 # reproducibility
 random.seed(0)
@@ -46,10 +46,9 @@ def setup_mnist():
     loss_metric = 'cross_entropy'
     eval_metric = 'accuracy'
     eval_metrics = {
-        'cross_entropy': torch.nn.CrossEntropyLoss(),
-        'accuracy': accuracy
-    } 
-    
+        'cross_entropy': CrossEntropy(),
+        'accuracy': Accuracy()
+    }
     # prepare training and testing data
     train_data_path = test_data_path = './data'
     train_data = MNIST(
@@ -91,7 +90,12 @@ def setup_mnist():
 def setup_fraud():
     model_class = FraudNet
     optimizer_class = torch.optim.SGD
-    loss_function = torch.nn.BCELoss()
+    loss_metric = 'cross_entropy'
+    eval_metric = 'cross_entropy'
+    eval_metrics = {
+        'cross_entropy': BinaryCrossEntropy(),
+        'accuracy': Accuracy()
+    }
     # prepare training and testing data
     df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
     X = df.iloc[:, :-1].values # extracting features
@@ -124,14 +128,14 @@ def setup_fraud():
             'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
             'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
             })
-    return model_class, optimizer_class, loss_function, train_data, eval_data, test_data, hyper_parameters
+    return model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters
 
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
     parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
-    parser.add_argument("--database_path", type=str, default='checkpoints/mnist', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--task", type=str, default='fraud', help="Select tasks from 'mnist', 'fraud'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -153,9 +157,10 @@ if __name__ == "__main__":
     args = import_user_arguments()
     # prepare database
     print(f"Preparing database...")
+    database_path = f"checkpoints/{args.task}"
     database = SharedDatabase(
         context=torch.multiprocessing.get_context('spawn'),
-        directory_path = args.database_path,
+        directory_path = database_path,
         read_function=torch.load,
         write_function=torch.save)
     print(f"The shared database is available at: {database.path}")
@@ -171,7 +176,10 @@ if __name__ == "__main__":
         tensorboard_writer = SummaryWriter(tensorboard_log_path)
     # prepare objective
     print(f"Preparing model and datasets...")
-    model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
+    if args.task == "fraud":
+        model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_fraud()
+    if args.task == "mnist":
+        model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
     # objective info
     print(f"Population size: {args.population_size}")
     print(f"Number of hyper-parameters: {len(hyper_parameters)}")
@@ -210,9 +218,9 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 100#2*10**3
-    end_criteria = {'steps': steps * 50, 'score': 100.0} #400*10**3
-    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2))
+    steps = 100
+    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
+    evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.9, 1.1), random_walk=True)
     #evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
     # create controller
     print(f"Creating controller...")
@@ -223,6 +231,7 @@ if __name__ == "__main__":
         evaluator=evaluator,
         tester=tester,
         evolver=evolver,
+        loss_metric=loss_metric,
         eval_metric=eval_metric,
         database=database,
         tensorboard_writer=tensorboard_writer,
@@ -236,10 +245,8 @@ if __name__ == "__main__":
     print(f"Starting controller...")
     controller.start()
     # analyze results stored in database
-    analyzer = Analyzer(database)
-    print("Database entries:")
-    database.print()
     print("Analyzing population...")
+    analyzer = Analyzer(database)
     print("Creating statistics...")
     analyzer.create_statistics(save_directory=database.create_folder("results/statistics"), verbose=False)
     print("Creating plot-files...")

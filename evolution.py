@@ -22,12 +22,13 @@ class EvolveEngine(ABC):
 
 class ExploitAndExplore(EvolveEngine):
     """ A general, modifiable implementation of PBTs exploitation and exploration method. """
-    def __init__(self, N, exploit_factor = 0.2, explore_factors = (0.8, 1.2)):
+    def __init__(self, N, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False):
         assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
         assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
         self.N = N
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
+        self.random_walk = random_walk
 
     def prepare(self, hyper_parameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
@@ -65,8 +66,14 @@ class ExploitAndExplore(EvolveEngine):
         """Perturb all parameters by the defined explore_factors."""
         logger("exploring...")
         for _, hp in member.hyper_parameters:
-            perturb_factor = random.choice(self.explore_factors)
-            hp *= perturb_factor
+            if not self.random_walk:
+                perturb_factor = random.choice(self.explore_factors)
+                hp *= perturb_factor
+            else:
+                min = 1.0 - self.explore_factors[0]
+                max = 1.0 - self.explore_factors[1]
+                walk_factor = random.uniform(min, max)
+                hp += walk_factor
 
 class DifferentialEvolution(EvolveEngine):
     """A general, modifiable implementation of Differential Evolution (DE)"""

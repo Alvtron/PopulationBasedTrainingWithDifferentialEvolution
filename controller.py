@@ -18,7 +18,7 @@ from utils import get_datetime_string
 mp = torch.multiprocessing.get_context('spawn')
 
 class Controller(object):
-    def __init__(self, population_size, hyper_parameters, trainer, evaluator, tester, evolver, eval_metric, database, tensorboard_writer = None, step_size = 1, evolve_frequency = 5, end_criteria = {'score': 100.0}, device = 'cpu', verbose=True, logging=True):
+    def __init__(self, population_size, hyper_parameters, trainer, evaluator, tester, evolver, loss_metric, eval_metric, database, tensorboard_writer = None, step_size = 1, evolve_frequency = 5, end_criteria = {'score': 100.0}, device = 'cpu', verbose=True, logging=True):
         assert evolve_frequency and isinstance(evolve_frequency, int) and evolve_frequency > 0, f"Frequency must be of type {int} as 1 or higher."
         assert end_criteria and isinstance(end_criteria, dict), f"End criteria must be of type {dict}."
         self.population_size = population_size
@@ -27,6 +27,7 @@ class Controller(object):
         self.evaluator = evaluator
         self.tester = tester
         self.evolver = evolver
+        self.loss_metric = loss_metric
         self.eval_metric = eval_metric
         self.database = database
         self.step_size = step_size
@@ -53,6 +54,7 @@ class Controller(object):
             'device': self.device,
             'n_hyper_parameters': len(self.hyper_parameters),
             'hyper_parameters': self.hyper_parameters.parameter_paths(),
+            'loss_metric': self.loss_metric,
             'eval_metric': self.eval_metric,
             'step_size': self.step_size,
             'evolve_frequency': self.evolve_frequency,
@@ -127,7 +129,11 @@ class Controller(object):
             # copy hyper-parameters
             hyper_parameters = copy.deepcopy(self.hyper_parameters)
             # create new checkpoint object
-            checkpoint = Checkpoint(id, hyper_parameters, self.eval_metric)
+            checkpoint = Checkpoint(
+                id=id,
+                hyper_parameters=hyper_parameters,
+                loss_metric=self.loss_metric,
+                eval_metric=self.eval_metric)
             # prepare hyper-parameters
             self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.log, checkpoint))
             # queue checkpoint for training
@@ -167,8 +173,8 @@ class Controller(object):
                 checkpoint = self.evolve_queue.get()
                 print(f"Queue length: {self.evolve_queue.qsize()}")
                 # check for nan loss-value
-                if math.isnan(checkpoint.loss['train'][self.eval_metric]):
-                    self.log(checkpoint, "NaN train_loss detected. Stopping.")
+                if any(math.isnan(value) for value in checkpoint.loss['eval'].values()):
+                    self.log(checkpoint, "NaN metric detected. Stopping.")
                     self.finish_queue.put(checkpoint)
                     if self.finish_queue.full():
                         print("All workers are finished.")
