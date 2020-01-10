@@ -7,7 +7,8 @@ from pathlib import Path
 from database import ReadOnlyDatabase
 from evaluator import Evaluator
 from hyperparameters import Hyperparameter, Hyperparameters
-from utils import clip, flatten_dict
+from utils.math import clip
+from utils.iterable import flatten_dict
 
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase):
@@ -121,7 +122,7 @@ class Analyzer(object):
             plt.ylabel('value')
             for id in progression_dict:
                 steps = [step for step in progression_dict[id]['steps']]
-                parameter_values = [hp[param_name].normalized() for hp in progression_dict[id]['hyper_parameters']]
+                parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
                 scores = [score for score in progression_dict[id]['score']]
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
@@ -164,7 +165,7 @@ class Analyzer(object):
             ax.set(xlabel='steps', ylabel='value')
             for id in progression_dict:
                 steps = [step for step in progression_dict[id]['steps']]
-                parameter_values = [hp[param_name].normalized() for hp in progression_dict[id]['hyper_parameters']]
+                parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
                 scores = [score for score in progression_dict[id]['score']]
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):

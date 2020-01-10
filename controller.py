@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from functools import partial 
 from database import Checkpoint
 from member import Member
-from utils import get_datetime_string
+from utils.date import get_datetime_string
 
 mp = torch.multiprocessing.get_context('spawn')
 
@@ -95,25 +95,8 @@ class Controller(object):
         for hparam_name, hparam in checkpoint.hyper_parameters:
             self.__tensorboard_writer.add_scalar(
                 tag=f"Hyperparameters/{hparam_name}/{checkpoint.id:03d}",
-                scalar_value=hparam.value(),
+                scalar_value=hparam.value,
                 global_step=checkpoint.steps)
-
-    def spawn_workers(self):
-        self.__workers = [
-            Member(
-                end_event = self.end_event,
-                trainer = self.trainer,
-                evaluator = self.evaluator,
-                evolve_queue = self.evolve_queue,
-                train_queue = self.train_queue,
-                step_size = self.step_size,
-                device = self.device,
-                verbose = self.verbose)
-            for _ in range(self.population_size)]
-        # Starting workers
-        for index, worker in enumerate(self.__workers, start=1):
-            print(f"Starting worker {index}/{self.population_size}", end="\r", flush=True)
-            worker.start()
 
     def eval_function(self, checkpoint):
         current_model_state, _, _, _ , _ = self.trainer.train(
@@ -145,6 +128,23 @@ class Controller(object):
             # score is above the given treshold
             return True
         return False
+
+    def spawn_workers(self):
+        self.__workers = [
+            Member(
+                end_event = self.end_event,
+                trainer = self.trainer,
+                evaluator = self.evaluator,
+                evolve_queue = self.evolve_queue,
+                train_queue = self.train_queue,
+                step_size = self.step_size,
+                device = self.device,
+                verbose = self.verbose)
+            for _ in range(self.population_size)]
+        # Starting workers
+        for index, worker in enumerate(self.__workers, start=1):
+            print(f"Starting worker {index}/{self.population_size}", end="\r", flush=True)
+            worker.start()
 
     def queue_members(self):
         for id in range(self.population_size):

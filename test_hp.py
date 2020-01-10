@@ -1,12 +1,11 @@
 import random
-import math
-import itertools
 from hyperparameters import Hyperparameter, Hyperparameters
-from utils import unwrap_iterable
+from utils.iterable import unwrap_iterable
 
-def hyperparameter_math_testing():
-    a = Hyperparameter(0, 1000000)
-    b = Hyperparameter(0, 1000000)
+def hyperparameter_math_test():
+    print("Hyperparameter Math Test")
+    a = Hyperparameter(0, 100)
+    b = Hyperparameter(0, 100)
     print(f"a = {a}")
     print(f"b = {b}")
     print(f"{a} + {b} = {a + b}")
@@ -14,38 +13,46 @@ def hyperparameter_math_testing():
     print(f"{a} * {b} = {a * b}")
     print(f"{a} / {b} = {a / b}")
     print(f"{a} ** {b} = {a ** b}")
-
+    print("--")
     print(f"{a} + 0.1 = {a + 0.1}")
     print(f"{a} - 0.1 = {a - 0.1}")
     print(f"{a} * 2 = {a * 2}")
     print(f"{a} / 2 = {a / 2}")
     print(f"{a} ** 2 = {a ** 2}")
+    print("--")
+    a.normalized = 0.5
+    print(f"a.normalized = 0.5 --> a.normalized: {a.normalized}, a.value: {a.value}")
+    a.value = 75
+    print(f"a.value = 75 --> a.normalized: {a.normalized}, a.value: {a.value}")
+    a.value = 130
+    print(f"a.value = 130 --> a.normalized: {a.normalized}, a.value: {a.value}")
+    a.value = -0.40
+    print(f"a.value = -0.40 --> a.normalized: {a.normalized}, a.value: {a.value}")
 
-def categorical_hyperparameter_testing():
+def categorical_hyperparameter_test():
+    print("Categorical Hyperparameter Test")
     categorical = Hyperparameter("A","B","C","D","E","F","G","H","I", is_categorical = True)
-
     print("sampling uniform...")
-    for i in range(3):
+    for _ in range(3):
         categorical.sample_uniform()
-        print(f"{categorical.normalized()}: {categorical.value()}")
-
+        print(f"{categorical.normalized}: {categorical.value}")
     print("perturbing...")
-    for i in range(3):
+    for _ in range(3):
         random_value = random.choice((0.8, 1.2))
         categorical *= random_value
-        print(f"{categorical.normalized()}: {categorical.value()}")
-
+        print(f"{categorical.normalized}: {categorical.value}")
     print("--")
-    print(f"Normalized: {categorical.normalized()}")
-    print(f"Value: {categorical.value()}")
-    print(f"Lower bound: {categorical.get_lower_bound()}")
-    print(f"Upper bound: {categorical.get_upper_bound()}")
+    print(f"Normalized: {categorical.normalized}")
+    print(f"Value: {categorical.value}")
+    print(f"Lower bound: {categorical.lower_bound}")
+    print(f"Upper bound: {categorical.upper_bound}")
     print("--")
-    print(f"Normalized value {0.30} gives me value {categorical.get_value(0.30)}")
+    print(f"Normalized value {0.30} gives me value {categorical.from_normalized(0.30)}")
     for value in categorical.search_space:
-        print(f"Value {value} gives me normalized value {categorical.get_normalized_value(value)}")
+        print(f"Value {value} gives me normalized value {categorical.from_value(value)}")
 
-def hyperparameter_configuration_testing():
+def hyperparameter_configuration_test():
+    print("Hyperparameter Configuration Test")
     hp1 = Hyperparameters(
             general_params = {
                 'a': Hyperparameter(1, 256)},
@@ -70,7 +77,7 @@ def hyperparameter_configuration_testing():
     print(hp1 != hp2)
 
     print(hp1.values())
-    print(hp1.normalized())
+    print(hp1.normalized)
 
     for param_name, param_value in hp1:
         print(param_name, param_value)
@@ -134,6 +141,8 @@ def hyperparameter_configuration_testing():
         print(f"hp1[{index}]: {hp1[index]}")
 
 if __name__ == "__main__":
-    #hyperparameter_math_testing()
-    #categorical_hyperparameter_testing()
-    hyperparameter_configuration_testing()
+    hyperparameter_math_test()
+    print("____________________")
+    categorical_hyperparameter_test()
+    print("____________________")
+    hyperparameter_configuration_test()

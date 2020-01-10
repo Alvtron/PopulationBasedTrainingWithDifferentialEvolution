@@ -1,7 +1,5 @@
 import torch
 import itertools
-import numpy
-import math
 from torch.utils.data import DataLoader
 
 class Trainer(object):
@@ -33,7 +31,7 @@ class Trainer(object):
             optimizer.load_state_dict(optimizer_state)
             for param_name, param_value in hyper_parameters.optimizer.items():
                 for param_group in optimizer.param_groups:
-                    param_group[param_name] = param_value.value()
+                    param_group[param_name] = param_value.value
         return optimizer
 
     def train(self, hyper_parameters, model_state, optimizer_state, epochs, steps, step_size = 1):

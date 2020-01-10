@@ -6,7 +6,7 @@ Possible solution: [Explain what could be done]
 
 -- Pending
 
-Priority level: High
+Priority level: Medium
 What: Reduce evolve time or make evolver an asynchronous process class to run evolving on a different thread.
 Why: The evolving process can take too long, extending the evolving queue and slowing down the population training process.
 

@@ -1,22 +1,13 @@
-import os
 import math
-import operator
 import random
 import copy
-import torch
-import time
 from abc import ABC, abstractmethod 
-from hyperparameters import Hyperparameter
-from torch.utils.data import DataLoader
-from database import Checkpoint, SharedDatabase
-from utils import get_datetime_string
-
-mp = torch.multiprocessing.get_context('spawn')
 
 class EvolveEngine(ABC):
+    @abstractmethod
     def prepare(self, hyper_parameters, logger = None):
         pass
-
+    @abstractmethod
     def evolve(self, member, generation, population, function, logger):
         pass
 
@@ -35,7 +26,7 @@ class ExploitAndExplore(EvolveEngine):
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -77,17 +68,21 @@ class ExploitAndExplore(EvolveEngine):
 
 class DifferentialEvolution(EvolveEngine):
     """A general, modifiable implementation of Differential Evolution (DE)"""
-    def __init__(self, N, F = 0.2, Cr = 0.8):
+    def __init__(self, N, F = 0.2, Cr = 0.8, constraint='clip'):
+        if N < 3:
+            raise ValueError("Population size 'N' must be at least 3 or higher.")
         self.N = N
         self.F = F
         self.Cr = Cr
+        self.constraint = constraint
 
     def prepare(self, hyper_parameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
+            hyperparameter.set_constraint(self.constraint)
             hyperparameter.sample_uniform()
-            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -106,16 +101,16 @@ class DifferentialEvolution(EvolveEngine):
                 x_r0 = generation[r0].hyper_parameters[j]
                 x_r1 = generation[r1].hyper_parameters[j]
                 x_r2 = generation[r2].hyper_parameters[j]
-                mutation.hyper_parameters[j] = x_r0 + (x_r1 - x_r2) * self.F
+                mutation.hyper_parameters[j].normalized = x_r0.normalized + (x_r1.normalized - x_r2.normalized) * self.F
             else:
                 mutation.hyper_parameters[j] = member.hyper_parameters[j]
         # eval mutation
         mutation_score = function(mutation)
         if mutation_score >= member.score:
-            logger(f"Mutated member. (u {mutation_score:.4f} >= x {member.score:.4f})")
+            logger(f"mutated member. (u {mutation_score:.4f} >= x {member.score:.4f})")
             member.update(mutation)
         else:
-            logger(f"Maintained member. (u {mutation_score:.4f} < x {member.score:.4f})")
+            logger(f"maintained member. (u {mutation_score:.4f} < x {member.score:.4f})")
 
 class ParticleSwarm(EvolveEngine):
     """A general, modifiable implementation of Particle Swarm Optimization (PSO)"""
@@ -128,7 +123,7 @@ class ParticleSwarm(EvolveEngine):
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value()}")
+            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """

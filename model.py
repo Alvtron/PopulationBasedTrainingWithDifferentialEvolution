@@ -28,11 +28,11 @@ class MnistNet(HyperNet):
         self.softmax = nn.LogSoftmax(dim=1)
 
     def apply_hyper_parameters(self, hyper_parameters, device):
-        self.dropout_1.p = hyper_parameters['dropout_rate_1'].value()
-        self.dropout_2.p = hyper_parameters['dropout_rate_2'].value()
-        self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value()).to(device)
-        self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value()).to(device)
-        self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value()).to(device)
+        self.dropout_1.p = hyper_parameters['dropout_rate_1'].value
+        self.dropout_2.p = hyper_parameters['dropout_rate_2'].value
+        self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value).to(device)
+        self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value).to(device)
+        self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
 
     def forward(self, x):
         x = self.conv_1(x)
@@ -67,11 +67,11 @@ class FraudNet(HyperNet):
         self.sigmoid = nn.Sigmoid()
 
     def apply_hyper_parameters(self, hyper_parameters, device):
-        self.dropout_1.p = hyper_parameters['dropout_rate_1'].value()
-        self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value()).to(device)
-        self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value()).to(device)
-        self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value()).to(device)
-        self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value()).to(device)
+        self.dropout_1.p = hyper_parameters['dropout_rate_1'].value
+        self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value).to(device)
+        self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value).to(device)
+        self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
+        self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value).to(device)
 
     def forward(self, x):
         x = self.fc_1(x)

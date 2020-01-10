@@ -218,10 +218,10 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 200
+    steps = 100
     end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
     #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
-    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8)
+    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
     # create controller
     print(f"Creating controller...")
     controller = Controller(
