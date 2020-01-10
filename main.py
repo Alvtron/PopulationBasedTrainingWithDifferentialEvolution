@@ -133,9 +133,10 @@ def setup_fraud():
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=5, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'fraud'.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/mnist_de_reflect', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -157,10 +158,9 @@ if __name__ == "__main__":
     args = import_user_arguments()
     # prepare database
     print(f"Preparing database...")
-    database_path = f"checkpoints/{args.task}"
     database = SharedDatabase(
         context=torch.multiprocessing.get_context('spawn'),
-        directory_path = database_path,
+        directory_path = args.database_path,
         read_function=torch.load,
         write_function=torch.save)
     print(f"The shared database is available at: {database.path}")
@@ -218,10 +218,10 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 100
+    steps = 200
     end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
     #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
-    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
+    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='reflect')
     # create controller
     print(f"Creating controller...")
     controller = Controller(
