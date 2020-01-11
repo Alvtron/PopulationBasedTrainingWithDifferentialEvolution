@@ -26,7 +26,6 @@ class ExploitAndExplore(EvolveEngine):
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -82,7 +81,6 @@ class DifferentialEvolution(EvolveEngine):
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.set_constraint(self.constraint)
             hyperparameter.sample_uniform()
-            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -123,7 +121,6 @@ class ParticleSwarm(EvolveEngine):
         logger(f"Preparing hyper-parameters...")
         for hyperparameter_name, hyperparameter in hyper_parameters:
             hyperparameter.sample_uniform()
-            if logger: logger(f"{hyperparameter_name}: {hyperparameter.value}")
 
     def evolve(self, member, generation, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """

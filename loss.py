@@ -54,7 +54,7 @@ class MSE(_Loss):
     def forward(self, y_pred, y_true):
         return self.function(y_pred, y_true)
 
-class CrossEntropy(_Loss):
+class CategoricalCrossEntropy(_Loss):
     '''
     Calculate the cross-entropy loss.
     '''

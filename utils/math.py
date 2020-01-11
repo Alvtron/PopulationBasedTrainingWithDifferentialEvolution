@@ -1,5 +1,14 @@
 import math
 
+def n_digits(number):
+    if number <= 999999999999997:
+        return int(math.log10(number)) + 1
+    else:
+        counter = 15
+        while number >= 10**counter:
+            counter += 1
+        return counter
+
 def translate(value, left_min, left_max, right_min, right_max):
     # Calculate the span of each range
     left_span = left_max - left_min

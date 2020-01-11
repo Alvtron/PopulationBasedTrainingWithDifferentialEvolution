@@ -14,6 +14,7 @@ from functools import partial
 from database import Checkpoint
 from member import Member
 from utils.date import get_datetime_string
+from utils.math import n_digits
 
 mp = torch.multiprocessing.get_context('spawn')
 
@@ -37,6 +38,7 @@ class Controller(object):
         self.device = device
         self.verbose = verbose
         self.logging = logging
+        self.iterations = 0
         # create shared bool-value for when to end training
         self.end_event = mp.Event()
         # create queues for training and evolving
@@ -63,20 +65,30 @@ class Controller(object):
         }
         pickle.dump(parameters, self.database.create_file("info", "parameters.obj").open("wb"))
 
-    def log(self, checkpoint, message):
-        """Logs and prints the provided message in the appropriate syntax."""
+    def __log(self, message):
+        """Logs and prints the provided controller message in the appropriate syntax."""
+        controller_name = self.__class__.__name__
+        time = get_datetime_string()
+        full_message = f"{time} {controller_name}, cycle {self.iterations:04d}: {message}"
+        if self.logging:
+            with self.database.create_file(tag='logs', file_name=f"{controller_name}_log.txt").open('a+') as file:
+                file.write(full_message + '\n')
+        if self.verbose:
+            print(full_message)
+
+    def __log_checkpoint(self, checkpoint, message):
+        """Logs and prints the provided checkpoint message in the appropriate syntax."""
         time = get_datetime_string()
         full_message = f"{time} {checkpoint}: {message}"
         if self.logging:
-            file_path = self.database.create_file(tag='logs', file_name=f"{checkpoint.id:03d}_log.txt")
-            with file_path.open('a+') as file:
+            with self.database.create_file(tag='logs', file_name=f"{checkpoint.id:03d}_log.txt").open('a+') as file:
                 file.write(full_message + '\n')
         if self.verbose:
             print(full_message)
         if self.__tensorboard_writer:
-            self.__tensorboard_writer.add_text(tag="controller", text_string=full_message, global_step=checkpoint.steps)
+            self.__tensorboard_writer.add_text(tag=f"member_{checkpoint.id:03d}", text_string=full_message, global_step=checkpoint.steps)
 
-    def write_to_tensorboard(self, checkpoint):
+    def __write_to_tensorboard(self, checkpoint):
         """Plots checkpoint data to tensorboard"""
         # plot eval metrics
         for eval_metric_group, eval_metrics in checkpoint.loss.items():
@@ -95,7 +107,7 @@ class Controller(object):
         for hparam_name, hparam in checkpoint.hyper_parameters:
             self.__tensorboard_writer.add_scalar(
                 tag=f"Hyperparameters/{hparam_name}/{checkpoint.id:03d}",
-                scalar_value=hparam.value,
+                scalar_value=hparam.normalized,
                 global_step=checkpoint.steps)
 
     def eval_function(self, checkpoint):
@@ -143,28 +155,30 @@ class Controller(object):
             for _ in range(self.population_size)]
         # Starting workers
         for index, worker in enumerate(self.__workers, start=1):
-            print(f"Starting worker {index}/{self.population_size}", end="\r", flush=True)
+            #print(f"Starting worker {index}/{self.population_size}", end="\r", flush=True)
+            self.__log(f"Starting worker {index}/{self.population_size}")
             worker.start()
 
     def queue_members(self):
         for id in range(self.population_size):
-            print(f"Queuing checkpoint {id + 1}/{self.population_size}", end="\r", flush=True)
+            #print(f"Queuing checkpoint {id + 1}/{self.population_size}", end="\r", flush=True)
             # copy hyper-parameters
             hyper_parameters = copy.deepcopy(self.hyper_parameters)
             # create new checkpoint object
             checkpoint = Checkpoint(id, hyper_parameters, self.loss_metric, self.eval_metric)
             # prepare hyper-parameters
-            self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.log, checkpoint))
+            self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.__log_checkpoint, checkpoint))
             # queue checkpoint for training
             self.train_queue.put(checkpoint)
 
     def start_training_procedure(self):
-        print("Creating worker processes...")
+        self.__log("Creating worker processes...")
         self.spawn_workers()
-        print("Queing member checkpoints...")
+        self.__log("Queing member checkpoints...")
         self.queue_members()
 
     def start(self):
+        self.iterations = 0
         try:
             # start training
             self.start_training_procedure()
@@ -174,14 +188,14 @@ class Controller(object):
                     continue
                 # get next checkpoint
                 checkpoint = self.evolve_queue.get()
-                print(f"Queue length: {self.evolve_queue.qsize()}")
+                self.__log(f"Queue length: {self.evolve_queue.qsize()}")
                 # check for nan loss-value
                 if self.detect_NaN and any(math.isnan(value) for value in checkpoint.loss['eval'].values()):
-                    self.log(checkpoint, "NaN metric detected.")
-                    self.log(checkpoint, "stopping.")
+                    self.__log_checkpoint(checkpoint, "NaN metric detected.")
+                    self.__log_checkpoint(checkpoint, "stopping.")
                     self.finish_queue.put(checkpoint)
                     if self.finish_queue.full():
-                        print("All workers are finished.")
+                        self.__log("All workers are finished.")
                         self.end_event.set()
                         break
                     else: continue
@@ -189,43 +203,44 @@ class Controller(object):
                 self.database.save_entry(checkpoint)
                 # write to tensorboard if enabled
                 if self.__tensorboard_writer:
-                    self.write_to_tensorboard(checkpoint)
+                    self.__write_to_tensorboard(checkpoint)
                 # check if population is finished
                 if self.is_population_finished(checkpoint):
-                    self.log(checkpoint, "End criterium reached.")
+                    self.__log_checkpoint(checkpoint, "End criterium reached.")
                     self.end_event.set()
                     break
                 # check if member is finished
                 if self.is_member_finished(checkpoint):
-                    self.log(checkpoint, "finished.")
+                    self.__log_checkpoint(checkpoint, "finished.")
                     self.finish_queue.put(checkpoint)
                     if self.finish_queue.full():
-                        print("All workers are finished.")
+                        self.__log("All workers are finished.")
                         self.end_event.set()
                         break
                     else: continue
                 # evolve member if ready
                 if self.is_member_ready(checkpoint):
-                    self.log(checkpoint, "evolving...")
+                    self.__log_checkpoint(checkpoint, "evolving...")
                     start_evolve_time_ns = time.time_ns()
                     self.evolver.evolve(
                         member=checkpoint,
                         generation=self.database.get_latest,
                         population=self.database.to_list,
                         function=self.eval_function,
-                        logger=partial(self.log, checkpoint))
+                        logger=partial(self.__log_checkpoint, checkpoint))
                     checkpoint.time['evolve'] = float(time.time_ns() - start_evolve_time_ns) * float(10**(-9))
                 # queue member for training
-                self.log(checkpoint, "training...")
+                self.__log_checkpoint(checkpoint, "training...")
                 self.train_queue.put(checkpoint)
+                self.iterations += 1
             # terminate worker processes
-            print("Controller is finished.")
+            self.__log("Controller is finished.")
         except KeyboardInterrupt:
-            print("Controller was interupted.")
+            self.__log("Controller was interupted.")
         finally:
-            print("Terminating all left-over worker-processes...")
+            self.__log("Terminating all left-over worker-processes...")
             for worker in self.__workers:
                 if isinstance(worker, mp.Process):
                     worker.terminate()
                 else: continue
-            print("Termination was successfull!")
+            self.__log("Termination was successfull!")

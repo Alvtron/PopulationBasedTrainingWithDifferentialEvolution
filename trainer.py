@@ -1,5 +1,6 @@
 import torch
 import itertools
+from hyperparameters import Hyperparameters
 from torch.utils.data import DataLoader
 
 class Trainer(object):
@@ -25,7 +26,7 @@ class Trainer(object):
             model.load_state_dict(model_state)
         return model
 
-    def create_optimizer(self, model, hyper_parameters, optimizer_state = None):
+    def create_optimizer(self, model, hyper_parameters : Hyperparameters, optimizer_state = None):
         optimizer = self.optimizer_class(model.parameters(), **hyper_parameters.get_optimizer_value_dict())
         if optimizer_state:
             optimizer.load_state_dict(optimizer_state)

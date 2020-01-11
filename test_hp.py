@@ -50,6 +50,17 @@ def categorical_hyperparameter_test():
     print(f"Normalized value {0.30} gives me value {categorical.from_normalized(0.30)}")
     for value in categorical.search_space:
         print(f"Value {value} gives me normalized value {categorical.from_value(value)}")
+    print("--")
+    print("Tuple Categorical Hyperparameter Test")
+    # tuples in categorical hyper-parameter
+    tuple_hp = Hyperparameter((0.9, 0.999), is_categorical=True)
+    
+    print("--")
+    print(f"Normalized: {tuple_hp.normalized}")
+    print(f"Value: {tuple_hp.value}")
+    print(f"Lower bound: {tuple_hp.lower_bound}")
+    print(f"Upper bound: {tuple_hp.upper_bound}")
+    print("--")
 
 def hyperparameter_configuration_test():
     print("Hyperparameter Configuration Test")
@@ -109,7 +120,7 @@ def hyperparameter_configuration_test():
         print(param_name, param_value)
 
     print("--")
-
+    print("Hyperparameter Alteration Test")
     params = [
         Hyperparameter(1, 256),
         Hyperparameter(1e-6, 1e-0),

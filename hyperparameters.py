@@ -18,8 +18,6 @@ class Hyperparameter(object):
             raise ValueError("No arguments provided.")
         self.MIN_NORM = 0.0
         self.MAX_NORM = 1.0
-        args = list(args)
-        args = (self.MIN_NORM, self.MAX_NORM) if len(args) < 2 else args
         if not is_categorical and not all(isinstance(arg, (float, int)) for arg in args):
             raise ValueError(f"Non-categorical hyperparameters must be of type {float} or {int}.")
         self.set_constraint(constraint)

@@ -14,8 +14,7 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.datasets import MNIST, EMNIST, FashionMNIST, KMNIST, QMNIST, ImageNet, CIFAR10, CIFAR100
-from model import MnistNet, FraudNet
+from setup import setup_mnist, setup_emnist, setup_fraud
 from database import SharedDatabase
 from hyperparameters import Hyperparameter, Hyperparameters
 from controller import Controller
@@ -23,7 +22,6 @@ from evaluator import Evaluator
 from trainer import Trainer
 from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from analyze import Analyzer
-from loss import CrossEntropy, BinaryCrossEntropy, Accuracy, F1, NLL
 
 # reproducibility
 random.seed(0)
@@ -32,112 +30,14 @@ torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-def split_dataset(dataset, fraction):
-        assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"
-        dataset_length = len(dataset)
-        first_set_length = math.floor(fraction * dataset_length)
-        second_set_length = dataset_length - first_set_length
-        first_set, second_set = torch.utils.data.random_split(dataset, (first_set_length, second_set_length))
-        return first_set, second_set
-
-def setup_mnist():
-    model_class = MnistNet
-    optimizer_class = torch.optim.SGD
-    loss_metric = 'nll'
-    eval_metric = 'accuracy'
-    eval_metrics = {
-        #'cross_entropy': CrossEntropy(),
-        'nll': NLL(),
-        'accuracy': Accuracy()
-    }
-    # prepare training and testing data
-    train_data_path = test_data_path = './data'
-    train_data = MNIST(
-        train_data_path,
-        train=True,
-        download=True,
-        transform=torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
-        ]))
-    test_data = MNIST(
-        test_data_path,
-        train=False,
-        download=True,
-        transform=torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
-        ]))
-    # split training set into training set and validation set
-    train_data, eval_data = split_dataset(train_data, 0.90)
-    # define hyper-parameter search space
-    hyper_parameters = Hyperparameters(
-        general_params = None,
-        model_params = {
-            'dropout_rate_1': Hyperparameter(0.0, 1.0),
-            'dropout_rate_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_3': Hyperparameter(0.0, 1.0)
-            },
-        optimizer_params = {
-            'lr': Hyperparameter(1e-6, 1e-2), # Learning rate.
-            'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
-            'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
-            'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
-            })
-    return model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters
-    
-def setup_fraud():
-    model_class = FraudNet
-    optimizer_class = torch.optim.SGD
-    loss_metric = 'cross_entropy'
-    eval_metric = 'cross_entropy'
-    eval_metrics = {
-        'cross_entropy': BinaryCrossEntropy(),
-        'accuracy': Accuracy()
-    }
-    # prepare training and testing data
-    df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
-    X = df.iloc[:, :-1].values # extracting features
-    y = df.iloc[:, -1].values # extracting labels
-    sc = sklearn.preprocessing.StandardScaler()
-    X = sc.fit_transform(X)
-    X_train, X_test, Y_train, Y_test = sklearn.model_selection.train_test_split(X, y, test_size=0.1, random_state=1)
-    X_train = torch.from_numpy(X_train).float()
-    Y_train = torch.from_numpy(Y_train).float()
-    X_test = torch.from_numpy(X_test).float()
-    Y_test = torch.from_numpy(Y_test).float()
-    train_data = torch.utils.data.TensorDataset(X_train, Y_train)
-    test_data = torch.utils.data.TensorDataset(X_test, Y_test)
-    # split training set into training set and validation set
-    train_data, eval_data = split_dataset(train_data, 0.9)
-    # define hyper-parameter search space
-    hyper_parameters = Hyperparameters(
-        general_params = None,
-        model_params = {
-            'dropout_rate_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_3': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_4': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_5': Hyperparameter(0.0, 1.0)
-            },
-        optimizer_params = {
-            'lr': Hyperparameter(1e-6, 1e-1), # Learning rate.
-            'momentum': Hyperparameter(1e-1, 1e-0), # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
-            'weight_decay': Hyperparameter(0.0, 1e-5), # Learning rate decay over each update.
-            'nesterov': Hyperparameter(False, True, is_categorical = True) # Whether to apply Nesterov momentum.
-            })
-    return model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters
-
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=1, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'fraud'.")
-    parser.add_argument("--database_path", type=str, default='checkpoints/mnist_de_clip', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--evolver", type=str, default='pbt', help="Select which evolve algorithm to use.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/mnist_pbt', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -181,6 +81,8 @@ if __name__ == "__main__":
         model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_fraud()
     if args.task == "mnist":
         model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
+    if args.task == "emnist":
+        model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_emnist()
     # objective info
     print(f"Population size: {args.population_size}")
     print(f"Number of hyper-parameters: {len(hyper_parameters)}")
@@ -219,10 +121,12 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 300
+    steps = 100
     end_criteria = {'steps': steps * 200, 'score': 100.0} #400*10**3
-    #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
-    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
+    if args.evolver == 'pbt':
+        evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
+    if args.evolver == 'de':
+        evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -269,7 +173,7 @@ if __name__ == "__main__":
     for checkpoint in all_checkpoints:
         database.save_entry(checkpoint)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.loss['test'][eval_metric])
-    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an accuracy of {best_checkpoint.loss['test'][eval_metric]:.4f}%"
+    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an {eval_metric} of {best_checkpoint.loss['test'][eval_metric]:.4f}"
     database.create_file("results", "best_member.txt").write_text(result)
     with database.create_file("results", "top_members.txt").open('a+') as f:
         for checkpoint in all_checkpoints:
