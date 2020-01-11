@@ -99,7 +99,10 @@ class Analyzer(object):
             plt.ylabel("value")
             plt.title(attribute)
             for id in progression_dict:
-                plt.plot(progression_dict[id][attribute], label=f"m_{id}")
+                try:
+                    plt.plot(progression_dict[id][attribute], label=f"m_{id}")
+                except KeyError:
+                    continue
             plt.legend()
             plt.savefig(fname=Path(save_directory, f"{attribute}_plot.png"), format='png', transparent=False)
             plt.savefig(fname=Path(save_directory, f"{attribute}_plot.svg"), format='svg', transparent=True)

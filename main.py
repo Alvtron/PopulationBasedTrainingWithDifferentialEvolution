@@ -14,7 +14,7 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.datasets import MNIST
+from torchvision.datasets import MNIST, EMNIST, FashionMNIST, KMNIST, QMNIST, ImageNet, CIFAR10, CIFAR100
 from model import MnistNet, FraudNet
 from database import SharedDatabase
 from hyperparameters import Hyperparameter, Hyperparameters
@@ -23,7 +23,7 @@ from evaluator import Evaluator
 from trainer import Trainer
 from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
 from analyze import Analyzer
-from loss import CrossEntropy, BinaryCrossEntropy, Accuracy, F1
+from loss import CrossEntropy, BinaryCrossEntropy, Accuracy, F1, NLL
 
 # reproducibility
 random.seed(0)
@@ -43,10 +43,11 @@ def split_dataset(dataset, fraction):
 def setup_mnist():
     model_class = MnistNet
     optimizer_class = torch.optim.SGD
-    loss_metric = 'cross_entropy'
+    loss_metric = 'nll'
     eval_metric = 'accuracy'
     eval_metrics = {
-        'cross_entropy': CrossEntropy(),
+        #'cross_entropy': CrossEntropy(),
+        'nll': NLL(),
         'accuracy': Accuracy()
     }
     # prepare training and testing data
@@ -136,7 +137,7 @@ def import_user_arguments():
     parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'fraud'.")
-    parser.add_argument("--database_path", type=str, default='checkpoints/mnist_de_reflect', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/mnist_de_clip', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -218,10 +219,10 @@ if __name__ == "__main__":
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 200
-    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
+    steps = 300
+    end_criteria = {'steps': steps * 200, 'score': 100.0} #400*10**3
     #evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
-    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='reflect')
+    evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -234,11 +235,12 @@ if __name__ == "__main__":
         loss_metric=loss_metric,
         eval_metric=eval_metric,
         database=database,
-        tensorboard_writer=tensorboard_writer,
         step_size=steps,
         evolve_frequency=steps,
         end_criteria=end_criteria,
+        detect_NaN=True,
         device=args.device,
+        tensorboard_writer=tensorboard_writer,
         verbose=args.verbose,
         logging=args.logging)
     # run controller

@@ -13,21 +13,27 @@ statistics_save_directory.mkdir(exist_ok=True, parents=True)
 plot_save_directory.mkdir(exist_ok=True, parents=True)
 hp_plot_save_directory.mkdir(exist_ok=True, parents=True)
 database = ReadOnlyDatabase(
-    database_path="checkpoints/mnist/20200109111837",
+    database_path="checkpoints/mnist_de_clip/20200110184314",
     read_function=torch.load)
 analyzer = Analyzer(database)
 print(f"Database consists of {len(database.to_list())} entries.")
 print("Creating statistics...")
 analyzer.create_statistics(save_directory=statistics_save_directory, verbose=False)
-print("Creating plot-files...")
+print("create_plot_files...", end =" ")
 analyzer.create_plot_files(save_directory=plot_save_directory)
-analyzer.create_hyper_parameter_multi_plot_files(
-    save_directory=hp_plot_save_directory,
-    min_score=0,
-    max_score=100,
-    sensitivity=4)
+print("done!")
+print("create_hyper_parameter_single_plot_files...", end =" ")
 analyzer.create_hyper_parameter_single_plot_files(
     save_directory=hp_plot_save_directory,
     min_score=0,
     max_score=100,
     sensitivity=4)
+print("done!")
+print("create_hyper_parameter_multi_plot_files...", end =" ")
+analyzer.create_hyper_parameter_multi_plot_files(
+    save_directory=hp_plot_save_directory,
+    min_score=0,
+    max_score=100,
+    sensitivity=4)
+print("done!")
+print("Analyze completed.")
