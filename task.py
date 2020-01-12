@@ -71,12 +71,9 @@ class Mnist(Task):
             general_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-2),  # Learning rate.
-                # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
+                'lr': Hyperparameter(1e-6, 1e-1),
                 'momentum': Hyperparameter(1e-1, 1e-0),
-                # Learning rate decay over each update.
                 'weight_decay': Hyperparameter(0.0, 1e-5),
-                # Whether to apply Nesterov momentum.
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
         super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters)
@@ -123,7 +120,6 @@ class EMnist(Task):
                 'lr': Hyperparameter(1e-10, 1e-2),
                 'betas': Hyperparameter((0.9, 0.999), is_categorical=True),
                 'eps': Hyperparameter(1e-10, 1.0),
-                # Learning rate decay over each update.
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'amsgrad': Hyperparameter(False, True, is_categorical=True)
             })
@@ -161,13 +157,9 @@ class Fraud(Task):
             general_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
-                # Learning rate.
                 'lr': Hyperparameter(1e-6, 1e-1),
-                # Parameter that accelerates SGD in the relevant direction and dampens oscillations.
                 'momentum': Hyperparameter(1e-1, 1e-0),
-                # Learning rate decay over each update.
                 'weight_decay': Hyperparameter(0.0, 1e-5),
-                # Whether to apply Nesterov momentum.
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
         super().__init__("fraud", model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters)

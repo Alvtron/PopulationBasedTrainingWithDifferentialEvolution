@@ -169,7 +169,7 @@ class Controller(object):
             # prepare hyper-parameters
             self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.__log_checkpoint, checkpoint))
             # queue checkpoint for training
-            self.__log_checkpoint(checkpoint, "queued from training...")
+            self.__log_checkpoint(checkpoint, "queued for training...")
             self.train_queue.put(checkpoint)
 
     def start_training_procedure(self):
