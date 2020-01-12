@@ -31,11 +31,13 @@ class Analyzer(object):
                     checkpoint_progression[entry_id][attribute] += [value]
         return checkpoint_progression
 
-    def test(self, evaluator : Evaluator, limit = None):
+    def test(self, evaluator : Evaluator, limit = None, verbose = False):
         entries = list()
         for entry in itertools.islice(sorted(self.database, key=lambda e: e.score, reverse=True), 0, limit):
+            print(f"Testing {entry}...", end=" ")
             entry.loss['test'] = evaluator.eval(entry.model_state)
             entries.append(entry)
+            print("completed.")
         return entries
 
     def create_statistics(self, save_directory, verbose=False):

@@ -154,13 +154,17 @@ class SharedDatabase(Database):
         manager = context.Manager() 
         self.cache = manager.dict()
 
-    def update(self, id, key, entry):
+    def update(self, id, key, entry, ignore_exception=False):
         """
         Saves entry to memory, and will replace any old entry.
         In addition, the method saves the provided entry to a file on id/key inside the database directory.
         """
         # Save entry to cache memory. This replaces the old entry.
-        self.cache[id] = entry
+        try:
+            self.cache[id] = entry
+        except Exception as exception:
+            print(f"Failed to write entry with id: {id}, key: {key}, to cache.")
+            if not ignore_exception: raise exception
         # Save entry to database directory.
         super().update(id, key, entry)
 

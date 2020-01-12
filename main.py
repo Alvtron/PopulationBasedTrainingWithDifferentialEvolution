@@ -1,27 +1,19 @@
-import os
-import sys
 import argparse
-import math
-import torch
-import torchvision
-import torch.utils.data
-import pandas
-import numpy
+import os
 import random
-import sklearn.preprocessing
-import sklearn.model_selection
-import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
+
+import numpy
+import torch
+from task import Mnist, EMnist, Fraud
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
-from setup import setup_mnist, setup_emnist, setup_fraud
-from database import SharedDatabase
-from hyperparameters import Hyperparameter, Hyperparameters
-from controller import Controller
-from evaluator import Evaluator
-from trainer import Trainer
-from evolution import ExploitAndExplore, DifferentialEvolution, ParticleSwarm
+
 from analyze import Analyzer
+from controller import Controller
+from database import SharedDatabase
+from evaluator import Evaluator
+from evolution import DifferentialEvolution, ExploitAndExplore
+from trainer import Trainer
 
 # reproducibility
 random.seed(0)
@@ -33,8 +25,9 @@ torch.backends.cudnn.benchmark = False
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=1, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--steps", type=int, default=100, help="Number of steps to train each training process.")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'fraud'.")
     parser.add_argument("--evolver", type=str, default='pbt', help="Select which evolve algorithm to use.")
     parser.add_argument("--database_path", type=str, default='checkpoints/mnistnet2_pbt_random_walk', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
@@ -66,7 +59,6 @@ if __name__ == "__main__":
         write_function=torch.save)
     print(f"The shared database is available at: {database.path}")
     # prepare tensorboard writer
-    tensorboard_writer = None
     if args.tensorboard:
         print(f"Launching tensorboard...")
         tensorboard_log_path = f"{database.path}/tensorboard"
@@ -76,72 +68,70 @@ if __name__ == "__main__":
         print(f"Tensoboard is launched and accessible at: {url}")
         tensorboard_writer = SummaryWriter(tensorboard_log_path)
     # prepare objective
-    print(f"Preparing model and datasets...")
+    print(f"Importing task...")
     if args.task == "fraud":
-        model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_fraud()
+        task = Fraud()
     if args.task == "mnist":
-        model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_mnist()
+        task = Mnist()
     if args.task == "emnist":
-        model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters = setup_emnist()
+        task = EMnist()
     # objective info
     print(f"Population size: {args.population_size}")
-    print(f"Number of hyper-parameters: {len(hyper_parameters)}")
-    print(f"Train data length: {len(train_data)}")
-    print(f"Eval data length: {len(eval_data)}")
-    print(f"Test data length: {len(test_data)}")
+    print(f"Number of hyper-parameters: {len(task.hyper_parameters)}")
+    print(f"Train data length: {len(task.train_data)}")
+    print(f"Eval data length: {len(task.eval_data)}")
+    print(f"Test data length: {len(task.test_data)}")
     # create trainer, evaluator and tester
     print(f"Creating trainer...")
-    trainer = Trainer(
-        model_class = model_class,
-        optimizer_class = optimizer_class,
-        loss_metric = loss_metric,
-        eval_metrics = eval_metrics,
+    TRAINER = Trainer(
+        model_class = task.model_class,
+        optimizer_class = task.optimizer_class,
+        loss_metric = task.loss_metric,
+        eval_metrics = task.eval_metrics,
         batch_size = args.batch_size,
-        train_data = train_data,
+        train_data = task.train_data,
         device = args.device,
         load_in_memory=True,
         verbose = False)
     print(f"Creating evaluator...")
-    evaluator = Evaluator(
-        model_class = model_class,
-        eval_metrics = eval_metrics,
+    EVALUATOR = Evaluator(
+        model_class = task.model_class,
+        eval_metrics = task.eval_metrics,
         batch_size = args.batch_size,
-        test_data = eval_data,
+        test_data = task.eval_data,
         device = args.device,
         load_in_memory=True,
         verbose = False)
     print(f"Creating tester...")
-    tester = Evaluator(
-        model_class = model_class,
-        eval_metrics = eval_metrics,
+    TESTER = Evaluator(
+        model_class = task.model_class,
+        eval_metrics = task.eval_metrics,
         batch_size = args.batch_size,
-        test_data = test_data,
+        test_data = task.test_data,
         device = args.device,
         load_in_memory=True,
         verbose = False)
     # define controller
     print(f"Creating evolver...")
-    steps = 100
-    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
     if args.evolver == 'pbt':
-        evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=True)
+        EVOLVER = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=True)
     if args.evolver == 'de':
-        evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
+        EVOLVER = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
     # create controller
     print(f"Creating controller...")
     controller = Controller(
         population_size=args.population_size,
-        hyper_parameters=hyper_parameters,
-        trainer=trainer,
-        evaluator=evaluator,
-        tester=tester,
-        evolver=evolver,
-        loss_metric=loss_metric,
-        eval_metric=eval_metric,
+        hyper_parameters=task.hyper_parameters,
+        trainer=TRAINER,
+        evaluator=EVALUATOR,
+        tester=TESTER,
+        evolver=EVOLVER,
+        loss_metric=task.loss_metric,
+        eval_metric=task.eval_metric,
         database=database,
-        step_size=steps,
-        evolve_frequency=steps,
-        end_criteria=end_criteria,
+        step_size=args.steps,
+        evolve_frequency=args.steps,
+        end_criteria={'steps': args.steps * 100, 'score': 100.0},
         detect_NaN=False,
         device=args.device,
         tensorboard_writer=tensorboard_writer,
@@ -167,15 +157,15 @@ if __name__ == "__main__":
         min_score=0,
         max_score=100,
         sensitivity=4)
-    n_members_to_be_tested = 50
-    print(f"Testing the top {n_members_to_be_tested} members on the test set of {len(test_data)} samples...")
-    all_checkpoints = analyzer.test(evaluator=tester, limit=n_members_to_be_tested)
-    for checkpoint in all_checkpoints:
-        database.update(checkpoint.id, checkpoint.steps, checkpoint)
-    best_checkpoint = max(all_checkpoints, key=lambda c: c.loss['test'][eval_metric])
-    result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an {eval_metric} of {best_checkpoint.loss['test'][eval_metric]:.4f}"
-    database.create_file("results", "best_member.txt").write_text(result)
+    N_TEST_MEMBER_LIMIT = 50
+    print(f"Testing the top {N_TEST_MEMBER_LIMIT} members on the test set of {len(task.test_data)} samples...")
+    TESTED_CHECKPOINTS = analyzer.test(evaluator=TESTER, limit=N_TEST_MEMBER_LIMIT)
+    for checkpoint in TESTED_CHECKPOINTS:
+        database.update(checkpoint.id, checkpoint.steps, checkpoint, ignore_exception=True)
+    BEST_CHECKPOINT = max(TESTED_CHECKPOINTS, key=lambda c: c.loss['test'][task.eval_metric])
+    RESULT = f"Member {BEST_CHECKPOINT.id} performed best on epoch {BEST_CHECKPOINT.epochs} / step {BEST_CHECKPOINT.steps} with an {task.eval_metric} of {BEST_CHECKPOINT.loss['test'][task.eval_metric]:.4f}"
+    database.create_file("results", "best_member.txt").write_text(RESULT)
     with database.create_file("results", "top_members.txt").open('a+') as f:
-        for checkpoint in all_checkpoints:
+        for checkpoint in TESTED_CHECKPOINTS:
             f.write(str(checkpoint) + "\n")
-    print(result)
+    print(RESULT)
