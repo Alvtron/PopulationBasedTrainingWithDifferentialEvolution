@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import MNIST, EMNIST, FashionMNIST, KMNIST, QMNIST, ImageNet, CIFAR10, CIFAR100
-from models import MnistNet1, MnistNet2, MnistNetLarge, FraudNet
+from models import MnistNet1, MnistNet2, MnistNet3, FraudNet
 from database import SharedDatabase
 from hyperparameters import Hyperparameter, Hyperparameters
 from controller import Controller
@@ -34,7 +34,7 @@ def split_dataset(dataset, fraction):
     return first_set, second_set
 
 def setup_mnist():
-    model_class = MnistNet1
+    model_class = MnistNet2
     optimizer_class = torch.optim.SGD
     loss_metric = 'nll'
     eval_metric = 'acc'
@@ -76,7 +76,7 @@ def setup_mnist():
     return model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters
 
 def setup_emnist():
-    model_class = MnistNet3
+    model_class = MnistNet2
     optimizer_class = torch.optim.Adam
     loss_metric = 'nll'
     eval_metric = 'acc'

@@ -33,11 +33,11 @@ torch.backends.cudnn.benchmark = False
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--population_size", type=int, default=1, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'fraud'.")
     parser.add_argument("--evolver", type=str, default='pbt', help="Select which evolve algorithm to use.")
-    parser.add_argument("--database_path", type=str, default='checkpoints/mnist_pbt', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/mnistnet2_pbt_random_walk', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -122,9 +122,9 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     steps = 100
-    end_criteria = {'steps': steps * 200, 'score': 100.0} #400*10**3
+    end_criteria = {'steps': steps * 100, 'score': 100.0} #400*10**3
     if args.evolver == 'pbt':
-        evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
+        evolver = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=True)
     if args.evolver == 'de':
         evolver = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
     # create controller
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         step_size=steps,
         evolve_frequency=steps,
         end_criteria=end_criteria,
-        detect_NaN=True,
+        detect_NaN=False,
         device=args.device,
         tensorboard_writer=tensorboard_writer,
         verbose=args.verbose,
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     print(f"Testing the top {n_members_to_be_tested} members on the test set of {len(test_data)} samples...")
     all_checkpoints = analyzer.test(evaluator=tester, limit=n_members_to_be_tested)
     for checkpoint in all_checkpoints:
-        database.save_entry(checkpoint)
+        database.update(checkpoint.id, checkpoint.steps, checkpoint)
     best_checkpoint = max(all_checkpoints, key=lambda c: c.loss['test'][eval_metric])
     result = f"Member {best_checkpoint.id} performed best on epoch {best_checkpoint.epochs} / step {best_checkpoint.steps} with an {eval_metric} of {best_checkpoint.loss['test'][eval_metric]:.4f}"
     database.create_file("results", "best_member.txt").write_text(result)

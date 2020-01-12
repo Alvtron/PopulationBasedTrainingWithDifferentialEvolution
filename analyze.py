@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
 import pickle
+import itertools
 from pathlib import Path
 from database import ReadOnlyDatabase
 from evaluator import Evaluator
@@ -31,12 +32,10 @@ class Analyzer(object):
         return checkpoint_progression
 
     def test(self, evaluator : Evaluator, limit = None):
-        entries = self.database.to_list()
-        if limit:
-            entries.sort(key=lambda e: e.score, reverse=True)
-            entries = entries[:limit]
-        for entry in entries:
+        entries = list()
+        for entry in itertools.islice(sorted(self.database, key=lambda e: e.score, reverse=True), 0, limit):
             entry.loss['test'] = evaluator.eval(entry.model_state)
+            entries.append(entry)
         return entries
 
     def create_statistics(self, save_directory, verbose=False):

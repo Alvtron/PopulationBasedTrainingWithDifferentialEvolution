@@ -188,7 +188,9 @@ class Controller(object):
                     continue
                 # get next checkpoint
                 checkpoint = self.evolve_queue.get()
-                self.__log(f"Queue length: {self.evolve_queue.qsize()}")
+                queue_length = self.evolve_queue.qsize()
+                if queue_length > 0:
+                    self.__log(f"queue size: {queue_length}")
                 # check for nan loss-value
                 if self.detect_NaN and any(math.isnan(value) for value in checkpoint.loss['eval'].values()):
                     self.__log_checkpoint(checkpoint, "NaN metric detected.")
@@ -200,7 +202,7 @@ class Controller(object):
                         break
                     else: continue
                 # save checkpoint to database
-                self.database.save_entry(checkpoint)
+                self.database.update(checkpoint.id, checkpoint.steps, checkpoint)
                 # write to tensorboard if enabled
                 if self.__tensorboard_writer:
                     self.__write_to_tensorboard(checkpoint)
@@ -224,8 +226,7 @@ class Controller(object):
                     start_evolve_time_ns = time.time_ns()
                     self.evolver.evolve(
                         member=checkpoint,
-                        generation=self.database.get_latest,
-                        population=self.database.to_list,
+                        population=self.database.latest,
                         function=self.eval_function,
                         logger=partial(self.__log_checkpoint, checkpoint))
                     checkpoint.time['evolve'] = float(time.time_ns() - start_evolve_time_ns) * float(10**(-9))

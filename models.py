@@ -143,9 +143,9 @@ class MnistNet2(HyperNet):
             x = module(x)
         return x
 
-class MnistNetLarge(HyperNet):
+class MnistNet3(HyperNet):
     def __init__(self):
-        super(MnistNetLarge, self).__init__()
+        super(MnistNet3, self).__init__()
         self.conv_1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
         self.batch_norm_1 = nn.BatchNorm2d(32)
         self.prelu_1 = nn.PReLU()

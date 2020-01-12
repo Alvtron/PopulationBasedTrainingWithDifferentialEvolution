@@ -16,7 +16,7 @@ database = ReadOnlyDatabase(
     database_path="checkpoints/mnist_de_clip/20200110184314",
     read_function=torch.load)
 analyzer = Analyzer(database)
-print(f"Database consists of {len(database.to_list())} entries.")
+print(f"Database consists of {len(database)} entries.")
 print("Creating statistics...")
 analyzer.create_statistics(save_directory=statistics_save_directory, verbose=False)
 print("create_plot_files...", end =" ")
