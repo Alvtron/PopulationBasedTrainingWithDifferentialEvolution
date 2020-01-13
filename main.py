@@ -3,7 +3,7 @@ import os
 import random
 import numpy
 import torch
-from task import Mnist, EMnist, CreditCardFraud
+from task import Mnist, EMnist, FashionMnist, CreditCardFraud
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 
@@ -27,9 +27,9 @@ def import_user_arguments():
     parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--steps", type=int, default=100, help="Number of steps to train each training process.")
-    parser.add_argument("--task", type=str, default='emnist', help="Select tasks from 'mnist', 'creditfraud'.")
+    parser.add_argument("--task", type=str, default='fashionmnist', help="Select tasks from 'mnist', 'creditfraud'.")
     parser.add_argument("--evolver", type=str, default='de', help="Select which evolve algorithm to use.")
-    parser.add_argument("--database_path", type=str, default='checkpoints/emnist_de', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/fashionmnist_de', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -72,6 +72,8 @@ if __name__ == "__main__":
         task = CreditCardFraud()
     if args.task == "mnist":
         task = Mnist()
+    if args.task == "fashionmnist":
+        task = FashionMnist()
     if args.task == "emnist":
         task = EMnist()
     # objective info

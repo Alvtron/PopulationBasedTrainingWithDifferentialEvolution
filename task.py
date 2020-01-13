@@ -69,10 +69,54 @@ class Mnist(Task):
             })
         super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
 
+class FashionMnist(Task):
+    def __init__(self):
+        model_class = MnistNet2
+        optimizer_class = torch.optim.SGD
+        loss_metric = 'cce'
+        eval_metric = 'acc'
+        loss_functions = {
+            'cce': CategoricalCrossEntropy(),
+            #'nll': NLL(),
+            'acc': Accuracy()
+        }
+        # prepare training and testing data
+        train_data_path = test_data_path = './data'
+        train_data = FashionMNIST(
+            train_data_path,
+            train=True,
+            download=True,
+            transform=torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.1307,), (0.3081,))
+            ]))
+        test_data = FashionMNIST(
+            test_data_path,
+            train=False,
+            download=True,
+            transform=torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.1307,), (0.3081,))
+            ]))
+        # split training set into training set and validation set
+        train_data, eval_data = random_split(train_data, 0.90)
+        # define hyper-parameter search space
+        hyper_parameters = Hyperparameters(
+            general_params=None,
+            model_params=model_class.create_hyper_parameters(),
+            optimizer_params={
+                'lr': Hyperparameter(1e-6, 1e-1),
+                'momentum': Hyperparameter(1e-1, 1e-0),
+                'weight_decay': Hyperparameter(0.0, 1e-5),
+                'nesterov': Hyperparameter(False, True, is_categorical=True)
+            })
+        super().__init__("fashionmnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
+
+
 class EMnist(Task):
     def __init__(self, split='mnist'):
         model_class = MnistNet2
-        optimizer_class = torch.optim.Adam
+        optimizer_class = torch.optim.SGD
         loss_metric = 'nll'
         eval_metric = 'acc'
         loss_functions = {
