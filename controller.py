@@ -11,8 +11,8 @@ import torchvision
 import torch.utils.data
 import matplotlib.pyplot as plt
 from functools import partial 
-from checkpoint import Checkpoint
-from member import Member
+from member import Checkpoint
+from worker import Worker
 from utils.date import get_datetime_string
 from utils.math import n_digits
 from hyperparameters import Hyperparameters
@@ -156,7 +156,7 @@ class Controller(object):
 
     def spawn_workers(self):
         self.__workers = [
-            Member(
+            Worker(
                 end_event = self.end_event,
                 trainer = self.trainer,
                 evaluator = self.evaluator,
@@ -179,7 +179,8 @@ class Controller(object):
                 hyper_parameters=hyper_parameters,
                 loss_metric=self.loss_metric,
                 eval_metric=self.eval_metric,
-                step_size=1)
+                minimize=self.loss_functions[self.eval_metric].minimize,
+                step_size=self.step_size)
             # prepare hyper-parameters
             self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.__log_checkpoint, checkpoint))
             # queue checkpoint for training

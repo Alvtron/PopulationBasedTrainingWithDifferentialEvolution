@@ -1,36 +1,80 @@
-import torch
-import time
+import copy
 
-mp = torch.multiprocessing.get_context('spawn')
+from hyperparameters import Hyperparameters
+from abc import abstractmethod 
 
-class Member(mp.Process):
-    """A individual member in the population"""
-    def __init__(self, end_event, evolve_queue, train_queue, trainer, evaluator):
-        super().__init__()
-        self.end_event = end_event
-        self.evolve_queue = evolve_queue
-        self.train_queue = train_queue
-        self.trainer = trainer
-        self.evaluator = evaluator
+class MemberState(object):
+    '''Base class for member states.'''
+    def __init__(self, id, hyper_parameters : Hyperparameters, minimize : bool):
+        self.id = id
+        self.hyper_parameters = hyper_parameters
+        self.minimize = minimize
 
-    def run(self):
-        while not self.end_event.is_set():
-            if self.train_queue.empty():
-                continue
-            # get next checkpoint from train queue
-            checkpoint = self.train_queue.get()
-            # train checkpoint model
-            start_train_time_ns = time.time_ns()
-            checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = self.trainer.train(
-                hyper_parameters=checkpoint.hyper_parameters,
-                model_state=checkpoint.model_state,
-                optimizer_state=checkpoint.optimizer_state,
-                epochs=checkpoint.epochs,
-                steps=checkpoint.steps,
-                step_size=checkpoint.step_size)
-            checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
-            # evaluate checkpoint model
-            start_eval_time_ns = time.time_ns()
-            checkpoint.loss['eval'] = self.evaluator.eval(checkpoint.model_state)
-            checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
-            self.evolve_queue.put(checkpoint)
+    @property
+    @abstractmethod
+    def score(self):
+        pass
+
+    def update(self, other):
+        self.hyper_parameters = other.hyper_parameters
+
+    def copy(self):
+        member_copy = copy.deepcopy(self)
+        member_copy.id = None
+        return member_copy
+
+    def __lt__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score > other if self.minimize else self.score < other
+        else:
+            return self.score > other.score if self.minimize else self.score < other.score
+
+    def __gt__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score < other if self.minimize else self.score > other
+        else:
+            return self.score < other.score if self.minimize else self.score > other.score
+
+    def __le__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score <= other if self.minimize else self.score >= other
+        else:
+            return self.score <= other.score if self.minimize else self.score >= other.score
+
+    def __ge__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score >= other if self.minimize else self.score <= other
+        else:
+            return self.score >= other.eval_value if self.minimize else self.score <= other.score
+
+class Checkpoint(MemberState):
+    '''Class for keeping track of a checkpoint.'''
+    def __init__(self, id, hyper_parameters : Hyperparameters, loss_metric : str, eval_metric : str, minimize : bool, step_size : int = 1):
+        super().__init__(id, hyper_parameters, minimize)
+        self.epochs = 0
+        self.steps = 0
+        self.model_state = None
+        self.optimizer_state = None
+        self.step_size = step_size
+        self.loss_metric = loss_metric
+        self.eval_metric = eval_metric
+        self.loss = dict()
+        self.time = dict()
+
+    @property
+    def score(self):
+        return self.loss['eval'][self.eval_metric]
+
+    def __str__(self):
+        string = f"Member {self.id:03d}, epoch {self.epochs}, step {self.steps}"
+        for loss_group, loss_values in self.loss.items():
+            for loss_name, loss_value in loss_values.items():
+                string += f", {loss_group}_{loss_name} {loss_value:.5f}"
+        return string
+
+    def update(self, checkpoint):
+        self.hyper_parameters = checkpoint.hyper_parameters
+        self.model_state = checkpoint.model_state
+        self.optimizer_state = checkpoint.optimizer_state
+        self.loss = dict()
+        self.time = dict()

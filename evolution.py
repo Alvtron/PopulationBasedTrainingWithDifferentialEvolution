@@ -1,19 +1,19 @@
 import math
 import random
-import copy
 from hyperparameters import Hyperparameters
-from abc import abstractmethod 
+from abc import abstractmethod
+from member import MemberState
 
 class EvolveEngine(object):
     def __init__(self, population_size):
         self.population_size = population_size
 
     @abstractmethod
-    def prepare(self, hyper_parameters, logger = None):
+    def prepare(self, hyper_parameters : Hyperparameters, logger = None):
         pass
 
     @abstractmethod
-    def evolve(self, member, population, function, logger):
+    def evolve(self, member : MemberState, population, function, logger):
         pass
 
 class ExploitAndExplore(EvolveEngine):
@@ -31,7 +31,7 @@ class ExploitAndExplore(EvolveEngine):
         for hyper_parameter in hyper_parameters.parameters():
             hyper_parameter.sample_uniform()
 
-    def evolve(self, member, population, function, logger):
+    def evolve(self, member : MemberState, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
         # check population size
         population = list(population)
@@ -44,13 +44,13 @@ class ExploitAndExplore(EvolveEngine):
         if n_elitists > 0:
             # sort members from best to worst on score
             population.sort(reverse=True)
-            if all(c.id != member.id for c in population[:n_elitists]):
+            if all(m.id != member.id for m in population[:n_elitists]):
                 # exploit weights and hyper-parameters if member is not elitist
                 self.exploit(member, population[:n_elitists], logger)
         # explore new hyper-parameters
         self.explore(member, logger)
 
-    def exploit(self, member, population, logger):
+    def exploit(self, member : MemberState, population, logger):
         """A fraction of the bottom performing members exploit the top performing members."""
         elitist = random.choice(population)
         logger(f"exploiting m{elitist.id}...")
@@ -79,13 +79,13 @@ class DifferentialEvolution(EvolveEngine):
         self.Cr = Cr
         self.constraint = constraint
 
-    def prepare(self, hyper_parameters, logger = None):
+    def prepare(self, hyper_parameters : Hyperparameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
         for hyper_parameter in hyper_parameters.parameters():
             hyper_parameter.set_constraint(self.constraint)
             hyper_parameter.sample_uniform()
 
-    def evolve(self, member, population, function, logger):
+    def evolve(self, member : MemberState, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
         # check population size
         population = list(population)
@@ -96,7 +96,7 @@ class DifferentialEvolution(EvolveEngine):
         hp_dimension_size = len(member.hyper_parameters)
         r0, r1, r2 = random.sample(range(0, population_size), 3)
         j_rand = random.choice(range(0, hp_dimension_size))
-        mutation = copy.deepcopy(member)
+        mutation = member.copy()
         for j in range(0, hp_dimension_size):
             if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
                 x_r0 = population[r0].hyper_parameters[j]
@@ -107,11 +107,11 @@ class DifferentialEvolution(EvolveEngine):
                 mutation.hyper_parameters[j] = member.hyper_parameters[j]
         # eval mutation
         mutation_score = function(mutation)
-        if mutation_score >= member.score:
-            logger(f"mutated member. (u {mutation_score:.4f} >= x {member.score:.4f})")
+        if member < mutation_score :
+            logger(f"mutate member (x {member.score:.4f} < u {mutation_score:.4f}).")
             member.update(mutation)
         else:
-            logger(f"maintained member. (u {mutation_score:.4f} < x {member.score:.4f})")
+            logger(f"maintain member (x {member.score:.4f} > u {mutation_score:.4f}).")
 
 class ParticleSwarm(EvolveEngine):
     """A general, modifiable implementation of Particle Swarm Optimization (PSO)"""
@@ -121,12 +121,12 @@ class ParticleSwarm(EvolveEngine):
         self.b = b
         self.best_member = None
 
-    def prepare(self, hyper_parameters, logger = None):
+    def prepare(self, hyper_parameters : Hyperparameters, logger = None):
         """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
         for hyper_parameter in hyper_parameters.parameters():
             hyper_parameter.sample_uniform()
 
-    def evolve(self, member, population, function, logger):
+    def evolve(self, member : MemberState, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
         population = list(population)
         population_size = len(population)
