@@ -67,11 +67,10 @@ class Mnist(Task):
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        super().__init__("mnist", model_class, optimizer_class, loss_metric, loss_functions, eval_metrics, train_data, eval_data, test_data, hyper_parameters)
-
+        super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
 
 class EMnist(Task):
-    def __init__(self):
+    def __init__(self, split='mnist'):
         model_class = MnistNet2
         optimizer_class = torch.optim.Adam
         loss_metric = 'nll'
@@ -85,7 +84,7 @@ class EMnist(Task):
         train_data_path = test_data_path = './data'
         train_data = EMNIST(
             train_data_path,
-            split='byclass',
+            split=split,
             train=True,
             download=True,
             transform=torchvision.transforms.Compose([
@@ -94,7 +93,7 @@ class EMnist(Task):
             ]))
         test_data = EMNIST(
             test_data_path,
-            split='byclass',
+            split=split,
             train=False,
             download=True,
             transform=torchvision.transforms.Compose([
@@ -108,14 +107,12 @@ class EMnist(Task):
             general_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
-                'lr': Hyperparameter(1e-10, 1e-2),
-                'betas': Hyperparameter((0.9, 0.999), is_categorical=True),
-                'eps': Hyperparameter(1e-10, 1.0),
+                'lr': Hyperparameter(1e-6, 1e-1),
+                'momentum': Hyperparameter(1e-1, 1e-0),
                 'weight_decay': Hyperparameter(0.0, 1e-5),
-                'amsgrad': Hyperparameter(False, True, is_categorical=True)
+                'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
         super().__init__("emnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
-
 
 class CreditCardFraud(Task):
     def __init__(self):

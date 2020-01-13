@@ -26,7 +26,7 @@ class Evaluator(object):
             model.load_state_dict(model_state)
         return model
 
-    def eval(self, model_state : Module):
+    def eval(self, model_state : dict):
         """Evaluate model on the provided validation or test set."""
         model = self.create_model(model_state)
         dataset_length = len(self.test_data)
