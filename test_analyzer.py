@@ -13,7 +13,7 @@ statistics_save_directory.mkdir(exist_ok=True, parents=True)
 plot_save_directory.mkdir(exist_ok=True, parents=True)
 hp_plot_save_directory.mkdir(exist_ok=True, parents=True)
 database = ReadOnlyDatabase(
-    database_path="checkpoints/mnist_de_clip/20200110184314",
+    database_path=Path("checkpoints/creditfraud_pbt/20200113193709"),
     read_function=torch.load)
 analyzer = Analyzer(database)
 print(f"Database consists of {len(database)} entries.")
@@ -25,15 +25,11 @@ print("done!")
 print("create_hyper_parameter_single_plot_files...", end =" ")
 analyzer.create_hyper_parameter_single_plot_files(
     save_directory=hp_plot_save_directory,
-    min_score=0,
-    max_score=100,
     sensitivity=4)
 print("done!")
 print("create_hyper_parameter_multi_plot_files...", end =" ")
 analyzer.create_hyper_parameter_multi_plot_files(
     save_directory=hp_plot_save_directory,
-    min_score=0,
-    max_score=100,
     sensitivity=4)
 print("done!")
 print("Analyze completed.")

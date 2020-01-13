@@ -175,10 +175,13 @@ if __name__ == "__main__":
     TESTED_CHECKPOINTS = analyzer.test(evaluator=TESTER, limit=N_TEST_MEMBER_LIMIT)
     for checkpoint in TESTED_CHECKPOINTS:
         database.update(checkpoint.id, checkpoint.steps, checkpoint, ignore_exception=True)
-    BEST_CHECKPOINT = max(TESTED_CHECKPOINTS, key=lambda c: c.loss['test'][task.eval_metric])
-    RESULT = f"Member {BEST_CHECKPOINT.id} performed best on epoch {BEST_CHECKPOINT.epochs} / step {BEST_CHECKPOINT.steps} with an {task.eval_metric} of {BEST_CHECKPOINT.loss['test'][task.eval_metric]:.4f}"
-    database.create_file("results", "best_member.txt").write_text(RESULT)
+    if task.loss_functions[task.eval_metric].minimize:  
+        BEST_CHECKPOINT = min(TESTED_CHECKPOINTS, key=lambda c: c.loss['test'][task.eval_metric])
+    else:
+        BEST_CHECKPOINT = max(TESTED_CHECKPOINTS, key=lambda c: c.loss['test'][task.eval_metric])
+    RESULT = f"Best checkpoint: {BEST_CHECKPOINT}"
     with database.create_file("results", "top_members.txt").open('a+') as f:
+        f.write(f"{RESULT}\n\n")
         for checkpoint in TESTED_CHECKPOINTS:
             f.write(str(checkpoint) + "\n")
     print(RESULT)
