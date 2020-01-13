@@ -11,17 +11,28 @@ import torchvision
 import torch.utils.data
 import matplotlib.pyplot as plt
 from functools import partial 
-from database import Checkpoint
+from checkpoint import Checkpoint
 from member import Member
 from utils.date import get_datetime_string
 from utils.math import n_digits
+from hyperparameters import Hyperparameters
+from trainer import Trainer
+from evaluator import Evaluator
+from evolution import EvolveEngine
+from database import SharedDatabase
+from torch.utils.tensorboard import SummaryWriter
 
 mp = torch.multiprocessing.get_context('spawn')
 
 class Controller(object):
-    def __init__(self, population_size, hyper_parameters, trainer, evaluator, tester, evolver, loss_metric, eval_metric, database, step_size = 1, evolve_frequency = 5, end_criteria = {'score': 100.0}, detect_NaN=False, device = 'cpu', tensorboard_writer = None, verbose=True, logging=True):
-        assert evolve_frequency and isinstance(evolve_frequency, int) and evolve_frequency > 0, f"Frequency must be of type {int} as 1 or higher."
-        assert end_criteria and isinstance(end_criteria, dict), f"End criteria must be of type {dict}."
+    def __init__(
+            self, population_size : int, hyper_parameters : Hyperparameters,
+            trainer : Trainer, evaluator : Evaluator, tester : Evaluator, evolver : EvolveEngine,
+            loss_metric : str, eval_metric : str, loss_functions : dict,
+            database : SharedDatabase, tensorboard_writer : SummaryWriter = None,
+            step_size = 1, evolve_frequency : int = 5, end_criteria : dict = {'score': 100.0},
+            detect_NaN : bool = False, device : str = 'cpu', verbose : bool = True, logging : bool = True):
+        assert evolve_frequency and evolve_frequency > 0, f"Frequency must be of type {int} and 1 or higher."
         self.population_size = population_size
         self.hyper_parameters = hyper_parameters
         self.trainer = trainer
@@ -30,6 +41,7 @@ class Controller(object):
         self.evolver = evolver
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
+        self.loss_functions = loss_functions
         self.database = database
         self.step_size = step_size
         self.evolve_frequency = evolve_frequency
@@ -39,7 +51,7 @@ class Controller(object):
         self.verbose = verbose
         self.logging = logging
         self.iterations = 0
-        # create shared bool-value for when to end training
+        # create shared event for when to end training
         self.end_event = mp.Event()
         # create queues for training and evolving
         self.train_queue = mp.Queue(population_size)
@@ -59,13 +71,14 @@ class Controller(object):
             'hyper_parameters': self.hyper_parameters.parameter_paths(),
             'loss_metric': self.loss_metric,
             'eval_metric': self.eval_metric,
+            'loss_functions': self.loss_functions,
             'step_size': self.step_size,
             'evolve_frequency': self.evolve_frequency,
             'end_criteria': self.end_criteria
         }
         pickle.dump(parameters, self.database.create_file("info", "parameters.obj").open("wb"))
 
-    def __log(self, message):
+    def __log(self, message : str):
         """Logs and prints the provided controller message in the appropriate syntax."""
         controller_name = self.__class__.__name__
         time = get_datetime_string()
@@ -76,7 +89,7 @@ class Controller(object):
         if self.verbose:
             print(full_message)
 
-    def __log_checkpoint(self, checkpoint, message):
+    def __log_checkpoint(self, checkpoint : Checkpoint, message : str):
         """Logs and prints the provided checkpoint message in the appropriate syntax."""
         time = get_datetime_string()
         full_message = f"{time} {checkpoint}: {message}"
@@ -88,7 +101,7 @@ class Controller(object):
         if self.__tensorboard_writer:
             self.__tensorboard_writer.add_text(tag=f"member_{checkpoint.id:03d}", text_string=full_message, global_step=checkpoint.steps)
 
-    def __write_to_tensorboard(self, checkpoint):
+    def __write_to_tensorboard(self, checkpoint : Checkpoint):
         """Plots checkpoint data to tensorboard"""
         # plot eval metrics
         for eval_metric_group, eval_metrics in checkpoint.loss.items():
@@ -122,11 +135,11 @@ class Controller(object):
         loss = self.evaluator.eval(current_model_state)
         return loss[self.eval_metric]
 
-    def is_member_ready(self, checkpoint):
+    def is_member_ready(self, checkpoint : Checkpoint):
         """True every n-th epoch."""
         return checkpoint.steps % self.evolve_frequency == 0
 
-    def is_member_finished(self, checkpoint):
+    def is_member_finished(self, checkpoint : Checkpoint):
         if 'epochs' in self.end_criteria and checkpoint.epochs >= self.end_criteria['epochs']:
             # the number of epochs is equal or above the given treshold
             return True
@@ -135,8 +148,8 @@ class Controller(object):
             return True
         return False
     
-    def is_population_finished(self, checkpoint):
-        if 'score' in self.end_criteria and checkpoint.loss['eval'][self.eval_metric] >= self.end_criteria['score']:
+    def is_population_finished(self, checkpoint : Checkpoint):
+        if 'score' in self.end_criteria and checkpoint.score >= self.end_criteria['score']:
             # score is above the given treshold
             return True
         return False
@@ -148,10 +161,7 @@ class Controller(object):
                 trainer = self.trainer,
                 evaluator = self.evaluator,
                 evolve_queue = self.evolve_queue,
-                train_queue = self.train_queue,
-                step_size = self.step_size,
-                device = self.device,
-                verbose = self.verbose)
+                train_queue = self.train_queue)
             for _ in range(self.population_size)]
         # Starting workers
         for index, worker in enumerate(self.__workers, start=1):
@@ -161,11 +171,15 @@ class Controller(object):
 
     def queue_members(self):
         for id in range(self.population_size):
-            #print(f"Queuing checkpoint {id + 1}/{self.population_size}", end="\r", flush=True)
             # copy hyper-parameters
             hyper_parameters = copy.deepcopy(self.hyper_parameters)
             # create new checkpoint object
-            checkpoint = Checkpoint(id, hyper_parameters, self.loss_metric, self.eval_metric)
+            checkpoint = Checkpoint(
+                id=id,
+                hyper_parameters=hyper_parameters,
+                loss_metric=self.loss_metric,
+                eval_metric=self.eval_metric,
+                step_size=1)
             # prepare hyper-parameters
             self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.__log_checkpoint, checkpoint))
             # queue checkpoint for training
@@ -196,7 +210,8 @@ class Controller(object):
                 if self.detect_NaN and any(math.isnan(value) for value in checkpoint.loss['eval'].values()):
                     self.__log_checkpoint(checkpoint, "NaN metric detected.")
                     self.__log_checkpoint(checkpoint, "stopping.")
-                    self.evolver.N -=1
+                    self.evolver.population_size -=1
+                    self.database.remove_latest(checkpoint.id)
                     self.finish_queue.put(checkpoint)
                     if self.finish_queue.full():
                         self.__log("All workers are finished.")

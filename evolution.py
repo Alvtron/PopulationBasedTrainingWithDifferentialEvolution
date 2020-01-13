@@ -2,22 +2,26 @@ import math
 import random
 import copy
 from hyperparameters import Hyperparameters
-from abc import ABC, abstractmethod 
+from abc import abstractmethod 
 
-class EvolveEngine(ABC):
+class EvolveEngine(object):
+    def __init__(self, population_size):
+        self.population_size = population_size
+
     @abstractmethod
     def prepare(self, hyper_parameters, logger = None):
         pass
+
     @abstractmethod
     def evolve(self, member, population, function, logger):
         pass
 
 class ExploitAndExplore(EvolveEngine):
     """ A general, modifiable implementation of PBTs exploitation and exploration method. """
-    def __init__(self, N, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False):
+    def __init__(self, population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False):
+        super().__init__(population_size)
         assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
         assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
-        self.N = N
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
         self.random_walk = random_walk
@@ -32,14 +36,14 @@ class ExploitAndExplore(EvolveEngine):
         # check population size
         population = list(population)
         population_size = len(population)
-        if population_size != self.N:
-            logger(f"Provided population is too small ({population_size} != {self.N}). Skipping.")
+        if population_size != self.population_size:
+            logger(f"Provided population is too small ({population_size} != {self.population_size}). Skipping.")
             return
         # set number of elitists
         n_elitists = math.floor(population_size * self.exploit_factor)
         if n_elitists > 0:
             # sort members from best to worst on score
-            population.sort(key=lambda m: m.score, reverse=True)
+            population.sort(reverse=True)
             if all(c.id != member.id for c in population[:n_elitists]):
                 # exploit weights and hyper-parameters if member is not elitist
                 self.exploit(member, population[:n_elitists], logger)
@@ -67,10 +71,10 @@ class ExploitAndExplore(EvolveEngine):
 
 class DifferentialEvolution(EvolveEngine):
     """A general, modifiable implementation of Differential Evolution (DE)"""
-    def __init__(self, N, F = 0.2, Cr = 0.8, constraint='clip'):
-        if N < 3:
-            raise ValueError("Population size 'N' must be at least 3 or higher.")
-        self.N = N
+    def __init__(self, population_size, F = 0.2, Cr = 0.8, constraint='clip'):
+        if population_size < 3:
+            raise ValueError("Population size must be at least 3 or higher.")
+        super().__init__(population_size)
         self.F = F
         self.Cr = Cr
         self.constraint = constraint
@@ -86,8 +90,8 @@ class DifferentialEvolution(EvolveEngine):
         # check population size
         population = list(population)
         population_size = len(population)
-        if population_size != self.N:
-            logger(f"Provided population is too small ({population_size} != {self.N}). Skipping.")
+        if population_size != self.population_size:
+            logger(f"Provided population is too small ({population_size} != {self.population_size}). Skipping.")
             return
         hp_dimension_size = len(member.hyper_parameters)
         r0, r1, r2 = random.sample(range(0, population_size), 3)
@@ -111,7 +115,8 @@ class DifferentialEvolution(EvolveEngine):
 
 class ParticleSwarm(EvolveEngine):
     """A general, modifiable implementation of Particle Swarm Optimization (PSO)"""
-    def __init__(self, a = 0.2, b = (0.8, 1.2)):
+    def __init__(self, population_size, a = 0.2, b = (0.8, 1.2)):
+        super().__init__(population_size)
         self.a = a
         self.b = b
         self.best_member = None
@@ -125,8 +130,8 @@ class ParticleSwarm(EvolveEngine):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
         population = list(population)
         population_size = len(population)
-        if population_size != self.N:
-            logger(f"Provided population is too small ({population_size} != {self.N}). Skipping.")
+        if population_size != self.population_size:
+            logger(f"Provided population is too small ({population_size} != {self.population_size}). Skipping.")
             return
         random_p = random.uniform(0.0, 1.0)
         random_g = random.uniform(0.0, 1.0)

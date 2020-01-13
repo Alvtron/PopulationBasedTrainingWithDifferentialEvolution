@@ -20,7 +20,7 @@ class Task(object):
     optimizer_class : Optimizer
     loss_metric : str
     eval_metric : str
-    eval_metrics : dict
+    loss_functions : dict
     train_data : Dataset
     eval_data : Dataset
     test_data : Dataset
@@ -32,7 +32,7 @@ class Mnist(Task):
         optimizer_class = torch.optim.SGD
         loss_metric = 'cce'
         eval_metric = 'acc'
-        eval_metrics = {
+        loss_functions = {
             'cce': CategoricalCrossEntropy(),
             #'nll': NLL(),
             'acc': Accuracy()
@@ -67,7 +67,7 @@ class Mnist(Task):
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters)
+        super().__init__("mnist", model_class, optimizer_class, loss_metric, loss_functions, eval_metrics, train_data, eval_data, test_data, hyper_parameters)
 
 
 class EMnist(Task):
@@ -76,7 +76,7 @@ class EMnist(Task):
         optimizer_class = torch.optim.Adam
         loss_metric = 'nll'
         eval_metric = 'acc'
-        eval_metrics = {
+        loss_functions = {
             # 'cce': CategoricalCrossEntropy(),
             'nll': NLL(),
             'acc': Accuracy()
@@ -114,7 +114,7 @@ class EMnist(Task):
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'amsgrad': Hyperparameter(False, True, is_categorical=True)
             })
-        super().__init__("emnist", model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters)
+        super().__init__("emnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
 
 
 class CreditCardFraud(Task):
@@ -123,7 +123,7 @@ class CreditCardFraud(Task):
         optimizer_class = torch.optim.SGD
         loss_metric = 'bce'
         eval_metric = 'bce'
-        eval_metrics = {
+        loss_functions = {
             'bce': BinaryCrossEntropy(),
             'acc': Accuracy()
         }
@@ -149,4 +149,4 @@ class CreditCardFraud(Task):
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        super().__init__("fraud", model_class, optimizer_class, loss_metric, eval_metric, eval_metrics, train_data, eval_data, test_data, hyper_parameters)
+        super().__init__("fraud", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)

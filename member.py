@@ -5,16 +5,13 @@ mp = torch.multiprocessing.get_context('spawn')
 
 class Member(mp.Process):
     """A individual member in the population"""
-    def __init__(self, end_event, evolve_queue, train_queue, trainer, evaluator, step_size = 1, device = "cpu", verbose = False):
+    def __init__(self, end_event, evolve_queue, train_queue, trainer, evaluator):
         super().__init__()
         self.end_event = end_event
         self.evolve_queue = evolve_queue
         self.train_queue = train_queue
         self.trainer = trainer
         self.evaluator = evaluator
-        self.step_size = step_size
-        self.device = device
-        self.verbose = verbose
 
     def run(self):
         while not self.end_event.is_set():
@@ -30,7 +27,7 @@ class Member(mp.Process):
                 optimizer_state=checkpoint.optimizer_state,
                 epochs=checkpoint.epochs,
                 steps=checkpoint.steps,
-                step_size=self.step_size)
+                step_size=checkpoint.step_size)
             checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
             # evaluate checkpoint model
             start_eval_time_ns = time.time_ns()
