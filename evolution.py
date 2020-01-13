@@ -43,7 +43,7 @@ class ExploitAndExplore(EvolveEngine):
         n_elitists = math.floor(population_size * self.exploit_factor)
         if n_elitists > 0:
             # sort members from best to worst on score
-            population.sort(reverse=True)
+            population.sort(key=lambda x: x.score, reverse=not member.minimize)
             if all(m.id != member.id for m in population[:n_elitists]):
                 # exploit weights and hyper-parameters if member is not elitist
                 self.exploit(member, population[:n_elitists], logger)

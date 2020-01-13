@@ -166,13 +166,13 @@ if __name__ == "__main__":
     analyzer.create_plot_files(save_directory=database.create_folder("results/plots"))
     analyzer.create_hyper_parameter_multi_plot_files(
         save_directory=database.create_folder("results/plots/hyper_parameters"),
-        min_score=task.loss_functions[task.eval_metric].min_score,
-        max_score=task.loss_functions[task.eval_metric].max_score,
+        min_score=task.loss_functions[task.eval_metric].min,
+        max_score=task.loss_functions[task.eval_metric].max,
         sensitivity=4)
     analyzer.create_hyper_parameter_single_plot_files(
         save_directory=database.create_folder("results/plots/hyper_parameters"),
-        min_score=task.loss_functions[task.eval_metric].min_score,
-        max_score=task.loss_functions[task.eval_metric].max_score,
+        min_score=task.loss_functions[task.eval_metric].min,
+        max_score=task.loss_functions[task.eval_metric].max,
         sensitivity=4)
     N_TEST_MEMBER_LIMIT = 50
     print(f"Testing the top {N_TEST_MEMBER_LIMIT} members on the test set of {len(task.test_data)} samples...")
