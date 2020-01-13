@@ -109,7 +109,7 @@ class Analyzer(object):
             plt.savefig(fname=Path(save_directory, f"{attribute}_plot.svg"), format='svg', transparent=True)
             plt.clf()
 
-    def create_hyper_parameter_single_plot_files(self, save_directory, min_score, max_score, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 10):
+    def create_hyper_parameter_single_plot_files(self, save_directory, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 10):
         # get color map
         color_map_key = "rainbow_r"
         color_map = plt.get_cmap(color_map_key)
@@ -128,6 +128,8 @@ class Analyzer(object):
                 steps = [step for step in progression_dict[id]['steps']]
                 parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
                 scores = [score for score in progression_dict[id]['score']]
+                min_score = min(scores)
+                max_score = max(scores)
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
                     score_decimal = (score - min_score) / (max_score - min_score)
@@ -146,7 +148,7 @@ class Analyzer(object):
             # clear current figure and axes
             plt.clf()
 
-    def create_hyper_parameter_multi_plot_files(self, save_directory, min_score, max_score, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 10):
+    def create_hyper_parameter_multi_plot_files(self, save_directory, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 10):
         # get objective data
         objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
         population_size = objective_info['population_size']
@@ -171,6 +173,8 @@ class Analyzer(object):
                 steps = [step for step in progression_dict[id]['steps']]
                 parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
                 scores = [score for score in progression_dict[id]['score']]
+                min_score = min(scores)
+                max_score = max(scores)
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
                     score_decimal = (score - min_score) / (max_score - min_score)
