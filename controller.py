@@ -196,6 +196,7 @@ class Controller(object):
                 if self.detect_NaN and any(math.isnan(value) for value in checkpoint.loss['eval'].values()):
                     self.__log_checkpoint(checkpoint, "NaN metric detected.")
                     self.__log_checkpoint(checkpoint, "stopping.")
+                    self.evolver.N -=1
                     self.finish_queue.put(checkpoint)
                     if self.finish_queue.full():
                         self.__log("All workers are finished.")

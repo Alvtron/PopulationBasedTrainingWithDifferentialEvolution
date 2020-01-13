@@ -1,7 +1,6 @@
 import argparse
 import os
 import random
-
 import numpy
 import torch
 from task import Mnist, EMnist, Fraud
@@ -29,8 +28,8 @@ def import_user_arguments():
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--steps", type=int, default=100, help="Number of steps to train each training process.")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'fraud'.")
-    parser.add_argument("--evolver", type=str, default='pbt', help="Select which evolve algorithm to use.")
-    parser.add_argument("--database_path", type=str, default='checkpoints/mnistnet2_pbt_random_walk', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--evolver", type=str, default='de', help="Select which evolve algorithm to use.")
+    parser.add_argument("--database_path", type=str, default='checkpoints/mnistnet2_de_clip', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Set processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--verbose", type=bool, default=True, help="Verbosity level")
@@ -114,9 +113,13 @@ if __name__ == "__main__":
     # define controller
     print(f"Creating evolver...")
     if args.evolver == 'pbt':
+        EVOLVER = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False)
+    if args.evolver == 'pbt_rw':
         EVOLVER = ExploitAndExplore(N = args.population_size, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=True)
     if args.evolver == 'de':
         EVOLVER = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='clip')
+    if args.evolver == 'de_r':
+        EVOLVER = DifferentialEvolution(N = args.population_size, F = 0.2, Cr = 0.8, constraint='reflect')
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -132,7 +135,7 @@ if __name__ == "__main__":
         step_size=args.steps,
         evolve_frequency=args.steps,
         end_criteria={'steps': args.steps * 100, 'score': 100.0},
-        detect_NaN=False,
+        detect_NaN=True,
         device=args.device,
         tensorboard_writer=tensorboard_writer,
         verbose=args.verbose,
