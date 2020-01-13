@@ -29,14 +29,14 @@ class ExploitAndExplore(EvolveEngine):
 
     def evolve(self, member, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
-        population = population()
         # check population size
+        population = list(population)
         population_size = len(population)
         if population_size != self.N:
-            logger(f"The current population available is not equal to the targeted population size. ({population_size} != {self.N})")
+            logger(f"Provided population is too small ({population_size} != {self.N}). Skipping.")
             return
         # set number of elitists
-        n_elitists = math.floor(len(population) * self.exploit_factor)
+        n_elitists = math.floor(population_size * self.exploit_factor)
         if n_elitists > 0:
             # sort members from best to worst on score
             population.sort(key=lambda m: m.score, reverse=True)
@@ -83,11 +83,11 @@ class DifferentialEvolution(EvolveEngine):
 
     def evolve(self, member, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
-        population = population()
         # check population size
+        population = list(population)
         population_size = len(population)
         if population_size != self.N:
-            logger(f"The current population available is not equal to the targeted population size. ({population_size} != {self.N})")
+            logger(f"Provided population is too small ({population_size} != {self.N}). Skipping.")
             return
         hp_dimension_size = len(member.hyper_parameters)
         r0, r1, r2 = random.sample(range(0, population_size), 3)
@@ -123,6 +123,11 @@ class ParticleSwarm(EvolveEngine):
 
     def evolve(self, member, population, function, logger):
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
+        population = list(population)
+        population_size = len(population)
+        if population_size != self.N:
+            logger(f"Provided population is too small ({population_size} != {self.N}). Skipping.")
+            return
         random_p = random.uniform(0.0, 1.0)
         random_g = random.uniform(0.0, 1.0)
         # set best member in current population

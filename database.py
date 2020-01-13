@@ -176,5 +176,6 @@ class SharedDatabase(Database):
         return self.cache[id] if key == None and id in self.cache else super().entry(id, key)
 
     def latest(self):
-        """ Returns a list containing the latest entry from every member. """
-        return self.cache.values()
+        """ Iterate over the last entries saved in the cache. """
+        for entry in self.cache.values():
+            yield entry

@@ -228,7 +228,7 @@ class Controller(object):
                     start_evolve_time_ns = time.time_ns()
                     self.evolver.evolve(
                         member=checkpoint,
-                        population=self.database.latest,
+                        population=self.database.latest(),
                         function=self.eval_function,
                         logger=partial(self.__log_checkpoint, checkpoint))
                     checkpoint.time['evolve'] = float(time.time_ns() - start_evolve_time_ns) * float(10**(-9))
