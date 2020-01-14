@@ -68,7 +68,7 @@ class Controller(object):
             'batch_size': self.trainer.batch_size,
             'device': self.device,
             'n_hyper_parameters': len(self.hyper_parameters),
-            'hyper_parameters': self.hyper_parameters.parameter_paths(),
+            'hyper_parameters': self.hyper_parameters.keys(),
             'loss_metric': self.loss_metric,
             'eval_metric': self.eval_metric,
             'loss_functions': self.loss_functions,
@@ -169,20 +169,26 @@ class Controller(object):
             self.__log(f"Starting worker {index}/{self.population_size}")
             worker.start()
 
+    def create_checkpoint(self, id):
+        # copy hyper-parameters
+        hyper_parameters = copy.deepcopy(self.hyper_parameters)
+        # create new checkpoint object
+        checkpoint = Checkpoint(
+            id=id,
+            hyper_parameters=hyper_parameters,
+            loss_metric=self.loss_metric,
+            eval_metric=self.eval_metric,
+            minimize=self.loss_functions[self.eval_metric].minimize,
+            step_size=self.step_size)
+        # prepare hyper-parameters
+        self.evolver.prepare(
+            hyper_parameters=checkpoint.hyper_parameters,
+            logger=partial(self.__log_checkpoint, checkpoint))
+        return checkpoint
+
     def queue_members(self):
         for id in range(self.population_size):
-            # copy hyper-parameters
-            hyper_parameters = copy.deepcopy(self.hyper_parameters)
-            # create new checkpoint object
-            checkpoint = Checkpoint(
-                id=id,
-                hyper_parameters=hyper_parameters,
-                loss_metric=self.loss_metric,
-                eval_metric=self.eval_metric,
-                minimize=self.loss_functions[self.eval_metric].minimize,
-                step_size=self.step_size)
-            # prepare hyper-parameters
-            self.evolver.prepare(hyper_parameters=checkpoint.hyper_parameters, logger=partial(self.__log_checkpoint, checkpoint))
+            checkpoint = self.create_checkpoint(id)
             # queue checkpoint for training
             self.__log_checkpoint(checkpoint, "queued for training...")
             self.train_queue.put(checkpoint)
@@ -192,6 +198,25 @@ class Controller(object):
         self.spawn_workers()
         self.__log("Queing member checkpoints...")
         self.queue_members()
+
+    def has_NaN_value(self, checkpoint : Checkpoint):
+        for loss_type, loss_value in checkpoint.loss['eval'].items():
+            if loss_type in (self.loss_metric, self.eval_metric) and math.isnan(loss_value):
+                return True
+        return False
+
+    def on_NaN_detect(self, checkpoint : Checkpoint):
+        self.__log_checkpoint(checkpoint, "NaN metric detected.")
+        population = list(c for c in self.database.latest() if checkpoint.id != c.id)
+        if len(population) < self.population_size - 1:
+            self.__log_checkpoint(checkpoint, "Poplation is not full. Creating new checkpoint.")
+            checkpoint = self.create_checkpoint(checkpoint.id)
+        else:
+            random_checkpoint = random.choice(population)
+            self.__log_checkpoint(checkpoint, f"Replacing with existing member {random_checkpoint.id}")
+            checkpoint.update(random_checkpoint)
+        self.__log_checkpoint(checkpoint, "training...")
+        self.train_queue.put(checkpoint)
 
     def start(self):
         self.iterations = 0
@@ -208,17 +233,9 @@ class Controller(object):
                 if queue_length > 0:
                     self.__log(f"queue size: {queue_length}")
                 # check for nan loss-value
-                if self.detect_NaN and any(math.isnan(value) for value in checkpoint.loss['eval'].values()):
-                    self.__log_checkpoint(checkpoint, "NaN metric detected.")
-                    self.__log_checkpoint(checkpoint, "stopping.")
-                    self.evolver.population_size -=1
-                    self.database.remove_latest(checkpoint.id)
-                    self.finish_queue.put(checkpoint)
-                    if self.finish_queue.full():
-                        self.__log("All workers are finished.")
-                        self.end_event.set()
-                        break
-                    else: continue
+                if self.detect_NaN and self.has_NaN_value(checkpoint):
+                    self.on_NaN_detect(checkpoint)
+                    continue
                 # save checkpoint to database
                 self.database.update(checkpoint.id, checkpoint.steps, checkpoint)
                 # write to tensorboard if enabled

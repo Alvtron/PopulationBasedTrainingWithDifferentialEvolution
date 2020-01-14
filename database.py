@@ -84,8 +84,11 @@ class ReadOnlyDatabase(object):
 class Database(ReadOnlyDatabase):
     def __init__(self, directory_path, database_name=None, read_function=None, write_function=None):
         # set database path
-        database_name = datetime.now().strftime('%Y%m%d%H%M%S') if not database_name else database_name
+        if not database_name:
+            database_name = datetime.now().strftime('%Y%m%d%H%M%S')
         database_path = Path(directory_path, database_name)
+        if database_path.exists():
+            raise ValueError(f"Database path is occupied: {database_path}")
         # init parent object
         super().__init__(database_path=database_path, read_function=read_function)
         # create database directory

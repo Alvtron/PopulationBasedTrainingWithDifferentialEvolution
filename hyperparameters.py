@@ -327,10 +327,10 @@ class Hyperparameters(object):
     def parameters(self):
         return [i[1] for i in self]
 
-    def parameter_names(self):
+    def names(self):
         return [i[0] for i in self]
 
-    def parameter_paths(self):
+    def keys(self):
         general_paths = [f"general/{parameter}" for parameter in self.general]
         model_paths = [f"model/{parameter}" for parameter in self.model]
         optimizer_paths = [f"optimizer/{parameter}" for parameter in self.optimizer]

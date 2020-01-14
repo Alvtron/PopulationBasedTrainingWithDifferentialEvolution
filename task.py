@@ -190,4 +190,4 @@ class CreditCardFraud(Task):
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        super().__init__("fraud", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
+        super().__init__("creditfraud", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
