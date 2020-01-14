@@ -120,7 +120,7 @@ class Controller(object):
         for hparam_name, hparam in checkpoint.hyper_parameters:
             self.__tensorboard_writer.add_scalar(
                 tag=f"Hyperparameters/{hparam_name}/{checkpoint.id:03d}",
-                scalar_value=hparam.normalized,
+                scalar_value=hparam.normalized if hparam.is_categorical else hparam.value,
                 global_step=checkpoint.steps)
 
     def eval_function(self, checkpoint):
