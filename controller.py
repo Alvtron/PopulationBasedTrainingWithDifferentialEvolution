@@ -124,6 +124,7 @@ class Controller(object):
                 global_step=checkpoint.steps)
 
     def eval_function(self, checkpoint):
+        """Evaluates the provided checkpoint. Returns a score."""
         current_model_state, _, _, _ , _ = self.trainer.train(
             hyper_parameters=checkpoint.hyper_parameters,
             model_state=checkpoint.model_state,
@@ -140,6 +141,7 @@ class Controller(object):
         return checkpoint.steps % self.evolve_frequency == 0
 
     def is_member_finished(self, checkpoint : Checkpoint):
+        """With the end_criteria, check if the provided checkpoint is finished training."""
         if 'epochs' in self.end_criteria and checkpoint.epochs >= self.end_criteria['epochs']:
             # the number of epochs is equal or above the given treshold
             return True
@@ -149,12 +151,17 @@ class Controller(object):
         return False
     
     def is_population_finished(self, checkpoint : Checkpoint):
+        """
+        With the end_criteria, check if the entire population is finished
+        by inspecting the provided checkpoint.
+        """
         if 'score' in self.end_criteria and checkpoint.score() >= self.end_criteria['score']:
             # score is above the given treshold
             return True
         return False
 
     def spawn_workers(self):
+        """Spawn a worker process for every member in the population."""  
         self.__workers = [
             Worker(
                 end_event = self.end_event,
@@ -166,10 +173,11 @@ class Controller(object):
         # Starting workers
         for index, worker in enumerate(self.__workers, start=1):
             #print(f"Starting worker {index}/{self.population_size}", end="\r", flush=True)
-            self.__log(f"Starting worker {index}/{self.population_size}")
+            self.__log(f"starting worker {index}/{self.population_size}")
             worker.start()
 
     def create_checkpoint(self, id):
+        """Create a checkpoint object"""
         # copy hyper-parameters
         hyper_parameters = copy.deepcopy(self.hyper_parameters)
         # create new checkpoint object
@@ -194,9 +202,9 @@ class Controller(object):
             self.train_queue.put(checkpoint)
 
     def start_training_procedure(self):
-        self.__log("Creating worker processes...")
+        self.__log("creating worker processes...")
         self.spawn_workers()
-        self.__log("Queing member checkpoints...")
+        self.__log("queing member checkpoints...")
         self.queue_members()
 
     def has_NaN_value(self, checkpoint : Checkpoint):
@@ -209,11 +217,11 @@ class Controller(object):
         self.__log_checkpoint(checkpoint, "NaN metric detected.")
         population = list(c for c in self.database.latest() if checkpoint.id != c.id)
         if len(population) < self.population_size - 1:
-            self.__log_checkpoint(checkpoint, "Poplation is not full. Creating new checkpoint.")
+            self.__log_checkpoint(checkpoint, "population is not full. Creating new checkpoint.")
             checkpoint = self.create_checkpoint(checkpoint.id)
         else:
             random_checkpoint = random.choice(population)
-            self.__log_checkpoint(checkpoint, f"Replacing with existing member {random_checkpoint.id}")
+            self.__log_checkpoint(checkpoint, f"replacing with existing member {random_checkpoint.id}")
             checkpoint.update(random_checkpoint)
         self.__log_checkpoint(checkpoint, "training...")
         self.train_queue.put(checkpoint)
@@ -245,7 +253,7 @@ class Controller(object):
                     self.__write_to_tensorboard(checkpoint)
                 # check if population is finished
                 if self.is_population_finished(checkpoint):
-                    self.__log_checkpoint(checkpoint, "End criterium reached.")
+                    self.__log_checkpoint(checkpoint, "end criterium reached.")
                     self.end_event.set()
                     break
                 # check if member is finished
@@ -253,7 +261,7 @@ class Controller(object):
                     self.__log_checkpoint(checkpoint, "finished.")
                     self.finish_queue.put(checkpoint)
                     if self.finish_queue.full():
-                        self.__log("All workers are finished.")
+                        self.__log("all workers are finished.")
                         self.end_event.set()
                         break
                     else: continue
@@ -272,13 +280,13 @@ class Controller(object):
                 self.train_queue.put(checkpoint)
                 self.iterations += 1
             # terminate worker processes
-            self.__log("Controller is finished.")
+            self.__log("controller is finished.")
         except KeyboardInterrupt:
-            self.__log("Controller was interupted.")
+            self.__log("controller was interupted.")
         finally:
-            self.__log("Terminating all left-over worker-processes...")
+            self.__log("terminating all left-over worker-processes...")
             for worker in self.__workers:
                 if isinstance(worker, mp.Process):
                     worker.terminate()
                 else: continue
-            self.__log("Termination was successfull!")
+            self.__log("termination was successfull!")

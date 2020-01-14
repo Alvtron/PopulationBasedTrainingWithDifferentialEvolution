@@ -70,11 +70,11 @@ class Checkpoint(MemberState):
         return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
 
     def peformance_details(self):
-        string = ""
+        strings = list()
         for loss_group, loss_values in self.loss.items():
             for loss_name, loss_value in loss_values.items():
-                string += f", {loss_group}_{loss_name} {loss_value:.5f}"
-        return string
+                strings.append(f"{loss_group}_{loss_name} {loss_value:.5f}")
+        return ", ".join(strings)
 
     def update(self, checkpoint):
         self.hyper_parameters = checkpoint.hyper_parameters

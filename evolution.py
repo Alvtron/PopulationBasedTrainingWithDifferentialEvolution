@@ -37,7 +37,7 @@ class ExploitAndExplore(EvolveEngine):
         population = list(population)
         population_size = len(population)
         if population_size != self.population_size:
-            logger(f"Provided population is too small ({population_size} != {self.population_size}). Skipping.")
+            logger(f"provided population is too small ({population_size} != {self.population_size}). Skipping.")
             return
         # set number of elitists
         n_elitists = math.floor(population_size * self.exploit_factor)
@@ -73,7 +73,7 @@ class DifferentialEvolution(EvolveEngine):
     """A general, modifiable implementation of Differential Evolution (DE)"""
     def __init__(self, population_size, F = 0.2, Cr = 0.8, constraint='clip'):
         if population_size < 3:
-            raise ValueError("Population size must be at least 3 or higher.")
+            raise ValueError("population size must be at least 3 or higher.")
         super().__init__(population_size)
         self.F = F
         self.Cr = Cr
@@ -91,7 +91,7 @@ class DifferentialEvolution(EvolveEngine):
         population = list(population)
         population_size = len(population)
         if population_size != self.population_size:
-            logger(f"Provided population is too small ({population_size} != {self.population_size}). Skipping.")
+            logger(f"provided population is too small ({population_size} != {self.population_size}). Skipping.")
             return
         hp_dimension_size = len(member.hyper_parameters)
         r0, r1, r2 = random.sample(range(0, population_size), 3)
@@ -131,7 +131,7 @@ class ParticleSwarm(EvolveEngine):
         population = list(population)
         population_size = len(population)
         if population_size != self.population_size:
-            logger(f"Provided population is too small ({population_size} != {self.population_size}). Skipping.")
+            logger(f"provided population is too small ({population_size} != {self.population_size}). Skipping.")
             return
         random_p = random.uniform(0.0, 1.0)
         random_g = random.uniform(0.0, 1.0)
