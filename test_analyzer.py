@@ -18,7 +18,7 @@ database = ReadOnlyDatabase(
 analyzer = Analyzer(database)
 print(f"Database consists of {len(database)} entries.")
 print("Creating statistics...")
-analyzer.create_statistics(save_directory=statistics_save_directory, verbose=False)
+analyzer.create_statistics(save_directory=statistics_save_directory)
 print("create_plot_files...", end =" ")
 analyzer.create_plot_files(save_directory=plot_save_directory)
 print("done!")

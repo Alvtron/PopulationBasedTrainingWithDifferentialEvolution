@@ -199,7 +199,7 @@ if __name__ == "__main__":
     print("Analyzing population...")
     analyzer = Analyzer(database)
     print("Creating statistics...")
-    analyzer.create_statistics(save_directory=database.create_folder("results/statistics"), verbose=False)
+    analyzer.create_statistics(save_directory=database.create_folder("results/statistics"))
     print("Creating plot-files...")
     analyzer.create_plot_files(save_directory=database.create_folder("results/plots"))
     analyzer.create_hyper_parameter_multi_plot_files(
