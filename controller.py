@@ -149,7 +149,7 @@ class Controller(object):
         return False
     
     def is_population_finished(self, checkpoint : Checkpoint):
-        if 'score' in self.end_criteria and checkpoint.score >= self.end_criteria['score']:
+        if 'score' in self.end_criteria and checkpoint.score() >= self.end_criteria['score']:
             # score is above the given treshold
             return True
         return False
@@ -232,6 +232,8 @@ class Controller(object):
                 queue_length = self.evolve_queue.qsize()
                 if queue_length > 0:
                     self.__log(f"queue size: {queue_length}")
+                # log peformance
+                self.__log_checkpoint(checkpoint, checkpoint.peformance_details())
                 # check for nan loss-value
                 if self.detect_NaN and self.has_NaN_value(checkpoint):
                     self.on_NaN_detect(checkpoint)

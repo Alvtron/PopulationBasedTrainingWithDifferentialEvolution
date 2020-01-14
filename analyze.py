@@ -16,14 +16,13 @@ class Analyzer(object):
         self.database = database
 
     def create_progression_dict(self):
-        attributes = {'steps','epochs','hyper_parameters','eval_metric','loss','time'}
+        attributes = {'steps','epochs','hyper_parameters','loss','time'}
         population_entries = self.database.to_dict()
         checkpoint_progression = dict()
         for entry_id, entries in population_entries.items():
             checkpoint_progression[entry_id] = dict()
             for entry in entries.values():
                 entry_dict = { attribute: entry.__dict__[attribute] for attribute in attributes }
-                entry_dict['score'] = entry.score
                 entry_dict = flatten_dict(entry_dict, exclude=['hyper_parameters'], delimiter='_')
                 for attribute, value in entry_dict.items():
                     if not attribute in checkpoint_progression[entry_id]:
@@ -33,14 +32,14 @@ class Analyzer(object):
 
     def test(self, evaluator : Evaluator, limit = None, verbose = False):
         entries = list()
-        for entry in itertools.islice(sorted(self.database, key=lambda e: e.score, reverse=True), 0, limit):
+        for entry in itertools.islice(sorted(self.database, key=lambda e: e.score(), reverse=True), 0, limit):
             print(f"Testing {entry}...", end=" ")
             entry.loss['test'] = evaluator.eval(entry.model_state)
             entries.append(entry)
             print("completed.")
         return entries
 
-    def create_statistics(self, save_directory, verbose=False):
+    def create_statistics(self, save_directory):
         population_entries = self.database.to_dict()
         # get member statistics
         checkpoint_summaries = dict()
@@ -82,15 +81,13 @@ class Analyzer(object):
                             summary[avg_key] += loss_value / summary['num_entries']
         # save/print member statistics
         for entry_id, checkpoint_summary in checkpoint_summaries.items():
-            if verbose: print(f"Statistics for member {entry_id}:")
             with open(f"{save_directory}/{entry_id}_statistics.txt", "a+") as file:
                 for tag, statistic in checkpoint_summary.items():
-                    info = f"{tag}:{statistic}"
-                    if verbose: print(info)
+                    info = f"{tag}: {statistic}"
                     file.write(info + "\n")
 
     def create_plot_files(self, save_directory):
-        exclude_attributes = ['steps','epochs','hyper_parameters','eval_metric','hyper_parameters','score']
+        exclude_attributes = ['steps','epochs','hyper_parameters']
         progression_dict = self.create_progression_dict()
         attributes = next(iter(progression_dict.values())).keys()
         for attribute in attributes:
@@ -118,6 +115,7 @@ class Analyzer(object):
         # get objective data
         objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
         hyper_parameters = objective_info['hyper_parameters']
+        eval_metric = objective_info['eval_metric']
         for param_name in hyper_parameters:
             figure = plt.figure()
             plt.title(param_name)
@@ -127,7 +125,7 @@ class Analyzer(object):
             for id in progression_dict:
                 steps = [step for step in progression_dict[id]['steps']]
                 parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
-                scores = [score for score in progression_dict[id]['score']]
+                scores = [score for score in progression_dict[id][f"loss_eval_{eval_metric}"]]
                 min_score = min(scores)
                 max_score = max(scores)
                 # plot markers first
@@ -153,6 +151,7 @@ class Analyzer(object):
         objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
         population_size = objective_info['population_size']
         hyper_parameters = objective_info['hyper_parameters']
+        eval_metric = objective_info['eval_metric']
         n_hyper_parameters = len(hyper_parameters)
         # get population data
         progression_dict = self.create_progression_dict()
@@ -172,7 +171,7 @@ class Analyzer(object):
             for id in progression_dict:
                 steps = [step for step in progression_dict[id]['steps']]
                 parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
-                scores = [score for score in progression_dict[id]['score']]
+                scores = [score for score in progression_dict[id][f"loss_eval_{eval_metric}"]]
                 min_score = min(scores)
                 max_score = max(scores)
                 # plot markers first
@@ -192,7 +191,7 @@ class Analyzer(object):
                 ax.remove()
         # legend
         handles, labels = ax.get_legend_handles_labels()
-        figure.legend(handles, labels, loc='lower center', ncol=population_size)
+        figure.legend(handles, labels, loc='lower center', ncol=int(population_size/2))
         # save figures to directory
         plt.savefig(fname=Path(save_directory, "multi_plot.png"), format='png', transparent=False)
         plt.savefig(fname=Path(save_directory, "multi_plot.svg"), format='svg', transparent=True)

@@ -43,7 +43,7 @@ class ExploitAndExplore(EvolveEngine):
         n_elitists = math.floor(population_size * self.exploit_factor)
         if n_elitists > 0:
             # sort members from best to worst on score
-            population.sort(key=lambda x: x.score, reverse=not member.minimize)
+            population.sort(key=lambda x: x.score(), reverse=not member.minimize)
             if all(m.id != member.id for m in population[:n_elitists]):
                 # exploit weights and hyper-parameters if member is not elitist
                 self.exploit(member, population[:n_elitists], logger)
@@ -108,10 +108,10 @@ class DifferentialEvolution(EvolveEngine):
         # eval mutation
         mutation_score = function(mutation)
         if member < mutation_score :
-            logger(f"mutate member (x {member.score:.4f} < u {mutation_score:.4f}).")
+            logger(f"mutate member (x {member.score():.4f} < u {mutation_score:.4f}).")
             member.update(mutation)
         else:
-            logger(f"maintain member (x {member.score:.4f} > u {mutation_score:.4f}).")
+            logger(f"maintain member (x {member.score():.4f} > u {mutation_score:.4f}).")
 
 class ParticleSwarm(EvolveEngine):
     """A general, modifiable implementation of Particle Swarm Optimization (PSO)"""
@@ -136,8 +136,8 @@ class ParticleSwarm(EvolveEngine):
         random_p = random.uniform(0.0, 1.0)
         random_g = random.uniform(0.0, 1.0)
         # set best member in current population
-        best_member = max(population, key=lambda m: m.score)
-        if not self.best_member or best_member.score > self.best_member.score:
+        best_member = max(population, key=lambda m: m.score())
+        if not self.best_member or best_member.score() > self.best_member.score():
             self.best_member = best_member
 
     def update_velocity(self, particle, best_particle_in_population, best_particle_across_populations, weight, velocity, acc_coeff_p, random_p, acc_coeff_g, random_g):
