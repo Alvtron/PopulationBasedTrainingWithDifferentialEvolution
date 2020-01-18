@@ -66,19 +66,21 @@ class Controller(object):
         # TODO: implement save and load function for controller
         self.save_objective_info()
 
+    def is_removed(self, member: Checkpoint):
+        """Finds out if the member in question is removed from the population"""
+        return self.generations > 0 and member.id not in self.evolver.population
+
+    def stop_member(self, member : Checkpoint):
+        self.finish_queue.put(member)
+        self.stop_workers(k=1)
+
     def update_population(self, member : Checkpoint):
         """
         Saves the provided member to the population.
         In addition, the method saves the provided member to a file on id/steps in the database directory.
         """
-        # check if member is marked for removal as long as this is not the initial generation
-        if self.generations > 0 and member.id not in self.evolver.population:
-            self.__log_member(member, "removed from population.")
-            self.finish_queue.put(member)
-            self.stop_workers(k=1)
         # Save entry to population (in memory). This replaces the old entry.
-        else:
-            self.evolver.population[member.id] = member
+        self.evolver.population[member.id] = member
         # Save entry to database directory.
         self.database.update(member.id, member.steps, member)
 
@@ -309,18 +311,17 @@ class Controller(object):
             self.__log("on generation start")
             self.evolver.on_generation_start(self.__log)
             iterations = 0
-            if self.generations == 0:
-                self.__log("awaiting next trained member...")
             while iterations < self.evolver.population_size:
-                # end training if end event is set
-                if self.end_event.is_set():
-                    return
-                # Skip if queue is empty
-                if self.evolve_queue.empty():
-                    continue
                 # get next member
-                self.__log("retrieving next member from queue...")
+                self.__log("awaiting next trained member...")
                 member = self.evolve_queue.get()
+                if member is None:
+                    return
+                # check if member is removed from population
+                if self.is_removed(member):
+                    self.__log_member(member, "removed from the population.")
+                    self.stop_member(member)
+                    continue
                 self.__log(f"queue size: {self.evolve_queue.qsize()}")
                 # update member in population/database
                 self.__log_member(member, "updating in population/database...")
@@ -328,7 +329,6 @@ class Controller(object):
                 # process member
                 self.process_member(member)
                 iterations += 1
-                self.__log("awaiting next trained member...")
             # process generation with evolver
             self.__log("on generation end")
             self.evolver.on_generation_end(self.__log)
@@ -342,18 +342,24 @@ class Controller(object):
         """
         self.generations = 0
         self.start_training_procedure()
-        self.__log("awaiting next trained member...")
         while not self.end_event.is_set():
-            # Skip if queue is not full
-            if not self.evolve_queue.qsize() == self.evolver.population_size:
-                continue
-            self.__log("retrieving members from training...")
-            for _ in range(self.evolver.population_size):
+            retrieved_members = 0
+            while retrieved_members < self.evolver.population_size:
                 # get next member
+                self.__log("awaiting next trained member...")
                 member = self.evolve_queue.get()
+                if member is None:
+                    return
+                # check if member is removed from population
+                if self.is_removed(member):
+                    self.__log_member(member, "removed from the population.")
+                    self.stop_member(member)
+                    continue
                 # update member in population/database
                 self.__log_member(member, "updating in population/database...")
                 self.update_population(member)
+                retrieved_members += 1
+            #update population size:
             self.__log("on generation start")
             self.evolver.on_generation_start(self.__log)
             for member in self.evolver.population.values():
@@ -361,7 +367,6 @@ class Controller(object):
             self.__log("on generation end")
             self.evolver.on_generation_end(self.__log)
             self.generations += 1
-            self.__log("awaiting next trained member...")
 
     def check_if_finished(self, member : Checkpoint):
         # check if population is finished
@@ -369,7 +374,7 @@ class Controller(object):
             self.__log_member(member, "end criterium reached.")
             self.finish_queue.put(member)
             self.evolver.population_size -= 1
-            self.end_event.set()
+            self.stop()
             return True
         # check if member is finished
         if self.is_member_finished(member):
@@ -378,9 +383,13 @@ class Controller(object):
             self.evolver.population_size -= 1
             if self.evolver.population_size == 0:
                 self.__log("population finished. All members have reached the end-criteria.")
-                self.end_event.set()
+                self.stop()
             return True
         return False
+
+    def stop(self):
+        self.end_event.set()
+        self.evolve_queue.put(STOP_FLAG)
 
     def process_member(self, member : Checkpoint):
         """The provided member checkpoint is analyzed, validated, changed (if valid) and queued for training (if valid)."""

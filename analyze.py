@@ -145,7 +145,7 @@ class Analyzer(object):
                 max_score = max(scores)
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
-                    score_decimal = (score - min_score) / (max_score - min_score)
+                    score_decimal = (score - min_score + 1e-7) / (max_score - min_score + 1e-7)
                     color = color_map(score_decimal ** sensitivity)
                     marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
                     # plot
@@ -191,7 +191,7 @@ class Analyzer(object):
                 max_score = max(scores)
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
-                    score_decimal = (score - min_score) / (max_score - min_score + 1e-7)
+                    score_decimal = (score - min_score + 1e-7) / (max_score - min_score + 1e-7)
                     color = color_map(score_decimal ** sensitivity)
                     marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
                     # plot
