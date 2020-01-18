@@ -9,7 +9,7 @@ class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
     def __init__(
             self, model_class : HyperNet, optimizer_class : Optimizer, train_data : Dataset, batch_size : int,
-            loss_functions : dict, loss_metric : str, device : str, load_in_memory : bool = True):
+            loss_functions : dict, loss_metric : str, device : str, load_in_memory : bool = True, verbose : bool = False):
         self.model_class = model_class
         self.optimizer_class = optimizer_class
         self.train_data = DataLoader(
@@ -21,6 +21,7 @@ class Trainer(object):
         self.loss_functions = loss_functions
         self.loss_metric = loss_metric
         self.device = device
+        self.verbose = verbose
 
     def create_model(self, model_state = None):
         model = self.model_class().to(self.device)
@@ -37,7 +38,9 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
-    def train(self, hyper_parameters : Hyperparameters, model_state : dict, optimizer_state : dict, epochs : int, steps : int, step_size : int = 1):
+    def train(
+            self, hyper_parameters : Hyperparameters, model_state : dict, optimizer_state : dict,
+            epochs : int, steps : int, step_size : int = 1):
         if step_size < 1:
             raise Exception("The number of steps must be at least one or higher.")
         # preparing model and optimizer
@@ -47,14 +50,15 @@ class Trainer(object):
         optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
         # creating iterator
         batch_index = steps % len(self.train_data)
-        dataset_iterator = itertools.islice(self.train_data, batch_index, None)
+        dataset_view = itertools.islice(self.train_data, batch_index, None)
         # initialize eval metrics dict
         metric_values = dict.fromkeys(self.loss_functions, 0.0)
         # loop until step_size is exhausted
         END_STEPS = steps + step_size
         while steps != END_STEPS:
             try:
-                x, y = next(dataset_iterator)
+                if self.verbose: print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
+                x, y = next(dataset_view)
                 x, y = x.to(self.device), y.to(self.device)
                 for metric_type, metric_function in self.loss_functions.items():
                     if metric_type == self.loss_metric:
@@ -63,11 +67,14 @@ class Trainer(object):
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
-                        metric_values[metric_type] += loss.item() / step_size
+                        metric_values[metric_type] += loss.item() / float(step_size)
                     else:
-                        metric_values[metric_type] += metric_function(output, y).item() / step_size
+                        loss = metric_function(output, y)
+                        metric_values[metric_type] += loss.item() / float(step_size)
+                    if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
+                if self.verbose: print(end="\n")
                 steps += 1
             except StopIteration:
-                dataset_iterator = iter(self.train_data)
+                dataset_view = iter(self.train_data)
                 epochs += 1
         return model.state_dict(), optimizer.state_dict(), epochs, steps, metric_values

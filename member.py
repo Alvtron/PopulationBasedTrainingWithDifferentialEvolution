@@ -20,33 +20,56 @@ class MemberState(object):
     def __lt__(self, other):
         if isinstance(other, (float, int)):
             return self.score() > other if self.minimize else self.score() < other
-        else:
+        elif isinstance(other, MemberState):
             return self.score() > other.score() if self.minimize else self.score() < other.score()
+        else:
+            raise NotImplementedError()
+
+    def __le__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score() >= other if self.minimize else self.score() <= other
+        elif isinstance(other, MemberState):
+            return self.score() >= other.score() if self.minimize else self.score() <= other.score()
+        else:
+            raise NotImplementedError()
 
     def __gt__(self, other):
         if isinstance(other, (float, int)):
             return self.score() < other if self.minimize else self.score() > other
+        elif isinstance(other, MemberState):
+            return self.score() < other.score() if self.minimize else self.score() > other.score()
         else:
-            return self.score() < other.score()if self.minimize else self.score() > other.score()
-
-    def __le__(self, other):
-        if isinstance(other, (float, int)):
-            return self.score() <= other if self.minimize else self.score() >= other
-        else:
-            return self.score() <= other.score()if self.minimize else self.score() >= other.score()
+            raise NotImplementedError()
 
     def __ge__(self, other):
         if isinstance(other, (float, int)):
-            return self.score() >= other if self.minimize else self.score() <= other
+            return self.score() <= other if self.minimize else self.score() >= other
+        elif isinstance(other, MemberState):
+            return self.score() <= other.score() if self.minimize else self.score() >= other.score()
         else:
-            return self.score() >= other.eval_value if self.minimize else self.score() <= other.score()
+            raise NotImplementedError()
+
+    def __eq__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score() == other
+        elif isinstance(other, MemberState):
+            return self.score() == other.score()
+        else:
+            raise NotImplementedError()
+
+    def __ne__(self, other):
+        if isinstance(other, (float, int)):
+            return self.score() != other
+        elif isinstance(other, MemberState):
+            return self.score() != other.score()
+        else:
+            raise NotImplementedError()
 
     def update(self, other):
-        self.hyper_parameters = other.hyper_parameters
+        self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
 
     def copy(self):
         member_copy = copy.deepcopy(self)
-        member_copy.id = None
         return member_copy
 
 class Checkpoint(MemberState):
@@ -66,10 +89,19 @@ class Checkpoint(MemberState):
     def score(self):
         return self.loss['eval'][self.eval_metric]
 
+    def train_score(self):
+        return self.loss['train'][self.eval_metric]
+
+    def eval_score(self):
+        return self.score()
+
+    def test_score(self):
+        return self.loss['test'][self.eval_metric]
+
     def __str__(self):
         return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
 
-    def peformance_details(self):
+    def performance_details(self):
         strings = list()
         for loss_group, loss_values in self.loss.items():
             for loss_name, loss_value in loss_values.items():
@@ -77,8 +109,8 @@ class Checkpoint(MemberState):
         return ", ".join(strings)
 
     def update(self, checkpoint):
-        self.hyper_parameters = checkpoint.hyper_parameters
-        self.model_state = checkpoint.model_state
-        self.optimizer_state = checkpoint.optimizer_state
+        self.hyper_parameters = copy.deepcopy(checkpoint.hyper_parameters)
+        self.model_state = copy.deepcopy(checkpoint.model_state)
+        self.optimizer_state = copy.deepcopy(checkpoint.optimizer_state)
         self.loss = dict()
         self.time = dict()

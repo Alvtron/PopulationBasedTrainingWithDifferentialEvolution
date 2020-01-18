@@ -2,7 +2,7 @@ import random
 import copy
 import warnings
 from functools import partial
-from utils.math import translate, clip, reflect
+from utils.constraint import translate, clip, reflect
 
 class Hyperparameter(object):
     '''
@@ -32,12 +32,18 @@ class Hyperparameter(object):
         return translate(value, self.lower_bound, self.upper_bound, self.MIN_NORM, self.MAX_NORM)
 
     def set_constraint(self, constraint):
-        if constraint == 'clip':
-            self.__constrain = partial(clip, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
-        elif constraint == 'reflect':
-            self.__constrain = partial(reflect, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
+        if isinstance(constraint, str):
+            if constraint == 'clip':
+                self.__constrain = partial(clip, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
+            elif constraint == 'reflect':
+                self.__constrain = partial(reflect, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
+            else:
+                raise NotImplementedError(f"No constraint matches '{constraint}'")
+        elif callable(constraint):
+            self.__constrain = partial(constraint, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
         else:
-            raise NotImplementedError(f"No constraint matches '{constraint}'")
+            raise ValueError("The provided constraint must be of type str or callable.")
+        
 
     def __str__(self):
         return f"{self.value} U({self.lower_bound},{self.upper_bound})"

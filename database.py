@@ -1,6 +1,7 @@
 import os
 import glob
 import pickle
+import copy
 from pathlib import Path
 from datetime import datetime
 
@@ -114,44 +115,3 @@ class Database(ReadOnlyDatabase):
         entry_file_path = self.create_entry_file_path(id, key)
         entry_file_path.parent.mkdir(parents=True, exist_ok=True)
         self.write(entry, entry_file_path)
-
-class SharedDatabase(Database):
-    def __init__(self, context, directory_path, database_name=None, read_function=None, write_function=None):
-        super().__init__(
-            directory_path=directory_path,
-            database_name=database_name,
-            read_function=read_function,
-            write_function=write_function)
-        manager = context.Manager() 
-        self.cache = manager.dict()
-
-    def update(self, id, key, entry, ignore_exception=False):
-        """
-        Saves entry to memory, and will replace any old entry.
-        In addition, the method saves the provided entry to a file on id/key inside the database directory.
-        """
-        # Save entry to cache memory. This replaces the old entry.
-        try:
-            self.cache[id] = entry
-        except Exception as exception:
-            print(f"Failed to write entry with id: {id}, key: {key}, to cache.")
-            if not ignore_exception: raise exception
-        # Save entry to database directory.
-        super().update(id, key, entry)
-
-    def entry(self, id, key=None):
-        """
-        Returns the specific entry stored on the specified id.
-        If there is no match, None is returned.
-        """
-        return self.cache[id] if key == None and id in self.cache else super().entry(id, key)
-
-    def latest(self):
-        """ Iterate over the last entries saved in the cache. """
-        for entry in self.cache.values():
-            yield entry
-
-    def remove_latest(self, id):
-        ''' Remove latest entry in cache stored on the provided id '''
-        if id in self.cache:
-            del self.cache[id]

@@ -11,8 +11,9 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset
 from hyperparameters import Hyperparameter, Hyperparameters
 from loss import F1, NLL, Accuracy, BinaryCrossEntropy, CategoricalCrossEntropy
-from models import HyperNet, FraudNet, MnistNet1, MnistNet2, MnistNet3
+from models import HyperNet, FraudNet, MnistNet10, MnistNet62, MnistNet10Large
 from utils.data import random_split, stratified_split
+
 @dataclass
 class Task(object):
     name: str
@@ -28,15 +29,27 @@ class Task(object):
 
 class Mnist(Task):
     def __init__(self):
-        model_class = MnistNet2
+        classes = 10
+        model_class = MnistNet10
         optimizer_class = torch.optim.SGD
         loss_metric = 'cce'
         eval_metric = 'acc'
         loss_functions = {
             'cce': CategoricalCrossEntropy(),
             #'nll': NLL(),
-            'acc': Accuracy()
+            'acc': Accuracy(),
+            'f1': F1(classes=classes)
         }
+        # define hyper-parameter search space
+        hyper_parameters = Hyperparameters(
+            general_params=None,
+            model_params=model_class.create_hyper_parameters(),
+            optimizer_params={
+                'lr': Hyperparameter(1e-6, 1e-1),
+                'momentum': Hyperparameter(1e-6, 0.5),
+                'weight_decay': Hyperparameter(0.0, 1e-5),
+                'nesterov': Hyperparameter(False, True, is_categorical=True)
+            })
         # prepare training and testing data
         train_data_path = test_data_path = './data'
         train_data = MNIST(
@@ -57,29 +70,32 @@ class Mnist(Task):
             ]))
         # split training set into training set and validation set
         train_data, eval_data = random_split(train_data, 0.90)
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
-            general_params=None,
-            model_params=model_class.create_hyper_parameters(),
-            optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-1, 1e-0),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
-            })
+        # initialize task
         super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
 
 class FashionMnist(Task):
     def __init__(self):
-        model_class = MnistNet2
+        classes = 10
+        model_class = MnistNet10
         optimizer_class = torch.optim.SGD
         loss_metric = 'cce'
         eval_metric = 'acc'
         loss_functions = {
             'cce': CategoricalCrossEntropy(),
             #'nll': NLL(),
-            'acc': Accuracy()
+            'acc': Accuracy(),
+            'f1': F1(classes=classes)
         }
+        # define hyper-parameter search space
+        hyper_parameters = Hyperparameters(
+            general_params=None,
+            model_params=model_class.create_hyper_parameters(),
+            optimizer_params={
+                'lr': Hyperparameter(1e-6, 1e-1),
+                'momentum': Hyperparameter(1e-6, 0.5),
+                'weight_decay': Hyperparameter(0.0, 1e-5),
+                'nesterov': Hyperparameter(False, True, is_categorical=True)
+            })
         # prepare training and testing data
         train_data_path = test_data_path = './data'
         train_data = FashionMNIST(
@@ -100,30 +116,34 @@ class FashionMnist(Task):
             ]))
         # split training set into training set and validation set
         train_data, eval_data = random_split(train_data, 0.90)
+        # initialize task
+        super().__init__("fashionmnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
+
+
+class EMnist(Task):
+    def __init__(self):
+        split = 'mnist'
+        classes = 10
+        model_class = MnistNet10
+        optimizer_class = torch.optim.SGD
+        loss_metric = 'cce'
+        eval_metric = 'acc'
+        loss_functions = {
+            'cce': CategoricalCrossEntropy(),
+            #'nll': NLL(),
+            'acc': Accuracy(),
+            'f1': F1(classes=classes)
+        }
         # define hyper-parameter search space
         hyper_parameters = Hyperparameters(
             general_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-1, 1e-0),
+                'momentum': Hyperparameter(1e-6, 0.5),
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        super().__init__("fashionmnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
-
-
-class EMnist(Task):
-    def __init__(self, split='mnist'):
-        model_class = MnistNet2
-        optimizer_class = torch.optim.SGD
-        loss_metric = 'nll'
-        eval_metric = 'acc'
-        loss_functions = {
-            # 'cce': CategoricalCrossEntropy(),
-            'nll': NLL(),
-            'acc': Accuracy()
-        }
         # prepare dataset
         train_data_path = test_data_path = './data'
         train_data = EMNIST(
@@ -146,16 +166,7 @@ class EMnist(Task):
             ]))
         # split training set into training set and validation set
         train_data, eval_data = random_split(train_data, 0.90)
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
-            general_params=None,
-            model_params=model_class.create_hyper_parameters(),
-            optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-1, 1e-0),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
-            })
+        # initialize task
         super().__init__("emnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
 
 class CreditCardFraud(Task):
@@ -166,8 +177,19 @@ class CreditCardFraud(Task):
         eval_metric = 'bce'
         loss_functions = {
             'bce': BinaryCrossEntropy(),
-            'acc': Accuracy()
+            'acc': Accuracy(),
+            'f1': F1(classes=2)
         }
+        # define hyper-parameter search space
+        hyper_parameters = Hyperparameters(
+            general_params=None,
+            model_params=model_class.create_hyper_parameters(),
+            optimizer_params={
+                'lr': Hyperparameter(1e-6, 1e-1),
+                'momentum': Hyperparameter(1e-6, 0.5),
+                'weight_decay': Hyperparameter(0.0, 1e-5),
+                'nesterov': Hyperparameter(False, True, is_categorical=True)
+            })
         # prepare dataset
         df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
         inputs = df.iloc[:, :-1].values
@@ -180,14 +202,4 @@ class CreditCardFraud(Task):
         # split dataset into training-, testing- and validation set
         train_data, train_labels, test_data, _ = stratified_split(dataset, labels, fraction=0.9, random_state=1)
         train_data, train_labels, eval_data, _ = stratified_split(train_data, train_labels, fraction=0.9, random_state=1)
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
-            general_params=None,
-            model_params=model_class.create_hyper_parameters(),
-            optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-1, 1e-0),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
-            })
         super().__init__("creditfraud", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)

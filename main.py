@@ -9,12 +9,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 from analyze import Analyzer
 from controller import Controller
-from database import SharedDatabase
+from database import Database
 from evaluator import Evaluator
-from evolution import DifferentialEvolution, ExploitAndExplore
+from evolution import DifferentialEvolution, ExploitAndExplore, LSHADE
 from trainer import Trainer
 
-# reproducibility
+# set random state for reproducibility
 random.seed(0)
 numpy.random.seed(0)
 torch.manual_seed(0)
@@ -23,11 +23,15 @@ torch.backends.cudnn.benchmark = False
 
 def import_arguments():
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--task", type=str, default='fashionmnist', help="Select tasks from 'mnist', 'creditfraud'.")
-    parser.add_argument("--evolver", type=str, default='de', help="Select which evolve algorithm to use.")
+    parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'creditfraud'.")
+    parser.add_argument("--evolver", type=str, default='lshade', help="Select which evolve algorithm to use.")
     parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--steps", type=int, default=100, help="Number of steps to train each training process.")
+    parser.add_argument("--end_steps", type=int, default=100 * 10, help="Perform early stopping when the specified number of steps have been performed.")
+    parser.add_argument("--end_score", type=int, default=100.0, help="Perform early stopping when the specified score is met.")
+    parser.add_argument("--test_limit", type=int, default=20, help="Number of top performing database entries to test with the testing set.")    
+    parser.add_argument("--syncronized", type=bool, default=True, help="Decides wether the training will be run synchronously or not. Certain evolvers depend on this function.")    
     parser.add_argument("--directory", type=str, default='checkpoints', help="The directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--device", type=str, default='cpu', help="Sets the processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--tensorboard", type=bool, default=True, help="Decides whether to enable tensorboard 2.0 for real-time monitoring of the training process.")
@@ -46,12 +50,10 @@ def validate_arguments(args):
         raise ValueError("Batch size must be at least 1.")
     if (args.steps < 0):
         raise ValueError("Step size must be at least 1.")
-    if (args.steps < 0):
-        raise ValueError("Step size must be at least 1.")
     if (args.device == 'cuda' and not torch.cuda.is_available()):
         raise ValueError("CUDA is not available on your machine.")
     if (args.device == 'cuda' and os.name == 'nt'):
-        raise NotImplementedError("Pytorch with CUDA is not supported on Windows.")
+        raise NotImplementedError("PyTorch multiprocessing with CUDA is not supported on Windows.")
     return args
 
 def import_task(task_name : str):
@@ -91,6 +93,13 @@ def create_evolver(evolver_name, population_size):
             F = 0.2,
             Cr = 0.8,
             constraint='reflect')
+    if evolver_name == 'lshade':
+        return LSHADE(
+            population_size = population_size,
+            MAX_NFE=population_size * (args.end_steps / args.steps),
+            r_arc=2.0,
+            p=0.2,
+            memory_size=5)
     else:
         raise NotImplementedError(f"Your evolver request '{evolver_name}'' is not available.")
 
@@ -108,8 +117,7 @@ if __name__ == "__main__":
     task = import_task(args.task)
     # prepare database
     print(f"Preparing database...")
-    database = SharedDatabase(
-        context=torch.multiprocessing.get_context('spawn'),
+    database = Database(
         directory_path = f"{args.directory}/{task.name}/{args.evolver}",
         read_function=torch.load,
         write_function=torch.save)
@@ -124,9 +132,12 @@ if __name__ == "__main__":
         f"Evolver: {args.evolver}",
         f"Database path: {database.path}",
         f"Population size: {args.population_size}",
-        f"Hyper-parameters: {len(task.hyper_parameters)} {task.hyper_parameters.names()}",
+        f"Hyper-parameters: {len(task.hyper_parameters)} {task.hyper_parameters.keys()}",
         f"Batch size: {args.batch_size}",
         f"Step size: {args.steps}",
+        f"End steps: {args.end_steps}",
+        f"End score: {args.end_score}",
+        f"Syncronized: {args.syncronized}",
         f"Training set length: {len(task.train_data)}",
         f"Evaluation set length: {len(task.eval_data)}",
         f"Testing set length: {len(task.test_data)}",
@@ -174,7 +185,7 @@ if __name__ == "__main__":
     # create controller
     print(f"Creating controller...")
     controller = Controller(
-        population_size=args.population_size,
+        context = torch.multiprocessing.get_context('spawn'),
         hyper_parameters=task.hyper_parameters,
         trainer=TRAINER,
         evaluator=EVALUATOR,
@@ -186,7 +197,7 @@ if __name__ == "__main__":
         database=database,
         step_size=args.steps,
         evolve_frequency=args.steps,
-        end_criteria={'steps': args.steps * 100, 'score': 100.0},
+        end_criteria={'steps': args.end_steps, 'score': args.end_score},
         detect_NaN=args.detect_NaN,
         device=args.device,
         tensorboard_writer=tensorboard_writer,
@@ -194,7 +205,7 @@ if __name__ == "__main__":
         logging=args.logging)
     # run controller
     print(f"Starting controller...")
-    controller.start()
+    controller.start(synchronized=args.syncronized)
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database)
@@ -208,18 +219,13 @@ if __name__ == "__main__":
     analyzer.create_hyper_parameter_single_plot_files(
         save_directory=database.create_folder("results/plots/hyper_parameters"),
         sensitivity=4)
-    N_TEST_MEMBER_LIMIT = 50
-    print(f"Testing the top {N_TEST_MEMBER_LIMIT} members on the test set of {len(task.test_data)} samples...")
-    TESTED_CHECKPOINTS = analyzer.test(evaluator=TESTER, limit=N_TEST_MEMBER_LIMIT)
-    for checkpoint in TESTED_CHECKPOINTS:
-        database.update(checkpoint.id, checkpoint.steps, checkpoint, ignore_exception=True)
-    if task.loss_functions[task.eval_metric].minimize:  
-        BEST_CHECKPOINT = min(TESTED_CHECKPOINTS, key=lambda c: c.loss['test'][task.eval_metric])
-    else:
-        BEST_CHECKPOINT = max(TESTED_CHECKPOINTS, key=lambda c: c.loss['test'][task.eval_metric])
-    RESULT = f"Best checkpoint: {BEST_CHECKPOINT}"
-    with database.create_file("results", "top_members.txt").open('a+') as f:
-        f.write(f"{RESULT}\n\n")
-        for checkpoint in TESTED_CHECKPOINTS:
-            f.write(str(checkpoint) + "\n")
-    print(RESULT)
+    print(f"Testing the top {args.test_limit} members on the test set of {len(task.test_data)} samples...")
+    tested_checkpoints = analyzer.test(
+        evaluator=TESTER,
+        save_directory=database.create_file("results", "top_members.txt"),
+        limit=args.test_limit,
+        verbose=True)
+    print("Updating database with results...")
+    for checkpoint in tested_checkpoints:
+        database.update(checkpoint.id, checkpoint.steps, checkpoint)
+    print("Program completed! You can now exit if needed.")

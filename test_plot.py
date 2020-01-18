@@ -1,6 +1,6 @@
 import math
 import random
-from utils.math import reflect
+from utils.constraint import reflect
 
 min_value = 0
 max_value = 100

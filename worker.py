@@ -1,20 +1,34 @@
 import torch
 import time
+import random
+import numpy
+import uuid
+
+# set random state for reproducibility
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 mp = torch.multiprocessing.get_context('spawn')
 
 class Worker(mp.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, end_event, evolve_queue, train_queue, trainer, evaluator):
+    def __init__(self, id, end_event_global, end_event_private, evolve_queue, train_queue, trainer, evaluator, random_seed = 0):
         super().__init__()
-        self.end_event = end_event
+        self.id = id
+        self.end_event_global = end_event_global
+        self.end_event_private = end_event_private
         self.evolve_queue = evolve_queue
         self.train_queue = train_queue
         self.trainer = trainer
         self.evaluator = evaluator
+        # set random state for reproducibility
+        random.seed(random_seed)
+        numpy.random.seed(random_seed)
+        torch.manual_seed(random_seed)
 
     def run(self):
-        while not self.end_event.is_set():
+        print(f"Worker {self.id} is running...")
+        while not self.end_event_global.is_set() and not self.end_event_private.is_set():
             if self.train_queue.empty():
                 continue
             # get next checkpoint from train queue
@@ -34,3 +48,5 @@ class Worker(mp.Process):
             checkpoint.loss['eval'] = self.evaluator.eval(checkpoint.model_state)
             checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
             self.evolve_queue.put(checkpoint)
+        print(f"Worker {self.id} has stopped.")
+        self.terminate()

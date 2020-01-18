@@ -8,7 +8,7 @@ from pathlib import Path
 from database import ReadOnlyDatabase
 from evaluator import Evaluator
 from hyperparameters import Hyperparameter, Hyperparameters
-from utils.math import clip
+from utils.constraint import clip
 from utils.iterable import flatten_dict
 
 class Analyzer(object):
@@ -30,14 +30,29 @@ class Analyzer(object):
                     checkpoint_progression[entry_id][attribute] += [value]
         return checkpoint_progression
 
-    def test(self, evaluator : Evaluator, limit = None, verbose = False):
-        entries = list()
-        for entry in itertools.islice(sorted(self.database, key=lambda e: e.score(), reverse=True), 0, limit):
-            print(f"Testing {entry}...", end=" ")
+    def test(self, evaluator : Evaluator, save_directory, limit = None, verbose = False):
+        tested_subjects = list()
+        minimize = next(iter(self.database)).minimize
+        subjects = sorted(self.database, reverse=True)[:limit]
+        for index, entry in enumerate(subjects, start=1):
+            if verbose: print(f"({index}/{len(subjects)}) Testing {entry}...", end=" ")
             entry.loss['test'] = evaluator.eval(entry.model_state)
-            entries.append(entry)
-            print("completed.")
-        return entries
+            tested_subjects.append(entry)
+            if verbose:
+                for metric_type, metric_value in entry.loss['test'].items():
+                    print(f"{metric_type}: {metric_value:4f}", end=" ")
+                print(end="\n")
+        # determine best checkpoint
+        sort_method = min if minimize else max
+        best_checkpoint = sort_method(tested_subjects, key=lambda c: c.test_score())
+        result = f"Best checkpoint: {best_checkpoint}: {best_checkpoint.performance_details()}"
+        # save top members to file
+        with Path(save_directory).open('a+') as f:
+            f.write(f"{result}\n\n")
+            for checkpoint in tested_subjects:
+                f.write(str(checkpoint) + "\n")
+        if verbose: print(result)
+        return tested_subjects
 
     def create_statistics(self, save_directory):
         population_entries = self.database.to_dict()
@@ -56,7 +71,7 @@ class Analyzer(object):
                     total_key = f"time_{time_type}_total"
                     if max_key not in summary or time_value > summary[max_key]:
                         summary[max_key] = time_value
-                    if min_key not in summary or time_value > summary[min_key]:
+                    if min_key not in summary or time_value < summary[min_key]:
                         summary[min_key] = time_value
                     if avg_key not in summary:
                         summary[avg_key] = time_value / summary['num_entries']
@@ -73,7 +88,7 @@ class Analyzer(object):
                         avg_key = f"loss_{loss_group}_{loss_type}_avg"
                         if max_key not in summary or loss_value > summary[max_key]:
                             summary[max_key] = loss_value
-                        if min_key not in summary or loss_value > summary[min_key]:
+                        if min_key not in summary or loss_value < summary[min_key]:
                             summary[min_key] = loss_value
                         if avg_key not in summary:
                             summary[avg_key] = loss_value / summary['num_entries']
@@ -176,7 +191,7 @@ class Analyzer(object):
                 max_score = max(scores)
                 # plot markers first
                 for step, parameter_value, score in zip(steps, parameter_values, scores):
-                    score_decimal = (score - min_score) / (max_score - min_score)
+                    score_decimal = (score - min_score) / (max_score - min_score + 1e-7)
                     color = color_map(score_decimal ** sensitivity)
                     marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
                     # plot

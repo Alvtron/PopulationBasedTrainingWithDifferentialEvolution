@@ -8,10 +8,11 @@ class HyperNet(nn.Module):
 
     @abstractstaticmethod
     def create_hyper_parameters():
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def apply_hyper_parameters(self, hyper_parameters, device):
-        raise NotImplementedError()
+        pass
     
     def forward(self, x):
         raise NotImplementedError()
@@ -54,9 +55,9 @@ class FraudNet(HyperNet):
             x = module(x)
         return x
 
-class MnistNet1(HyperNet):
+class MnistNet10(HyperNet):
     def __init__(self):
-        super(MnistNet1, self).__init__()
+        super(MnistNet10, self).__init__()
         self.conv_1 = nn.Conv2d(1, 10, kernel_size=5)
         self.max_pool_1 = nn.MaxPool2d(kernel_size=2)
         self.prelu_1 = nn.PReLU()
@@ -94,9 +95,9 @@ class MnistNet1(HyperNet):
             x = module(x)
         return x
 
-class MnistNet2(HyperNet):
+class MnistNet62(HyperNet):
     def __init__(self):
-        super(MnistNet2, self).__init__()
+        super(MnistNet62, self).__init__()
         self.conv_1 = nn.Conv2d(1, 32, kernel_size=5)
         self.max_pool_1 = nn.MaxPool2d(kernel_size=2)
         self.prelu_1 = nn.PReLU()
@@ -143,9 +144,9 @@ class MnistNet2(HyperNet):
             x = module(x)
         return x
 
-class MnistNet3(HyperNet):
+class MnistNet10Large(HyperNet):
     def __init__(self):
-        super(MnistNet3, self).__init__()
+        super(MnistNet10Large, self).__init__()
         self.conv_1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
         self.batch_norm_1 = nn.BatchNorm2d(32)
         self.prelu_1 = nn.PReLU()
