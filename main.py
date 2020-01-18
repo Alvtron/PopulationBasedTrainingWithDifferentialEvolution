@@ -24,7 +24,7 @@ torch.backends.cudnn.benchmark = False
 def import_arguments():
     parser = argparse.ArgumentParser(description="Population Based Training")
     parser.add_argument("--task", type=str, default='mnist', help="Select tasks from 'mnist', 'creditfraud'.")
-    parser.add_argument("--evolver", type=str, default='lshade', help="Select which evolve algorithm to use.")
+    parser.add_argument("--evolver", type=str, default='pbt', help="Select which evolve algorithm to use.")
     parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population. Default: 5.")
     parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--steps", type=int, default=100, help="Number of steps to train each training process.")

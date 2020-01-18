@@ -29,10 +29,11 @@ class Worker(mp.Process):
     def run(self):
         print(f"Worker {self.id} is running...")
         while not self.end_event_global.is_set() and not self.end_event_private.is_set():
-            if self.train_queue.empty():
-                continue
             # get next checkpoint from train queue
             checkpoint = self.train_queue.get()
+            if checkpoint is None:
+                del checkpoint
+                break
             # train checkpoint model
             start_train_time_ns = time.time_ns()
             checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = self.trainer.train(
@@ -48,5 +49,6 @@ class Worker(mp.Process):
             checkpoint.loss['eval'] = self.evaluator.eval(checkpoint.model_state)
             checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
             self.evolve_queue.put(checkpoint)
+            # release memory
+            del checkpoint
         print(f"Worker {self.id} has stopped.")
-        self.terminate()

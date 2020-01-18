@@ -22,7 +22,10 @@ from evolution import EvolveEngine
 from database import Database
 from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
-from multiprocessing.context import BaseContext, Process
+from torch.multiprocessing import Process
+from multiprocessing.context import BaseContext
+
+STOP_FLAG = None
 
 class Controller(object):
     def __init__(
@@ -72,25 +75,24 @@ class Controller(object):
         if self.generations > 0 and member.id not in self.evolver.population:
             self.__log_member(member, "removed from population.")
             self.finish_queue.put(member)
-            self.delete_workers(k=1)
+            self.stop_workers(k=1)
         # Save entry to population (in memory). This replaces the old entry.
         else:
             self.evolver.population[member.id] = member
         # Save entry to database directory.
         self.database.update(member.id, member.steps, member)
 
-    def delete_workers(self, k : int = None):
+    def stop_workers(self, k : int = None):
         if not k:
-            selected_workers = self.__workers
+            k = len(self.__workers)
         elif isinstance(k, int) and 0 < k < len(self.__workers):
-            selected_workers = self.__workers[:k]
+            k = k
         else:
             raise IndexError()
-        for worker in selected_workers:
-            self.__log(f"Setting end event for worker {worker.uid}")
-            worker.end_event_private.set()
+        for _ in range(k):
+            self.train_queue.put(STOP_FLAG)
 
-    def create_workers(self, k, start_id = 0):
+    def create_workers(self, k):
         return [
             Worker(
                 id=id,
@@ -100,7 +102,7 @@ class Controller(object):
                 evaluator=self.evaluator,
                 evolve_queue=self.evolve_queue,
                 train_queue=self.train_queue)
-            for id in range(k+start_id, start=start_id)]
+            for id in range(k)]
 
     def save_objective_info(self):
         parameters = {
@@ -284,11 +286,12 @@ class Controller(object):
         except KeyboardInterrupt:
             self.__log("controller was interupted.")
         finally:
-            self.__log("terminating all left-over worker-processes...")
+            self.__log("sending stop signal to the remaining worker processes...")
             for worker in self.__workers:
-                if isinstance(worker, Process):
-                    worker.terminate()
-                else: continue
+                self.train_queue.put(STOP_FLAG)
+            self.__log("waiting for all worker processes to finish...")
+            for worker in self.__workers:
+                worker.join()
             self.__log("termination was successfull!")
 
     def train_asynchronous(self):
