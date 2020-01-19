@@ -35,6 +35,9 @@ class Analyzer(object):
         minimize = next(iter(self.database)).minimize
         subjects = sorted(self.database, reverse=True)[:limit]
         for index, entry in enumerate(subjects, start=1):
+            if not entry.model_state or not entry.optimizer_state:
+                if verbose: print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model- or optimizer state.")
+                continue
             if verbose: print(f"({index}/{len(subjects)}) Testing {entry}...", end=" ")
             entry.loss['test'] = evaluator.eval(entry.model_state)
             tested_subjects.append(entry)
@@ -102,7 +105,7 @@ class Analyzer(object):
                     file.write(info + "\n")
 
     def create_plot_files(self, save_directory):
-        exclude_attributes = ['steps','epochs','hyper_parameters']
+        exclude_attributes = {'steps','epochs','hyper_parameters'}
         progression_dict = self.create_progression_dict()
         attributes = next(iter(progression_dict.values())).keys()
         for attribute in attributes:
@@ -121,55 +124,28 @@ class Analyzer(object):
             plt.savefig(fname=Path(save_directory, f"{attribute}_plot.svg"), format='svg', transparent=True)
             plt.clf()
 
-    def create_hyper_parameter_single_plot_files(self, save_directory, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 10):
-        # get color map
-        color_map_key = "rainbow_r"
-        color_map = plt.get_cmap(color_map_key)
-        # get population data
-        progression_dict = self.create_progression_dict()
-        # get objective data
-        objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
-        hyper_parameters = objective_info['hyper_parameters']
-        eval_metric = objective_info['eval_metric']
-        for param_name in hyper_parameters:
-            figure = plt.figure()
-            plt.title(param_name)
-            plt.ylim(bottom=0.0, top=1.0, auto=False)
-            plt.xlabel('steps')
-            plt.ylabel('value')
-            for id in progression_dict:
-                steps = [step for step in progression_dict[id]['steps']]
-                parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
-                scores = [score for score in progression_dict[id][f"loss_eval_{eval_metric}"]]
-                min_score = min(scores)
-                max_score = max(scores)
-                # plot markers first
-                for step, parameter_value, score in zip(steps, parameter_values, scores):
-                    score_decimal = (score - min_score + 1e-7) / (max_score - min_score + 1e-7)
-                    color = color_map(score_decimal ** sensitivity)
-                    marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
-                    # plot
-                    plt.plot(step, parameter_value, marker, markersize=marker_size, color=color)
-                    if annotate: plt.annotate(f"{score:.2f}", (step, parameter_value))
-                # plot lines last
-                plt.plot(steps, parameter_values, label=f"m_{id}")
-            # legend
-            figure.legend()
-            # save figures to directory
-            plt.savefig(fname=Path(save_directory, f"{param_name.replace('/', '_')}_plot.png"), format='png', transparent=False)
-            plt.savefig(fname=Path(save_directory, f"{param_name.replace('/', '_')}_plot.svg"), format='svg', transparent=True)
-            # clear current figure and axes
-            plt.clf()
-
-    def create_hyper_parameter_multi_plot_files(self, save_directory, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 10):
+    def create_hyper_parameter_plot_files(self, save_directory, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 8):
         # get objective data
         objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
         population_size = objective_info['population_size']
         hyper_parameters = objective_info['hyper_parameters']
-        eval_metric = objective_info['eval_metric']
         n_hyper_parameters = len(hyper_parameters)
-        # get population data
-        progression_dict = self.create_progression_dict()
+        # get entries
+        population_entries = self.database.to_dict()
+        best_entries = dict()
+        worst_entries = dict()
+        best_score = None
+        worst_score = None
+        for entries in population_entries.values():
+            for entry in entries.values():
+                if entry.steps not in best_entries or entry > best_entries[entry.steps]:
+                    best_entries[entry.steps] = entry
+                    if not best_score or entry > best_score:
+                        best_score = entry.score()
+                if entry.steps not in worst_entries or entry < worst_entries[entry.steps]:
+                    worst_entries[entry.steps] = entry
+                    if not worst_score or entry < worst_score:
+                        worst_score = entry.score()
         # get color map
         color_map_key = "rainbow_r"
         color_map = plt.get_cmap(color_map_key)
@@ -177,38 +153,38 @@ class Analyzer(object):
         n_rows = round(math.sqrt(n_hyper_parameters))
         n_columns = math.ceil(n_hyper_parameters / n_rows)
         # create sub-plots and axes
-        figure, axes = plt.subplots(n_rows, n_columns, sharex=True, figsize=(10,10))
-        for param_index, param_name in enumerate(hyper_parameters):
-            ax = axes.flat[param_index]
-            ax.set_title(param_name)
-            ax.set_ylim(bottom=0.0, top=1.0, auto=False)
-            ax.set(xlabel='steps', ylabel='value')
-            for id in progression_dict:
-                steps = [step for step in progression_dict[id]['steps']]
-                parameter_values = [hp[param_name].normalized for hp in progression_dict[id]['hyper_parameters']]
-                scores = [score for score in progression_dict[id][f"loss_eval_{eval_metric}"]]
-                min_score = min(scores)
-                max_score = max(scores)
-                # plot markers first
-                for step, parameter_value, score in zip(steps, parameter_values, scores):
-                    score_decimal = (score - min_score + 1e-7) / (max_score - min_score + 1e-7)
-                    color = color_map(score_decimal ** sensitivity)
-                    marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
-                    # plot
-                    ax.plot(step, parameter_value, marker, markersize=marker_size, color=color)
-                    if annotate: ax.annotate(f"{score:.2f}", (step, parameter_value))
-                # plot lines last
-                ax.plot(steps, parameter_values, label=f"m_{id}")
+        figure, axes = plt.subplots(n_rows, n_columns, sharex=True, figsize=(12,12))
         # delete unused axes
         n_unused = len(axes.flat) - n_hyper_parameters
         if n_unused > 0:
             for ax in axes.flat[-n_unused:]:
                 ax.remove()
+        # plot hyper-parameters
+        for entries in population_entries.values():
+            for entry in entries.values():
+                score_decimal = (entry.score() - worst_score + 1e-7) / (best_score - worst_score + 1e-7)
+                color = color_map(score_decimal ** sensitivity)
+                marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
+                for ax, param_name in zip(axes.flat, hyper_parameters):
+                    ax.plot(entry.steps, entry.hyper_parameters[param_name].normalized, marker, markersize=marker_size, color=color)
+                    if annotate: plt.annotate(f"{entry.score():.2f}", (entry.steps, entry.hyper_parameters[param_name].normalized))
+        # plot best and worst scores
+        for ax, param_name in zip(axes.flat, hyper_parameters):
+            ax.set_title(param_name)
+            ax.set_ylim(bottom=0.0, top=1.0, auto=False)
+            ax.set(xlabel='steps', ylabel='value')
+            ax.set_aspect('auto')
+            x, y = zip(*sorted(best_entries.items()))
+            y = [e.hyper_parameters[param_name].normalized for e in y]
+            ax.plot(x, y, label="best score", color="orange")
+            x, y = zip(*sorted(worst_entries.items()))
+            y = [e.hyper_parameters[param_name].normalized for e in y]
+            ax.plot(x, y, label="worst score", color="red")
         # legend
         handles, labels = ax.get_legend_handles_labels()
         figure.legend(handles, labels, loc='lower center', ncol=int(population_size/2))
         # save figures to directory
-        plt.savefig(fname=Path(save_directory, "multi_plot.png"), format='png', transparent=False)
-        plt.savefig(fname=Path(save_directory, "multi_plot.svg"), format='svg', transparent=True)
+        plt.savefig(fname=Path(save_directory, "hyper_parameter_plot.png"), format='png', transparent=False)
+        plt.savefig(fname=Path(save_directory, "hyper_parameter_multi_plot.svg"), format='svg', transparent=True)
         # clear current figure and axes
         plt.clf()

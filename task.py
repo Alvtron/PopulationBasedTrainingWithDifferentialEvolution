@@ -11,7 +11,7 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset
 from hyperparameters import Hyperparameter, Hyperparameters
 from loss import F1, NLL, Accuracy, BinaryCrossEntropy, CategoricalCrossEntropy
-from models import HyperNet, FraudNet, MnistNet10, MnistNet62, MnistNet10Large
+from models import HyperNet, FraudNet, MnistNet10, MnistNet10Larger, MnistNet10Largest
 from utils.data import random_split, stratified_split
 
 @dataclass
@@ -30,7 +30,7 @@ class Task(object):
 class Mnist(Task):
     def __init__(self):
         classes = 10
-        model_class = MnistNet10
+        model_class = MnistNet10Larger
         optimizer_class = torch.optim.SGD
         loss_metric = 'cce'
         eval_metric = 'acc'

@@ -7,13 +7,11 @@ from database import ReadOnlyDatabase
 
 statistics_save_directory = Path("test/analyzer/statistics")
 plot_save_directory = Path("test/analyzer/plots")
-hp_plot_save_directory = Path("test/analyzer/plots/hp_plots")
 shutil.rmtree("test/analyzer", ignore_errors=True)
 statistics_save_directory.mkdir(exist_ok=True, parents=True)
 plot_save_directory.mkdir(exist_ok=True, parents=True)
-hp_plot_save_directory.mkdir(exist_ok=True, parents=True)
 database = ReadOnlyDatabase(
-    database_path=Path("checkpoints/fashionmnist/de/20200114103410"),
+    database_path=Path("checkpoints/mnist/pbt/20200119140535"),
     read_function=torch.load)
 analyzer = Analyzer(database)
 print(f"Database consists of {len(database)} entries.")
@@ -22,14 +20,8 @@ analyzer.create_statistics(save_directory=statistics_save_directory)
 print("create_plot_files...", end =" ")
 analyzer.create_plot_files(save_directory=plot_save_directory)
 print("done!")
-print("create_hyper_parameter_single_plot_files...", end =" ")
-analyzer.create_hyper_parameter_single_plot_files(
-    save_directory=hp_plot_save_directory,
-    sensitivity=4)
-print("done!")
-print("create_hyper_parameter_multi_plot_files...", end =" ")
-analyzer.create_hyper_parameter_multi_plot_files(
-    save_directory=hp_plot_save_directory,
-    sensitivity=4)
-print("done!")
+print("create_hyper_parameter_multi_plot_files...")
+analyzer.create_hyper_parameter_plot_files(
+    save_directory=plot_save_directory,
+    sensitivity=20)
 print("Analyze completed.")

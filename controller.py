@@ -1,10 +1,8 @@
 import os
 import math
-import operator
 import random
 import pickle
 import copy
-import argparse
 import time
 import torch
 import torchvision
@@ -33,8 +31,8 @@ class Controller(object):
             trainer : Trainer, evaluator : Evaluator, tester : Evaluator, evolver : EvolveEngine,
             loss_metric : str, eval_metric : str, loss_functions : dict, database : Database,
             step_size = 1, evolve_frequency : int = 5, end_criteria : dict = {'score': 100.0}, eval_steps=1,
-            tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False,
-            device : str = 'cpu', verbose : bool = True, logging : bool = True):
+            tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False, history_limit : int = None,
+            device : str = 'cpu', n_jobs : int = -1, verbose : int = 1, logging : bool = True):
         assert evolve_frequency and evolve_frequency > 0, f"Frequency must be of type {int} and 1 or higher."
         self.hyper_parameters = hyper_parameters
         self.trainer = trainer
@@ -51,6 +49,7 @@ class Controller(object):
         self.eval_steps = eval_steps
         self.detect_NaN = detect_NaN
         self.device = device
+        self.n_jobs = n_jobs
         self.verbose = verbose
         self.logging = logging
         self.generations = 0
@@ -62,17 +61,42 @@ class Controller(object):
         self.evolve_queue = self.context.Queue()
         self.finish_queue = self.context.Queue()
         self.__workers = []
+        self.__n_active_workers = 0
+        self.history_limit = history_limit
+        self.scoreboard = dict()
         self.__tensorboard_writer = tensorboard_writer
         # TODO: implement save and load function for controller
         self.save_objective_info()
 
-    def is_removed(self, member: Checkpoint):
-        """Finds out if the member in question is removed from the population"""
-        return self.generations > 0 and member.id not in self.evolver.population
+    def __print(self, message : str):
+        """Prints the provided controller message in the appropriate syntax."""
+        controller_name = self.__class__.__name__
+        time = get_datetime_string()
+        full_message = f"{time} (G{self.generations:03d}) {controller_name}: {message}"
+        print(full_message)
 
-    def stop_member(self, member : Checkpoint):
-        self.finish_queue.put(member)
-        self.stop_workers(k=1)
+    def __say(self, message : str):
+        """Prints the provided controller message in the appropriate syntax if verbosity level is above 0."""
+        if self.verbose > 0: self.__print(message)
+
+    def __whisper(self, message : str):
+        """Prints the provided controller message in the appropriate syntax if verbosity level is above 1."""
+        if self.verbose > 1: self.__print(message)
+
+    def __log(self, member : Checkpoint, message : str, verbose=True):
+        """Logs and prints the provided member message in the appropriate syntax."""
+        time = get_datetime_string()
+        full_message = f"{time} (G{self.generations:03d}) {member}: {message}"
+        if self.logging:
+            with self.database.create_file(tag='logs', file_name=f"{member.id:03d}_log.txt").open('a+') as file:
+                file.write(full_message + '\n')
+        if verbose and self.verbose > 0:
+            print(full_message)
+        if self.__tensorboard_writer:
+            self.__tensorboard_writer.add_text(tag=f"member_{member.id:03d}", text_string=full_message, global_step=member.steps)
+
+    def __log_silent(self, member : Checkpoint, message : str):
+        self.__log(member, message, verbose=self.verbose > 1)
 
     def update_population(self, member : Checkpoint):
         """
@@ -83,6 +107,44 @@ class Controller(object):
         self.evolver.population[member.id] = member
         # Save entry to database directory.
         self.database.update(member.id, member.steps, member)
+        # save score to history
+        self.scoreboard[(member.id, member.steps)] = member.score()
+
+    def garbage_collection(self):
+        if not self.history_limit or not self.scoreboard:
+            return
+        excess = len(self.scoreboard) - self.history_limit
+        if excess < 1:
+            return
+        minimize = self.loss_functions[self.eval_metric].minimize
+        worst_entries = sorted(self.scoreboard.items(), key=lambda x: x[1], reverse=minimize)
+        excess_entries = worst_entries[:excess]
+        for (id, steps), _ in excess_entries:
+            self.__whisper(f"deleting the model and optimizer state from member {id} at step {steps} ...")
+            del self.scoreboard[(id, steps)]
+            entry = self.database.entry(id, steps)
+            entry.model_state = None
+            entry.optimizer_state = None
+            self.database.update(id, steps, entry)
+
+    def is_removed(self, member: Checkpoint):
+        """Finds out if the member in question is removed from the population"""
+        return self.generations > 0 and member.id not in self.evolver.population
+
+    def stop_member(self, member : Checkpoint):
+        self.finish_queue.put(member)
+        self.adjust_workers_size()
+        
+    def adjust_workers_size(self):
+        delta_size = self.__n_active_workers - self.evolver.population_size
+        # adjust down if number of active workers is higher than the population size
+        if delta_size > 0:
+            self.stop_workers(k=delta_size)
+        # adjust up if number of active workers is lower than the population size
+        # and if adjustment does not exceed n_jobs
+        elif delta_size < 0:
+            new_size = min(abs(delta_size) + self.__n_active_workers, self.n_jobs)
+            self.spawn_workers(k=new_size - self.__n_active_workers)
 
     def stop_workers(self, k : int = None):
         if not k:
@@ -93,17 +155,19 @@ class Controller(object):
             raise IndexError()
         for _ in range(k):
             self.train_queue.put(STOP_FLAG)
+        self.__n_active_workers -= k
 
     def create_workers(self, k):
         return [
             Worker(
                 id=id,
                 end_event_global=self.end_event,
-                end_event_private=self.context.Event(),
                 trainer=self.trainer,
                 evaluator=self.evaluator,
                 evolve_queue=self.evolve_queue,
-                train_queue=self.train_queue)
+                train_queue=self.train_queue,
+                random_seed=id,
+                verbose=self.verbose > 1)
             for id in range(k)]
 
     def save_objective_info(self):
@@ -121,28 +185,6 @@ class Controller(object):
         }
         pickle.dump(parameters, self.database.create_file("info", "parameters.obj").open("wb"))
 
-    def __log(self, message : str):
-        """Logs and prints the provided controller message in the appropriate syntax."""
-        controller_name = self.__class__.__name__
-        time = get_datetime_string()
-        full_message = f"{time} (G{self.generations:03d}) {controller_name}: {message}"
-        if self.logging:
-            with self.database.create_file(tag='logs', file_name=f"{controller_name}_log.txt").open('a+') as file:
-                file.write(full_message + '\n')
-        if self.verbose:
-            print(full_message)
-
-    def __log_member(self, member : Checkpoint, message : str):
-        """Logs and prints the provided member message in the appropriate syntax."""
-        time = get_datetime_string()
-        full_message = f"{time} (G{self.generations:03d}) {member}: {message}"
-        if self.logging:
-            with self.database.create_file(tag='logs', file_name=f"{member.id:03d}_log.txt").open('a+') as file:
-                file.write(full_message + '\n')
-        if self.verbose:
-            print(full_message)
-        if self.__tensorboard_writer:
-            self.__tensorboard_writer.add_text(tag=f"member_{member.id:03d}", text_string=full_message, global_step=member.steps)
 
     def __write_to_tensorboard(self, member : Checkpoint):
         """Plots member data to tensorboard"""
@@ -189,13 +231,15 @@ class Controller(object):
             return False
         return member.score() >= self.end_criteria['score']
 
-    def spawn_workers(self):
-        """Spawn a worker process for every member in the population."""  
-        self.__workers = self.create_workers(self.evolver.population_size)
+    def spawn_workers(self, k):
+        """Spawn a worker process for every member in the population."""
+        new_workers = self.create_workers(k)
         # Starting workers
-        for index, worker in enumerate(self.__workers, start=1):
-            self.__log(f"starting worker {index}/{len(self.__workers)}")
+        for index, worker in enumerate(new_workers, start=1):
+            self.__whisper(f"starting worker {index}/{len(new_workers)}")
             worker.start()
+        self.__n_active_workers += k
+        self.__workers += new_workers
 
     def create_member(self, id):
         """Create a member object"""
@@ -221,7 +265,7 @@ class Controller(object):
         """Queue members for training."""
         for index, member in enumerate(members, start=1):
             self.train_queue.put(member)
-            self.__log(f"queued member {index}/{len(members)} for training...")
+            self.__whisper(f"queued member {index}/{len(members)} for training...")
 
     def has_NaN_value(self, member : Checkpoint):
         """Returns True if the member has NaN values for its loss_metric or eval_metric."""
@@ -235,14 +279,14 @@ class Controller(object):
         Handle member with NaN loss. Depending on the active population size,
         generate a new member start-object or sample one from the population.
         """
-        self.__log_member(member, "NaN metric detected.")
+        self.__log_silent(member, "NaN metric detected.")
         population = list(c for c in self.evolver.population.values() if member.id != c.id)
         if 0 == len(population) or len(population) < self.evolver.population_size - 1:
-            self.__log_member(member, "population is not full. Creating new member.")
+            self.__log_silent(member, "population is not full. Creating new member.")
             member = self.create_member(member.id)
         else:
             random_member = random.choice(population)
-            self.__log_member(member, f"replacing with existing member {random_member.id}")
+            self.__log_silent(member, f"replacing with existing member {random_member.id}")
             member.update(random_member)
 
     def eval_function(self, trial : Checkpoint):
@@ -267,13 +311,14 @@ class Controller(object):
         Creates worker-processes for training and evaluation.
         Creates, prepares and queue member-objects for training.
         """
-        self.__log("creating initial members member objects...")
+        self.__whisper("creating initial members member objects...")
         members = self.create_members(self.evolver.population_size)
-        self.__log("on evolver initialization")
-        self.evolver.on_initialization(members, self.__log)
-        self.__log("creating worker processes...")
-        self.spawn_workers()
-        self.__log("queuing member members...")
+        self.__whisper("on evolver initialization")
+        self.evolver.on_initialization(members, self.__log_silent)
+        self.__whisper("creating worker processes...")
+        n_workers = self.n_jobs if 0 < self.n_jobs <= self.evolver.population_size else self.evolver.population_size
+        self.spawn_workers(n_workers)
+        self.__whisper("queuing member members...")
         self.queue_members(members.values())
 
     def start(self, synchronized : bool = True):
@@ -282,19 +327,20 @@ class Controller(object):
         """
         try:
             # start controller loop
+            self.__say("Starting training procedure...")
             self.train_synchronously() if synchronized else self.train_asynchronous()
             # terminate worker processes
-            self.__log("controller is finished.")
+            self.__say("controller is finished.")
         except KeyboardInterrupt:
-            self.__log("controller was interupted.")
+            self.__say("controller was interupted.")
         finally:
-            self.__log("sending stop signal to the remaining worker processes...")
+            self.__whisper("sending stop signal to the remaining worker processes...")
             for worker in self.__workers:
                 self.train_queue.put(STOP_FLAG)
-            self.__log("waiting for all worker processes to finish...")
+            self.__whisper("waiting for all worker processes to finish...")
             for worker in self.__workers:
                 worker.join()
-            self.__log("termination was successfull!")
+            self.__whisper("termination was successfull!")
 
     def train_asynchronous(self):
         """
@@ -308,30 +354,33 @@ class Controller(object):
         self.start_training_procedure()
         while not self.end_event.is_set():
             # prepare generation with evolver
-            self.__log("on generation start")
-            self.evolver.on_generation_start(self.__log)
+            self.__whisper("on generation start")
+            self.evolver.on_generation_start(self.__log_silent)
             iterations = 0
             while iterations < self.evolver.population_size:
                 # get next member
-                self.__log("awaiting next trained member...")
+                self.__whisper("awaiting next trained member...")
                 member = self.evolve_queue.get()
-                if member is None:
+                if member is STOP_FLAG:
                     return
                 # check if member is removed from population
                 if self.is_removed(member):
-                    self.__log_member(member, "removed from the population.")
+                    self.__log_silent(member, "removed from the population.")
                     self.stop_member(member)
                     continue
-                self.__log(f"queue size: {self.evolve_queue.qsize()}")
+                self.__whisper(f"queue size: {self.evolve_queue.qsize()}")
                 # update member in population/database
-                self.__log_member(member, "updating in population/database...")
+                self.__log_silent(member, "updating in population/database...")
                 self.update_population(member)
                 # process member
                 self.process_member(member)
                 iterations += 1
             # process generation with evolver
-            self.__log("on generation end")
-            self.evolver.on_generation_end(self.__log)
+            self.__whisper("on generation end")
+            self.evolver.on_generation_end(self.__log_silent)
+            # perform garbage collection
+            self.__whisper("performing garbage collection...")
+            self.garbage_collection()
             self.generations += 1
 
     def train_synchronously(self):
@@ -346,43 +395,46 @@ class Controller(object):
             retrieved_members = 0
             while retrieved_members < self.evolver.population_size:
                 # get next member
-                self.__log("awaiting next trained member...")
+                self.__whisper("awaiting next trained member...")
                 member = self.evolve_queue.get()
-                if member is None:
+                if member is STOP_FLAG:
                     return
                 # check if member is removed from population
                 if self.is_removed(member):
-                    self.__log_member(member, "removed from the population.")
+                    self.__log_silent(member, "removed from the population.")
                     self.stop_member(member)
                     continue
                 # update member in population/database
-                self.__log_member(member, "updating in population/database...")
+                self.__log_silent(member, "updating in population/database...")
                 self.update_population(member)
                 retrieved_members += 1
             #update population size:
-            self.__log("on generation start")
-            self.evolver.on_generation_start(self.__log)
+            self.__whisper("on generation start")
+            self.evolver.on_generation_start(self.__log_silent)
             for member in self.evolver.population.values():
                 self.process_member(member)
-            self.__log("on generation end")
-            self.evolver.on_generation_end(self.__log)
+            self.__whisper("on generation end")
+            self.evolver.on_generation_end(self.__log_silent)
+            # perform garbage collection
+            self.__whisper("performing garbage collection...")
+            self.garbage_collection()
             self.generations += 1
 
     def check_if_finished(self, member : Checkpoint):
         # check if population is finished
         if self.is_population_finished(member):
-            self.__log_member(member, "end criterium reached.")
+            self.__say(f"member {member.id} reached the end criterium.")
             self.finish_queue.put(member)
             self.evolver.population_size -= 1
             self.stop()
             return True
         # check if member is finished
         if self.is_member_finished(member):
-            self.__log_member(member, "finished.")
+            self.__log(member, "finished.")
             self.finish_queue.put(member)
             self.evolver.population_size -= 1
             if self.evolver.population_size == 0:
-                self.__log("population finished. All members have reached the end-criteria.")
+                self.__say("population finished. All members have reached the end-criteria.")
                 self.stop()
             return True
         return False
@@ -394,7 +446,7 @@ class Controller(object):
     def process_member(self, member : Checkpoint):
         """The provided member checkpoint is analyzed, validated, changed (if valid) and queued for training (if valid)."""
         # log performance
-        self.__log_member(member, member.performance_details())
+        self.__log(member, member.performance_details())
         # write to tensorboard if enabled
         if self.__tensorboard_writer:
             self.__write_to_tensorboard(member)
@@ -409,24 +461,24 @@ class Controller(object):
             return
         # check population size
         if len(self.evolver.population) < self.evolver.population_size:
-            self.__log_member(candidate, f"population is too small ({len(self.evolver.population)} < {self.evolver.population_size}). Skipping.")
+            self.__log_silent(candidate, f"population is too small ({len(self.evolver.population)} < {self.evolver.population_size}). Skipping.")
             self.train_member(candidate)
             return
         # evolve member if ready
         if self.is_member_ready(candidate):
             start_evolve_time_ns = time.time_ns()
-            self.__log_member(candidate, "evolving...")
+            self.__log_silent(candidate, "evolving...")
             trial = candidate.copy()
             trial = self.evolver.on_evolve(
                 member=trial,
-                logger=partial(self.__log_member, candidate))
-            self.__log_member(candidate, "evaluating mutant...")
+                logger=partial(self.__log_silent, candidate))
+            self.__log_silent(candidate, "evaluating mutant...")
             trial = self.evolver.on_evaluation(
                 member=candidate,
                 trial=trial,
                 eval_function=self.eval_function,
-                logger=partial(self.__log_member, candidate))
-            self.__log_member(candidate, "updating...")
+                logger=partial(self.__log_silent, candidate))
+            self.__log_silent(candidate, "updating...")
             candidate.update(trial)
             candidate.time['evolve'] = float(time.time_ns() - start_evolve_time_ns) * float(10**(-9))
         # train candidate
@@ -434,5 +486,5 @@ class Controller(object):
 
     def train_member(self, member : Checkpoint):
         """Queue the provided member checkpoint for training."""
-        self.__log_member(member, "training...")
+        self.__log_silent(member, "training...")
         self.train_queue.put(member)
