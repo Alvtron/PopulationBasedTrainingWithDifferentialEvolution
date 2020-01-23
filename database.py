@@ -4,10 +4,10 @@ import pickle
 import copy
 from pathlib import Path
 from datetime import datetime
-
+import time
 class ReadOnlyDatabase(object):
     def __init__(self, database_path, read_function=None):
-        self.ENTRY_EXT = "pth"
+        self.ENTRY_EXT = "obj"
         self.ENTRIES_TAG = 'entries'
         self.path = Path(database_path)
         # set read function
@@ -18,14 +18,14 @@ class ReadOnlyDatabase(object):
     def exists(self):
         return self.path.is_dir()
 
+    def __len__(self):
+        entries_path = Path(self.path, self.ENTRIES_TAG)
+        return len(list(entries_path.glob(f'**/*.{self.ENTRY_EXT}')))
+
     def __iter__(self):
         for directory in self.entry_directories():
             for entry in self.entries_from_path(directory):
                 yield entry
-
-    def __len__(self):
-        entries_path = Path(self.path, self.ENTRIES_TAG)
-        return len(list(entries_path.glob(f'**/*.{self.ENTRY_EXT}')))
 
     def __contains__(self, id):
         return self.create_entry_directoy_path(id).exists()
@@ -63,7 +63,7 @@ class ReadOnlyDatabase(object):
 
     def entries_from_path(self, entry_directory_path):
         """ Retrieve all entries made on the specified id. """
-        for content in entry_directory_path.iterdir():
+        for content in entry_directory_path.glob(f"*.{self.ENTRY_EXT}"):
             yield self.read(content)
 
     def to_dict(self):

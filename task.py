@@ -36,7 +36,6 @@ class Mnist(Task):
         eval_metric = 'acc'
         loss_functions = {
             'cce': CategoricalCrossEntropy(),
-            #'nll': NLL(),
             'acc': Accuracy(),
             'f1': F1(classes=classes)
         }
@@ -82,7 +81,6 @@ class FashionMnist(Task):
         eval_metric = 'acc'
         loss_functions = {
             'cce': CategoricalCrossEntropy(),
-            #'nll': NLL(),
             'acc': Accuracy(),
             'f1': F1(classes=classes)
         }
@@ -130,7 +128,6 @@ class EMnist(Task):
         eval_metric = 'acc'
         loss_functions = {
             'cce': CategoricalCrossEntropy(),
-            #'nll': NLL(),
             'acc': Accuracy(),
             'f1': F1(classes=classes)
         }

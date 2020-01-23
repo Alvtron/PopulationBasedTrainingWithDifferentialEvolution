@@ -4,6 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import random
 import pickle
 import itertools
+import numpy as np
 from pathlib import Path
 from database import ReadOnlyDatabase
 from evaluator import Evaluator
@@ -13,33 +14,19 @@ from utils.iterable import flatten_dict
 
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase):
-        self.database = database
-
-    def create_progression_dict(self):
-        attributes = {'steps','epochs','hyper_parameters','loss','time'}
-        population_entries = self.database.to_dict()
-        checkpoint_progression = dict()
-        for entry_id, entries in population_entries.items():
-            checkpoint_progression[entry_id] = dict()
-            for entry in entries.values():
-                entry_dict = { attribute: entry.__dict__[attribute] for attribute in attributes }
-                entry_dict = flatten_dict(entry_dict, exclude=['hyper_parameters'], delimiter='_')
-                for attribute, value in entry_dict.items():
-                    if not attribute in checkpoint_progression[entry_id]:
-                        checkpoint_progression[entry_id][attribute] = list()
-                    checkpoint_progression[entry_id][attribute] += [value]
-        return checkpoint_progression
+        self.database : ReadOnlyDatabase = database
 
     def test(self, evaluator : Evaluator, save_directory, limit = None, verbose = False):
         tested_subjects = list()
         minimize = next(iter(self.database)).minimize
         subjects = sorted(self.database, reverse=True)[:limit]
         for index, entry in enumerate(subjects, start=1):
-            if not entry.model_state or not entry.optimizer_state:
-                if verbose: print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model- or optimizer state.")
+            if not entry.has_model_state():
+                if verbose: print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model state.")
                 continue
+            model_state, _ = entry.load_state()
             if verbose: print(f"({index}/{len(subjects)}) Testing {entry}...", end=" ")
-            entry.loss['test'] = evaluator.eval(entry.model_state)
+            entry.loss['test'] = evaluator.eval(model_state)
             tested_subjects.append(entry)
             if verbose:
                 for metric_type, metric_value in entry.loss['test'].items():
@@ -56,6 +43,21 @@ class Analyzer(object):
                 f.write(str(checkpoint) + "\n")
         if verbose: print(result)
         return tested_subjects
+
+    def create_progression_dict(self):
+        attributes = {'steps','epochs','hyper_parameters','loss','time'}
+        population_entries = self.database.to_dict()
+        checkpoint_progression = dict()
+        for entry_id, entries in population_entries.items():
+            checkpoint_progression[entry_id] = dict()
+            for entry in entries.values():
+                entry_dict = { attribute: entry.__dict__[attribute] for attribute in attributes }
+                entry_dict = flatten_dict(entry_dict, exclude=['hyper_parameters'], delimiter='_')
+                for attribute, value in entry_dict.items():
+                    if not attribute in checkpoint_progression[entry_id]:
+                        checkpoint_progression[entry_id][attribute] = list()
+                    checkpoint_progression[entry_id][attribute] += [value]
+        return checkpoint_progression
 
     def create_statistics(self, save_directory):
         population_entries = self.database.to_dict()
@@ -116,7 +118,8 @@ class Analyzer(object):
             plt.title(attribute)
             for id in progression_dict:
                 try:
-                    plt.plot(progression_dict[id][attribute], label=f"m_{id}")
+                    data = np.array(progression_dict[id][attribute])
+                    plt.plot(data, label=f"m_{id}")
                 except KeyError:
                     continue
             plt.legend()
@@ -168,23 +171,23 @@ class Analyzer(object):
                 for ax, param_name in zip(axes.flat, hyper_parameters):
                     ax.plot(entry.steps, entry.hyper_parameters[param_name].normalized, marker, markersize=marker_size, color=color)
                     if annotate: plt.annotate(f"{entry.score():.2f}", (entry.steps, entry.hyper_parameters[param_name].normalized))
-        # plot best and worst scores
+        # plot worst and best scores
         for ax, param_name in zip(axes.flat, hyper_parameters):
             ax.set_title(param_name)
             ax.set_ylim(bottom=0.0, top=1.0, auto=False)
             ax.set(xlabel='steps', ylabel='value')
             ax.set_aspect('auto')
-            x, y = zip(*sorted(best_entries.items()))
-            y = [e.hyper_parameters[param_name].normalized for e in y]
-            ax.plot(x, y, label="best score", color="orange")
             x, y = zip(*sorted(worst_entries.items()))
             y = [e.hyper_parameters[param_name].normalized for e in y]
             ax.plot(x, y, label="worst score", color="red")
+            x, y = zip(*sorted(best_entries.items()))
+            y = [e.hyper_parameters[param_name].normalized for e in y]
+            ax.plot(x, y, label="best score", color="orange")
         # legend
         handles, labels = ax.get_legend_handles_labels()
         figure.legend(handles, labels, loc='lower center', ncol=int(population_size/2))
         # save figures to directory
         plt.savefig(fname=Path(save_directory, "hyper_parameter_plot.png"), format='png', transparent=False)
-        plt.savefig(fname=Path(save_directory, "hyper_parameter_multi_plot.svg"), format='svg', transparent=True)
+        plt.savefig(fname=Path(save_directory, "hyper_parameter_plot.svg"), format='svg', transparent=True)
         # clear current figure and axes
         plt.clf()

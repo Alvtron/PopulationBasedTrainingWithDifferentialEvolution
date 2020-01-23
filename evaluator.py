@@ -1,9 +1,15 @@
 import torch
 from torch.utils.data import DataLoader
-
 from hyperparameters import Hyperparameters
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
+from copy import deepcopy
+
+torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.enabled = True
+torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
@@ -14,7 +20,8 @@ class Evaluator(object):
         self.test_data = DataLoader(
             dataset=test_data,
             batch_size = batch_size,
-            shuffle = False)
+            shuffle = False,
+            pin_memory=device.startswith('cuda'))
         if load_in_memory: self.test_data = list(self.test_data)
         self.batch_size = batch_size
         self.loss_functions = loss_functions
@@ -29,16 +36,21 @@ class Evaluator(object):
 
     def eval(self, model_state : dict):
         """Evaluate model on the provided validation or test set."""
-        model = self.create_model(model_state)
         dataset_length = len(self.test_data)
         metric_values = dict.fromkeys(self.loss_functions, 0.0)
-        for batch_index, (x, y) in enumerate(self.test_data, start=1):
-            if self.verbose: print(f"({batch_index}/{dataset_length})", end=" ")
-            x, y = x.to(self.device), y.to(self.device)
-            output = model(x)
-            for metric_type, metric_function in self.loss_functions.items():
-                loss = metric_function(output, y)
-                metric_values[metric_type] += loss.item() / float(dataset_length)
-                if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
-            if self.verbose: print(end="\n")
+        with torch.cuda.device(0):
+            model = self.create_model(model_state)
+            # model.eval() #breaks when using gpu
+            with torch.no_grad():
+                for batch_index, (x, y) in enumerate(self.test_data, start=1):
+                    if self.verbose: print(f"({batch_index}/{dataset_length})", end=" ")
+                    x, y = x.to(self.device), y.to(self.device)
+                    output = model(x)
+                    for metric_type, metric_function in self.loss_functions.items():
+                        loss = metric_function(output, y)
+                        metric_values[metric_type] += loss.item() / float(dataset_length)
+                        if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
+                    if self.verbose: print(end="\n")
+            del model
+        torch.cuda.empty_cache()
         return metric_values

@@ -10,9 +10,7 @@ plot_save_directory = Path("test/analyzer/plots")
 shutil.rmtree("test/analyzer", ignore_errors=True)
 statistics_save_directory.mkdir(exist_ok=True, parents=True)
 plot_save_directory.mkdir(exist_ok=True, parents=True)
-database = ReadOnlyDatabase(
-    database_path=Path("checkpoints/mnist/pbt/20200119140535"),
-    read_function=torch.load)
+database = ReadOnlyDatabase("checkpoints/mnist/pbt/20200121112716")
 analyzer = Analyzer(database)
 print(f"Database consists of {len(database)} entries.")
 print("Creating statistics...")

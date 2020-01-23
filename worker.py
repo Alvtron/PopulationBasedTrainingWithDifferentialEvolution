@@ -1,14 +1,19 @@
+import os
 import torch
 import time
 import random
 import numpy
-import uuid
+
+from member import Checkpoint
 
 STOP_FLAG = None
 
 # set random state for reproducibility
+torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.enabled = True
+torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
 mp = torch.multiprocessing.get_context('spawn')
 
@@ -29,7 +34,7 @@ class Worker(mp.Process):
         torch.manual_seed(random_seed)
 
     def __log(self, message : str):
-        prefix = f"Worker {self.id}"
+        prefix = f"Worker {self.id}, PID {os.getpid()}"
         full_message = f"{prefix}: {message}"
         if self.verbose:
             print(full_message)
@@ -39,28 +44,39 @@ class Worker(mp.Process):
         while not self.end_event_global.is_set():
             self.__log("awaiting checkpoint...")
             # get next checkpoint from train queue
-            checkpoint = self.train_queue.get()
+            checkpoint : Checkpoint = self.train_queue.get()
             if checkpoint is STOP_FLAG:
                 del checkpoint
-                break
-            # train checkpoint model
-            start_train_time_ns = time.time_ns()
-            self.__log("training...")
-            checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = self.trainer.train(
-                hyper_parameters=checkpoint.hyper_parameters,
-                model_state=checkpoint.model_state,
-                optimizer_state=checkpoint.optimizer_state,
-                epochs=checkpoint.epochs,
-                steps=checkpoint.steps,
-                step_size=checkpoint.step_size)
-            checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
-            # evaluate checkpoint model
-            start_eval_time_ns = time.time_ns()
-            self.__log("evaluating...")
-            checkpoint.loss['eval'] = self.evaluator.eval(checkpoint.model_state)
-            checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
+                continue
+            try:
+                # load state
+                self.__log("loading checkpoint state...")
+                model_state, optimizer_state = checkpoint.load_state()
+                if (model_state is None or optimizer_state is None) and checkpoint.steps >= checkpoint.step_size:
+                    self.__log(f"WARNING: received trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
+                # train checkpoint model
+                start_train_time_ns = time.time_ns()
+                self.__log("training...")
+                model_state, optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = self.trainer.train(
+                    hyper_parameters=checkpoint.hyper_parameters,
+                    model_state=model_state,
+                    optimizer_state=optimizer_state,
+                    epochs=checkpoint.epochs,
+                    steps=checkpoint.steps,
+                    step_size=checkpoint.step_size)
+                checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
+                # save state
+                self.__log("saving checkpoint state...")
+                checkpoint.save_state(model_state, optimizer_state)
+                # evaluate checkpoint model
+                start_eval_time_ns = time.time_ns()
+                self.__log("evaluating...")
+                checkpoint.loss['eval'] = self.evaluator.eval(model_state)
+                checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
+            except Exception as e:
+                self.__log(e)
+                raise e
+                #TODO: recollect checkpoint and queue it for training
             self.evolve_queue.put(checkpoint)
             self.__log("checkpoint returned.")
-            # release memory
-            del checkpoint
         self.__log("stopped.")

@@ -27,3 +27,12 @@ def merge_dict(dict1, dict2):
        if key in dict1 and key in dict2:
                dict3[key] = [value , dict1[key]]
    return dict3
+
+def chunks(sequence, n):
+    """Return a generator that yields successive n-sized chunks from a sequence."""
+    for i in range(0, len(sequence), n):
+        yield sequence[i:i + n]
+
+def insert_sequence(index, seq1, seq2):
+    """Inserts the second sequence on the index in the first sequence."""
+    return seq1[:index] + seq2 + seq1[index:]

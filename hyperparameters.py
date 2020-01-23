@@ -331,10 +331,10 @@ class Hyperparameters(object):
             self.optimizer[param_name] = value
 
     def parameters(self):
-        return [i[1] for i in self]
+        return (i[1] for i in self)
 
     def names(self):
-        return [i[0] for i in self]
+        return (i[0] for i in self)
 
     def keys(self):
         general_paths = [f"general/{parameter}" for parameter in self.general]
@@ -343,10 +343,10 @@ class Hyperparameters(object):
         return general_paths + model_paths + optimizer_paths
 
     def values(self):
-        return [i[1].value for i in self]
+        return (i[1].value for i in self)
     
     def normalized(self):
-        return [i[1].normalized for i in self]
+        return (i[1].normalized for i in self)
 
     def set(self, list):
         length = len(self)

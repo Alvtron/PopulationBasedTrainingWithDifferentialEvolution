@@ -4,10 +4,8 @@ import itertools
 from database import ReadOnlyDatabase
 
 print(f"Creating databse...")
-database = ReadOnlyDatabase(
-    database_path="checkpoints/mnist_de_clip/20200110224544_98.1986",
-    read_function=torch.load)
-print(f"Databse exist: {database.exists}")
+database = ReadOnlyDatabase("checkpoints/mnist/pbt/20200121112716")
+print(f"Database exist: {database.exists}")
 print(f"Database consists of {len(database)} entries.")
 print(f"Latest entries are:")
 for entry in database.latest():
