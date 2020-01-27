@@ -73,6 +73,7 @@ class Worker(mp.Process):
                 self.__log("evaluating...")
                 checkpoint.loss['eval'] = self.evaluator.eval(model_state)
                 checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
+                print(f"{self.id}, train = {float(time.time_ns() - start_train_time_ns) * float(10**(-9)):.2f}, eval = {float(time.time_ns() - start_eval_time_ns) * float(10**(-9)):.2f}")
             except Exception as e:
                 self.__log(e)
                 raise e

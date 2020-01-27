@@ -3,6 +3,7 @@ import copy
 import warnings
 from functools import partial
 from utils.constraint import translate, clip, reflect
+from typing import Dict
 
 class Hyperparameter(object):
     '''
@@ -279,13 +280,16 @@ class Hyperparameter(object):
 class Hyperparameters(object):
     ''' Class for storing and updating hyperparameters. '''
 
-    def __init__(self, general_params : dict, model_params : dict, optimizer_params : dict):
-        assert not general_params or all(isinstance(hyper_param, Hyperparameter) for hyper_param in general_params.values()), f"General hyperparameters can only contain {Hyperparameter} objects."
-        assert not model_params or all(isinstance(hyper_param, Hyperparameter) for hyper_param in model_params.values()), f"Model hyperparameters can only contain {Hyperparameter} objects."
-        assert not optimizer_params or all(isinstance(hyper_param, Hyperparameter) for hyper_param in optimizer_params.values()), f"Optimizer hyperparameters can only contain {Hyperparameter} objects."
-        self.general = general_params  if general_params else {}
-        self.model = model_params if model_params else {}
-        self.optimizer = optimizer_params if optimizer_params else {}
+    def __init__(self, augment_params : Dict[str, Hyperparameter], model_params : Dict[str, Hyperparameter], optimizer_params : Dict[str, Hyperparameter]):
+        if augment_params and not all(isinstance(hyper_param, Hyperparameter) for hyper_param in augment_params.values()):
+            raise TypeError(f"General hyperparameters can only contain {Hyperparameter} objects.")
+        if model_params and not all(isinstance(hyper_param, Hyperparameter) for hyper_param in model_params.values()):
+            raise TypeError(f"Model hyperparameters can only contain {Hyperparameter} objects.")
+        if optimizer_params and not all(isinstance(hyper_param, Hyperparameter) for hyper_param in optimizer_params.values()):
+            raise TypeError(f"Optimizer hyperparameters can only contain {Hyperparameter} objects.")
+        self.augment : Dict[str, Hyperparameter] = augment_params  if augment_params else {}
+        self.model : Dict[str, Hyperparameter] = model_params if model_params else {}
+        self.optimizer : Dict[str, Hyperparameter] = optimizer_params if optimizer_params else {}
 
     def __str__(self):
         info = []
@@ -294,7 +298,7 @@ class Hyperparameters(object):
         return ''.join(info)
 
     def __iter__(self):
-        for parameter in self.general.items():
+        for parameter in self.augment.items():
             yield parameter
         for parameter in self.model.items():
             yield parameter
@@ -302,7 +306,7 @@ class Hyperparameters(object):
             yield parameter
 
     def __len__(self):
-        return len(self.general) + len(self.model) + len(self.optimizer)
+        return len(self.augment) + len(self.model) + len(self.optimizer)
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -313,6 +317,7 @@ class Hyperparameters(object):
             split_key = key.split("/")
             if len(split_key) != 2:
                 raise IndexError("Key string with bad syntax. Use 'param_group/param_name'.")
+            split_key[0] = "augment" if split_key[0] == "general" else split_key[0]
             group = getattr(self, split_key[0])
             return group[split_key[1]]
         raise ValueError("Key types supported are int and str of syntax 'param_group/param_name'.")
@@ -320,14 +325,14 @@ class Hyperparameters(object):
     def __setitem__(self, key, value):
         if not 0 <= key < len(self):
             raise IndexError("The provided key is out of bounds.")
-        if key < len(self.general):
-            param_name = list(self.general)[key]
-            self.general[param_name] = value
-        elif key < len(self.general) + len(self.model):
-            param_name = list(self.model)[key - len(self.general)]
+        if key < len(self.augment):
+            param_name = list(self.augment)[key]
+            self.augment[param_name] = value
+        elif key < len(self.augment) + len(self.model):
+            param_name = list(self.model)[key - len(self.augment)]
             self.model[param_name] = value
         else:
-            param_name = list(self.optimizer)[key - len(self.general) - len(self.model)]
+            param_name = list(self.optimizer)[key - len(self.augment) - len(self.model)]
             self.optimizer[param_name] = value
 
     def parameters(self):
@@ -337,7 +342,7 @@ class Hyperparameters(object):
         return (i[0] for i in self)
 
     def keys(self):
-        general_paths = [f"general/{parameter}" for parameter in self.general]
+        general_paths = [f"augment/{parameter}" for parameter in self.augment]
         model_paths = [f"model/{parameter}" for parameter in self.model]
         optimizer_paths = [f"optimizer/{parameter}" for parameter in self.optimizer]
         return general_paths + model_paths + optimizer_paths
@@ -356,7 +361,7 @@ class Hyperparameters(object):
             self[index] += list[index]
 
     def get_general_value_dict(self):
-        return {param_name:param.value for param_name, param in self.general.items()}
+        return {param_name:param.value for param_name, param in self.augment.items()}
 
     def get_model_value_dict(self):
         return {param_name:param.value for param_name, param in self.model.items()}
@@ -366,14 +371,14 @@ class Hyperparameters(object):
 
     def equal_search_space(self, other):
         # Check if each hyperparameter type is of same length
-        if len(self.general) != len(other.general):
+        if len(self.augment) != len(other.augment):
             return False
         if len(self.model) != len(other.model):
             return False
         if len(self.optimizer) != len(other.optimizer):
             return False
         # Check if hyperparameter names are equal
-        if self.general.keys() != other.general.keys():
+        if self.augment.keys() != other.augment.keys():
             return False
         if self.model.keys() != other.model.keys():
             return False

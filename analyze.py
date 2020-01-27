@@ -1,5 +1,6 @@
 import math
 import matplotlib.pyplot as plt
+import matplotlib.colors
 from mpl_toolkits.mplot3d import Axes3D
 import random
 import pickle
@@ -11,6 +12,7 @@ from evaluator import Evaluator
 from hyperparameters import Hyperparameter, Hyperparameters
 from utils.constraint import clip
 from utils.iterable import flatten_dict
+from collections import defaultdict
 
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase):
@@ -127,18 +129,21 @@ class Analyzer(object):
             plt.savefig(fname=Path(save_directory, f"{attribute}_plot.svg"), format='svg', transparent=True)
             plt.clf()
 
-    def create_hyper_parameter_plot_files(self, save_directory, annotate=False, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 8):
+    def create_hyper_parameter_plot_files(self, save_directory, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 8, cmap = "winter", best_color = "orange", worst_color = "red"):
+        # get color map
+        color_map = plt.get_cmap(cmap)
+        tab_colors = [color_map(i/10) for i in range(0, 11, 1)]
+        tab_map = matplotlib.colors.ListedColormap(tab_colors)
         # get objective data
         objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
-        population_size = objective_info['population_size']
         hyper_parameters = objective_info['hyper_parameters']
-        n_hyper_parameters = len(hyper_parameters)
         # get entries
         population_entries = self.database.to_dict()
         best_entries = dict()
         worst_entries = dict()
         best_score = None
         worst_score = None
+        # determine best and worst entries
         for entries in population_entries.values():
             for entry in entries.values():
                 if entry.steps not in best_entries or entry > best_entries[entry.steps]:
@@ -149,45 +154,47 @@ class Analyzer(object):
                     worst_entries[entry.steps] = entry
                     if not worst_score or entry < worst_score:
                         worst_score = entry.score()
-        # get color map
-        color_map_key = "rainbow_r"
-        color_map = plt.get_cmap(color_map_key)
-        # set number of rows and columns
-        n_rows = round(math.sqrt(n_hyper_parameters))
-        n_columns = math.ceil(n_hyper_parameters / n_rows)
-        # create sub-plots and axes
-        figure, axes = plt.subplots(n_rows, n_columns, sharex=True, figsize=(12,12))
-        # delete unused axes
-        n_unused = len(axes.flat) - n_hyper_parameters
-        if n_unused > 0:
-            for ax in axes.flat[-n_unused:]:
-                ax.remove()
-        # plot hyper-parameters
+        # create data holders
+        steps = defaultdict(list)
+        scores = defaultdict(list)
+        colors = defaultdict(list)
+        # aquire plot data
         for entries in population_entries.values():
             for entry in entries.values():
                 score_decimal = (entry.score() - worst_score + 1e-7) / (best_score - worst_score + 1e-7)
-                color = color_map(score_decimal ** sensitivity)
-                marker_size = clip(max_marker_size * score_decimal, min_marker_size, max_marker_size)
-                for ax, param_name in zip(axes.flat, hyper_parameters):
-                    ax.plot(entry.steps, entry.hyper_parameters[param_name].normalized, marker, markersize=marker_size, color=color)
-                    if annotate: plt.annotate(f"{entry.score():.2f}", (entry.steps, entry.hyper_parameters[param_name].normalized))
-        # plot worst and best scores
-        for ax, param_name in zip(axes.flat, hyper_parameters):
-            ax.set_title(param_name)
-            ax.set_ylim(bottom=0.0, top=1.0, auto=False)
-            ax.set(xlabel='steps', ylabel='value')
-            ax.set_aspect('auto')
+                color = score_decimal ** sensitivity
+                for param_name in hyper_parameters:
+                    steps[param_name].append(entry.steps)
+                    scores[param_name].append(entry.hyper_parameters[param_name].normalized)
+                    colors[param_name].append(color)
+        # plot data
+        for param_name in hyper_parameters:
+            # create sub-plots and axes
+            plt.title(param_name)
+            plt.ylim(bottom=0.0, top=1.0, auto=False)
+            plt.xlabel("steps")
+            plt.ylabel("value")
+            # plot hyper_parameters
+            hp_plot = plt.scatter(
+                x=steps[param_name],
+                y=scores[param_name],
+                marker="s",
+                s=6,
+                c=colors[param_name],
+                cmap=tab_map)
+            # plot worst score
             x, y = zip(*sorted(worst_entries.items()))
             y = [e.hyper_parameters[param_name].normalized for e in y]
-            ax.plot(x, y, label="worst score", color="red")
+            plt.scatter(x, y, label="worst score", color=worst_color, marker="o", s=6)
+            # plot best score
             x, y = zip(*sorted(best_entries.items()))
             y = [e.hyper_parameters[param_name].normalized for e in y]
-            ax.plot(x, y, label="best score", color="orange")
-        # legend
-        handles, labels = ax.get_legend_handles_labels()
-        figure.legend(handles, labels, loc='lower center', ncol=int(population_size/2))
-        # save figures to directory
-        plt.savefig(fname=Path(save_directory, "hyper_parameter_plot.png"), format='png', transparent=False)
-        plt.savefig(fname=Path(save_directory, "hyper_parameter_plot.svg"), format='svg', transparent=True)
-        # clear current figure and axes
-        plt.clf()
+            plt.scatter(x, y, label="best score", color=best_color, marker="o", s=6)
+            # legend
+            plt.legend()
+            # display colorbar
+            plt.colorbar(hp_plot)
+            # save figures to directory
+            plt.savefig(fname=Path(save_directory, f"hp_plot_{param_name.replace('/', '_')}.png"), format='png', transparent=False)
+            plt.savefig(fname=Path(save_directory, f"hp_plot_{param_name.replace('/', '_')}.svg"), format='svg', transparent=True)
+            plt.clf()

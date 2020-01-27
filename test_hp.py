@@ -65,7 +65,7 @@ def categorical_hyperparameter_test():
 def hyperparameter_configuration_test():
     print("Hyperparameter Configuration Test")
     hp1 = Hyperparameters(
-            general_params = {
+            augment_params = {
                 'a': Hyperparameter(1, 256)},
             model_params = {
                 'b': Hyperparameter(1e-6, 1e-0)},
@@ -74,7 +74,7 @@ def hyperparameter_configuration_test():
                 'd': Hyperparameter(False, True, is_categorical = True)
                 })
     hp2 = Hyperparameters(
-            general_params = {
+            augment_params = {
                 'a': Hyperparameter(1, 256)},
             model_params = {
                 'b': Hyperparameter(1e-6, 1e-0)},

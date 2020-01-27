@@ -10,7 +10,7 @@ from utils.iterable import chunks, insert_sequence
 from abc import abstractmethod 
 from collections import defaultdict, deque
 from itertools import islice, chain
-from typing import List, Iterable, Sequence
+from typing import List, Iterable, Sequence, Generator
 
 class MemberState(object):
     '''Base class for member states.'''
@@ -113,44 +113,54 @@ class Checkpoint(MemberState):
         # ensure directory is created
         self.directory.mkdir(parents=True, exist_ok=True)
 
-    def score(self):
-        return self.loss['eval'][self.eval_metric]
-
-    @property
-    def model_state_save_path(self):
-        return Path(self.directory, f"{self.steps:05d}_model_state.pth")
-
-    @property 
-    def optimizer_state_save_path(self):
-        return Path(self.directory, f"{self.steps:05d}_optimizer_state.pth")
-
-    def train_score(self):
-        return self.loss['train'][self.eval_metric]
-
-    def eval_score(self):
-        return self.score()
-
-    def test_score(self):
-        return self.loss['test'][self.eval_metric]
-
-    def has_model_state(self):
-        return self.model_state_load_path and self.model_state_load_path.is_file()
-
-    def has_optimizer_state(self):
-        return self.optimizer_state_load_path and self.optimizer_state_load_path.is_file()
-
-    def has_state(self):
-        return self.has_model_state() and self.has_optimizer_state() 
+    def __str__(self) -> str:
+        return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
     
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if other is None:
             return False
         return self.id == other.id and self.steps == other.steps and self.step_size == other.step_size
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         if other is None:
             return True
         return self.id != other.id or self.steps != other.steps or self.step_size != other.step_size
+
+    def score(self) -> float:
+        return self.loss['eval'][self.eval_metric]
+
+    @property
+    def model_state_save_path(self) -> Path:
+        return Path(self.directory, f"{self.steps:05d}_model_state.pth")
+
+    @property 
+    def optimizer_state_save_path(self) -> Path:
+        return Path(self.directory, f"{self.steps:05d}_optimizer_state.pth")
+
+    def train_score(self) -> float:
+        return self.loss['train'][self.eval_metric]
+
+    def eval_score(self) -> float:
+        return self.score()
+
+    def test_score(self) -> float:
+        return self.loss['test'][self.eval_metric]
+
+    def has_model_state(self) -> bool:
+        return self.model_state_load_path and self.model_state_load_path.is_file()
+
+    def has_optimizer_state(self) -> bool:
+        return self.optimizer_state_load_path and self.optimizer_state_load_path.is_file()
+
+    def has_state(self) -> bool:
+        return self.has_model_state() and self.has_optimizer_state() 
+    
+    def performance_details(self) -> str:
+        strings = list()
+        for loss_group, loss_values in self.loss.items():
+            for loss_name, loss_value in loss_values.items():
+                strings.append(f"{loss_group}_{loss_name} {loss_value:.5f}")
+        return ", ".join(strings)
 
     def load_state(self):
         model_state = torch.load(self.model_state_load_path) if self.has_model_state() else None
@@ -168,16 +178,6 @@ class Checkpoint(MemberState):
             self.model_state_load_path.unlink()
         if self.has_optimizer_state() and self.optimizer_state_load_path.parent == self.directory:
             self.optimizer_state_load_path.unlink()
-
-    def __str__(self):
-        return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
-
-    def performance_details(self):
-        strings = list()
-        for loss_group, loss_values in self.loss.items():
-            for loss_name, loss_value in loss_values.items():
-                strings.append(f"{loss_group}_{loss_name} {loss_value:.5f}")
-        return ", ".join(strings)
 
     def update(self, other):
         """

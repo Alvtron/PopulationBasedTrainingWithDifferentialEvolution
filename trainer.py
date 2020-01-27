@@ -1,10 +1,15 @@
 import torch
+import torchvision
 import itertools
+import matplotlib.pyplot as plt
 from hyperparameters import Hyperparameters
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, Subset, DataLoader
+from torchvision.datasets import VisionDataset
+from torchvision.datasets.vision import StandardTransform
 from torch.optim import Optimizer
 from models import HyperNet
 from copy import deepcopy
+from utils.data import create_subset
 
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
@@ -16,15 +21,10 @@ class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
     def __init__(
             self, model_class : HyperNet, optimizer_class : Optimizer, train_data : Dataset, batch_size : int,
-            loss_functions : dict, loss_metric : str, device : str, load_in_memory : bool = True, verbose : bool = False):
+            loss_functions : dict, loss_metric : str, device : str, verbose : bool = False):
         self.model_class = model_class
         self.optimizer_class = optimizer_class
-        self.train_data = DataLoader(
-            dataset = train_data,
-            batch_size = batch_size,
-            shuffle = False,
-            pin_memory=device.startswith('cuda'))
-        if load_in_memory: self.train_data = list(self.train_data)
+        self.train_data = train_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_metric = loss_metric
@@ -46,28 +46,42 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
+    def create_subset(self, steps, hyper_parameters):
+        dataset_size = len(self.train_data)
+        start_index = (steps * self.batch_size) % dataset_size
+        subset = create_subset(self.train_data, start_index, dataset_size)
+        subset.update(hyper_parameters.augment)
+        return iter(DataLoader(
+            dataset = subset,
+            batch_size = self.batch_size,
+            shuffle = False,
+            num_workers=0))
+
     def train(
             self, hyper_parameters : Hyperparameters, model_state : dict, optimizer_state : dict,
             epochs : int, steps : int, step_size : int = 1):
         if step_size < 1:
-            raise Exception("The number of steps must be at least one or higher.")
+            raise ValueError("The number of steps must be at least one or higher.")
         with torch.cuda.device(0):
             # preparing model and optimizer
             model = self.create_model(model_state)
             model.apply_hyper_parameters(hyper_parameters.model, self.device)
             model.train()
             optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
-            # creating iterator
-            batch_index = steps % len(self.train_data)
-            dataset_view = itertools.islice(self.train_data, batch_index, None)
+            # create subset
+            batches = self.create_subset(steps, hyper_parameters)
             # initialize eval metrics dict
             metric_values = dict.fromkeys(self.loss_functions, 0.0)
             # loop until step_size is exhausted
             END_STEPS = steps + step_size
             while steps != END_STEPS:
+                # creating iterator
                 try:
                     if self.verbose: print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
-                    x, y = next(dataset_view)
+                    x, y = next(batches)
+                    #grid_img = torchvision.utils.make_grid(x, nrow=8)
+                    #plt.imshow(grid_img.permute(1, 2, 0))
+                    #plt.show()
                     x, y = x.to(self.device), y.to(self.device)
                     for metric_type, metric_function in self.loss_functions.items():
                         if metric_type == self.loss_metric:
@@ -85,7 +99,7 @@ class Trainer(object):
                     if self.verbose: print(end="\n")
                     steps += 1
                 except StopIteration:
-                    dataset_view = iter(self.train_data)
+                    batches = self.create_subset(0, hyper_parameters)
                     epochs += 1
             model_state = model.state_dict()
             optimizer_state = optimizer.state_dict()

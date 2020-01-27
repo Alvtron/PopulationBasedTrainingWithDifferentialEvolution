@@ -55,9 +55,9 @@ class FraudNet(HyperNet):
             x = module(x)
         return x
 
-class MnistNet10(HyperNet):
-    def __init__(self):
-        super(MnistNet10, self).__init__()
+class MnistNet(HyperNet):
+    def __init__(self, output_size : int):
+        super(MnistNet, self).__init__()
         self.conv_1 = nn.Conv2d(1, 10, kernel_size=5)
         self.max_pool_1 = nn.MaxPool2d(kernel_size=2)
         self.prelu_1 = nn.PReLU()
@@ -69,7 +69,7 @@ class MnistNet10(HyperNet):
         self.fc_1 = nn.Linear(320, 50)
         self.prelu_3 = nn.PReLU()
         self.dropout_2 = nn.Dropout()
-        self.fc_2 = nn.Linear(50, 10)
+        self.fc_2 = nn.Linear(50, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
 
     @staticmethod  
@@ -95,9 +95,17 @@ class MnistNet10(HyperNet):
             x = module(x)
         return x
 
-class MnistNet10Larger(HyperNet):
+class MnistNet10(MnistNet):
     def __init__(self):
-        super(MnistNet10Larger, self).__init__()
+        super().__init__(output_size=10)
+
+class MnistNet26(MnistNet):
+    def __init__(self):
+        super().__init__(output_size=26)
+
+class MnistNetLarger(HyperNet):
+    def __init__(self, output_size):
+        super(MnistNetLarger, self).__init__()
         self.conv_1 = nn.Conv2d(1, 32, kernel_size=5)
         self.max_pool_1 = nn.MaxPool2d(kernel_size=2)
         self.prelu_1 = nn.PReLU()
@@ -112,7 +120,7 @@ class MnistNet10Larger(HyperNet):
         self.fc_2 = nn.Linear(1024, 512)
         self.prelu_4 = nn.PReLU()
         self.dropout_3 = nn.Dropout()
-        self.fc_3 = nn.Linear(512, 10)
+        self.fc_3 = nn.Linear(512, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
         
     @staticmethod
@@ -144,9 +152,25 @@ class MnistNet10Larger(HyperNet):
             x = module(x)
         return x
 
-class MnistNet10Largest(HyperNet):
+class MnistNet10Larger(MnistNetLarger):
     def __init__(self):
-        super(MnistNet10Largest, self).__init__()
+        super().__init__(output_size=10)
+
+class MnistNet26Larger(MnistNetLarger):
+    def __init__(self):
+        super().__init__(output_size=26)
+
+class MnistNet47Larger(MnistNetLarger):
+    def __init__(self):
+        super().__init__(output_size=47)
+
+class MnistNet62Larger(MnistNetLarger):
+    def __init__(self):
+        super().__init__(output_size=62)
+
+class MnistNetLargest(HyperNet):
+    def __init__(self, output_size : int):
+        super(MnistNetLargest, self).__init__()
         self.conv_1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
         self.batch_norm_1 = nn.BatchNorm2d(32)
         self.prelu_1 = nn.PReLU()
@@ -171,7 +195,7 @@ class MnistNet10Largest(HyperNet):
         self.batch_norm_6 = nn.BatchNorm1d(512)
         self.prelu_6 = nn.PReLU()
         self.dropout_3 = nn.Dropout(p = 0.5)
-        self.fc_3 = nn.Linear(512, 10)
+        self.fc_3 = nn.Linear(512, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
         
     @staticmethod
@@ -204,3 +228,19 @@ class MnistNet10Largest(HyperNet):
         for module in self.children():
             x = module(x)
         return x
+
+class MnistNet10Largest(MnistNetLargest):
+    def __init__(self):
+        super().__init__(output_size=10)
+
+class MnistNet26Largest(MnistNetLargest):
+    def __init__(self):
+        super().__init__(output_size=26)
+
+class MnistNet47Largest(MnistNetLargest):
+    def __init__(self):
+        super().__init__(output_size=47)
+
+class MnistNet62Largest(MnistNetLargest):
+    def __init__(self):
+        super().__init__(output_size=62)

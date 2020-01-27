@@ -42,9 +42,9 @@ N_JOBS = 6
 
 def import_arguments():
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--task", type=str, default=TASK, help="Select tasks from 'mnist', 'creditfraud'.")
+    parser.add_argument("--task", type=str, default=TASK, help="Select tasks such as 'mnist', 'creditfraud'.")
     parser.add_argument("--evolver", type=str, default=EVOLVER, help="Select which evolve algorithm to use.")
-    parser.add_argument("--population_size", type=int, default=POPULATION_SIZE, help="The number of members in the population. Default: 5.")
+    parser.add_argument("--population_size", type=int, default=POPULATION_SIZE, help="The number of members in the population.")
     parser.add_argument("--batch_size", type=int, default=BATCH_SIZE, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--step_size", type=int, default=STEP_SIZE, help="Number of steps to train each training process.")
     parser.add_argument("--end_steps", type=int, default=END_STEPS, help="Perform early stopping after the specified number of steps.")
@@ -54,13 +54,12 @@ def import_arguments():
     parser.add_argument("--test_limit", type=int, default=TEST_LIMIT, help="Number of top performing database entries to test with the testing set.")    
     parser.add_argument("--history_limit", type=int, default=HISTORY_LIMIT, help="Sets the number of network model- and optimizer states to keep stored in database.")
     parser.add_argument("--directory", type=str, default=DIRECTORY, help="The directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
-    parser.add_argument("--device", type=str, default=DEVICE, help="Sets the processor device ('cpu' or 'gpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
+    parser.add_argument("--device", type=str, default=DEVICE, help="Sets the torch processor device ('cpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--n_jobs", type=int, default=N_JOBS, help="Sets the number of training processes. If n_jobs is less than 1 or higher than population size, the population size will be used instead.")
-    parser.add_argument("--tensorboard", type=bool, default=True, help="Decides whether to enable tensorboard 2.0 for real-time monitoring of the training process.")
-    parser.add_argument("--in_memory", type=bool, default=True, help="Decides whether the dataset will be loaded in memory.")    
+    parser.add_argument("--tensorboard", type=bool, default=False, help="Decides whether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--detect_NaN", type=bool, default=True, help="Decides whether the controller will detect NaN loss values.")    
-    parser.add_argument("--verbose", type=int, default=2, help="Verbosity level")
-    parser.add_argument("--logging", type=bool, default=True, help="Logging level")
+    parser.add_argument("--verbose", type=int, default=1, help="Verbosity level.")
+    parser.add_argument("--logging", type=bool, default=True, help="Logging level.")
     args = parser.parse_args()
     args = validate_arguments(args)
     return args
@@ -85,10 +84,20 @@ def import_task(task_name : str):
         return Mnist()
     elif task_name == "fashionmnist":
         return FashionMnist()
-    elif task_name == "emnist":
-        return EMnist()
+    elif task_name == "emnist_byclass":
+        return EMnist("byclass")
+    elif task_name == "emnist_bymerge":
+        return EMnist("bymerge")
+    elif task_name == "emnist_balanced":
+        return EMnist("balanced")
+    elif task_name == "emnist_letters":
+        return EMnist("letters")
+    elif task_name == "emnist_digits":
+        return EMnist("digits")
+    elif task_name == "emnist_mnist":
+        return EMnist("mnist")
     else:
-        raise NotImplementedError(f"Your task request '{task_name}'' is not available.")
+        raise NotImplementedError(f"Your requested task '{task_name}'' is not available.")
 
 def create_evolver(evolver_name, population_size):
     if evolver_name == 'pbt':
@@ -137,6 +146,7 @@ if __name__ == "__main__":
     print(f"Preparing database...")
     database = Database(f"{args.directory}/{task.name}/{args.evolver}")
     # prepare tensorboard writer
+    tensorboard_writer = None
     if args.tensorboard:    
         print(f"Launching tensorboard...")
         tensorboard_writer, tensorboard_url = create_tensorboard(database.path)
@@ -164,7 +174,6 @@ if __name__ == "__main__":
         f"Evaluation set length: {len(task.eval_data)}",
         f"Testing set length: {len(task.test_data)}",
         f"Total dataset length: {len(task.train_data) + len(task.eval_data) + len(task.test_data)}",
-        f"Load dataset in memory: {args.in_memory}",
         f"Verbosity: {args.verbose}",
         f"Logging: {args.logging}",
         f"Device: {args.device}",
@@ -183,24 +192,21 @@ if __name__ == "__main__":
         loss_functions = task.loss_functions,
         loss_metric = task.loss_metric,
         batch_size = args.batch_size,
-        device = args.device,
-        load_in_memory=args.in_memory)
+        device = args.device)
     print(f"Creating evaluator...")
     EVALUATOR = Evaluator(
         model_class = task.model_class,
         test_data = task.eval_data,
         loss_functions=task.loss_functions,
         batch_size = args.batch_size,
-        device = args.device,
-        load_in_memory=args.in_memory)
+        device = args.device)
     print(f"Creating tester...")
     TESTER = Evaluator(
         model_class = task.model_class,
         test_data = task.test_data,
         loss_functions=task.loss_functions,
         batch_size = args.batch_size,
-        device = args.device,
-        load_in_memory=args.in_memory)
+        device = args.device)
     # define controller
     print(f"Creating evolver...")
     EVOLVER = create_evolver(args.evolver, args.population_size)

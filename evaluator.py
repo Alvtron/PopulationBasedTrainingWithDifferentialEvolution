@@ -15,14 +15,13 @@ class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
     def __init__(
             self, model_class : Module, test_data : Dataset, batch_size : int, loss_functions : dict,
-            device : str, load_in_memory : bool = False, verbose : bool = False):
+            device : str, verbose : bool = False):
         self.model_class = model_class
         self.test_data = DataLoader(
             dataset=test_data,
             batch_size = batch_size,
             shuffle = False,
-            pin_memory=device.startswith('cuda'))
-        if load_in_memory: self.test_data = list(self.test_data)
+            num_workers=0)
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.device = device
@@ -51,6 +50,5 @@ class Evaluator(object):
                         metric_values[metric_type] += loss.item() / float(dataset_length)
                         if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
                     if self.verbose: print(end="\n")
-            del model
         torch.cuda.empty_cache()
         return metric_values
