@@ -177,6 +177,10 @@ class DifferentialEvolution(EvolveEngine):
         pass
 
 def mean_wl(S, weights):
+    """
+    The weighted Lehmer mean of a tuple x of positive real numbers,
+    with respect to a tuple w of positive weights.
+    """
     def weight(weights, k):
         return weights[k] / sum(weights)
     A = sum(weight(weights, k) * s**2 for k, s in enumerate(S))
@@ -193,6 +197,11 @@ class HistoricalMemory(object):
         self.weights = list()
         self.k = 0
     
+    def reset(self):
+        self.s_cr = list()
+        self.s_f = list()
+        self.weights = list()
+
     def record(self, cr_i, f_i, delta_score):
         self.s_cr.append(cr_i)
         self.s_f.append(f_i)
@@ -207,16 +216,22 @@ class HistoricalMemory(object):
             self.m_f[self.k] = mean_wl(self.s_f, self.weights)
             self.k = 0 if self.k >= self.size - 1 else self.k + 1
 
-class ExternalArchive(object):
+class ExternalArchive(list):
     def __init__(self, size):
+        list.__init__(self)
         self.size = size
-        self.parents = list()
 
-    def add_parent(self, parent):
-        if len(self.parents) == self.size:
+    def append(self, parent):
+        if len(self) == self.size:
             random_index = random.randrange(self.size)
-            del self.parents[random_index]
-        self.parents.append(parent)
+            del self[random_index]
+        super().append(parent)
+
+    def insert(self, index, parent):
+        raise NotImplementedError()
+    
+    def extend(self, parent):
+        raise NotImplementedError()
 
 class SHADE(EvolveEngine):
     """
@@ -238,8 +253,8 @@ class SHADE(EvolveEngine):
             warnings.warn(f"p-parameter too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
         super().__init__()
         self.N_INIT = N_INIT
-        self.archive = ExternalArchive(round(self.N_INIT * r_arc))
-        self.memory = HistoricalMemory(memory_size)
+        self.archive = ExternalArchive(size=round(self.N_INIT * r_arc))
+        self.memory = HistoricalMemory(size=memory_size)
         self.p = p
         self.CR_i = None
         self.F_i = None
@@ -251,8 +266,7 @@ class SHADE(EvolveEngine):
                 hyper_parameter.sample_uniform()
 
     def on_generation_start(self, generation : Generation, logger):
-        self.archive.s_cr = list()
-        self.archive.s_f = list()
+        self.memory.reset()
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """
@@ -266,9 +280,9 @@ class SHADE(EvolveEngine):
         # control parameter assignment
         self.CR_i, self.F_i = self.get_control_parameters()
         # random unique members
-        if self.archive.parents:
+        if self.archive:
             x_r1 = random_from_list(generation, exclude=member)
-            x_r2 = random_from_list(self.archive.parents)
+            x_r2 = random_from_list(self.archive + generation,  exclude=(member, x_r1))
         else:
             x_r1, x_r2 = random_from_list(generation, k=2, exclude=member)
         # random best member
@@ -276,7 +290,7 @@ class SHADE(EvolveEngine):
         # random parameter dimension
         j_rand = random.randrange(0, hp_dimension_size)
         for j in range(hp_dimension_size):
-            base = member.hyper_parameters[j].normalized
+            base = member[j].normalized
             if random.uniform(0.0, 1.0) <= self.CR_i or j == j_rand:
                 mutant = de_current_to_best_1(
                     F = self.F_i,
@@ -300,7 +314,7 @@ class SHADE(EvolveEngine):
         candidate = eval_function(candidate)
         if member < candidate:
             logger(f"mutation is better. Add parent member to archive.")
-            self.archive.add_parent(member.copy())
+            self.archive.append(member.copy())
             self.memory.record(self.CR_i, self.F_i, abs(candidate.score() - member.score()))
         if member <= candidate:
             logger(f"mutate member (x {member.score():.4f} < u {candidate.score():.4f}).")
@@ -313,6 +327,7 @@ class SHADE(EvolveEngine):
         self.memory.update()
 
     def get_control_parameters(self):
+        # select random from memory
         r1 = random.randrange(0, self.memory.size)
         MF_i = self.memory.m_f[r1]
         MCR_i = self.memory.m_cr[r1]
