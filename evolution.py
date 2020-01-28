@@ -218,32 +218,26 @@ class ExternalArchive(object):
             del self.parents[random_index]
         self.parents.append(parent)
 
-class LSHADE(EvolveEngine):
+class SHADE(EvolveEngine):
     """
-    A general, modifiable implementation of Success-History based Adaptive Differential Evolution (SHADE)
-    with linear population size reduction.
+    A general, modifiable implementation of Success-History based Adaptive Differential Evolution (SHADE).
 
     References:
         SHADE: https://ieeexplore.ieee.org/document/6557555
-        L-SHADE: https://ieeexplore.ieee.org/document/6900380
 
     Parameters:
         N_INIT: The number of members in the population {15, 16, ..., 25}.
         r_arc: adjusts archive size with round(N_INIT * rarc) {1.0, 1.1, ..., 3.0}.
-        MAX_NFE: the maximum number of fitness evaluations (N * (end_steps / step_size))
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
+    def __init__(self, N_INIT, r_arc = 2.0, p=0.1, memory_size = 5):
         if N_INIT < 4:
             raise ValueError("population size must be at least 4 or higher.")
         if round(N_INIT * p) < 1:
             warnings.warn(f"p-parameter too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
         super().__init__()
         self.N_INIT = N_INIT
-        self.N_MIN = 4
-        self.NFE = 0
-        self.MAX_NFE = MAX_NFE
         self.archive = ExternalArchive(round(self.N_INIT * r_arc))
         self.memory = HistoricalMemory(memory_size)
         self.p = p
@@ -259,7 +253,6 @@ class LSHADE(EvolveEngine):
     def on_generation_start(self, generation : Generation, logger):
         self.archive.s_cr = list()
         self.archive.s_f = list()
-        self.adjust_generation_size(generation, logger)
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """
@@ -305,7 +298,6 @@ class LSHADE(EvolveEngine):
     def on_evaluation(self, member : MemberState, candidate : MemberState, eval_function, logger) -> MemberState:
         """Evaluates candidate, compares it to the original member and returns the best performer."""
         candidate = eval_function(candidate)
-        self.NFE += 1 # increment the number of fitness evaluations
         if member < candidate:
             logger(f"mutation is better. Add parent member to archive.")
             self.archive.add_parent(member.copy())
@@ -319,17 +311,6 @@ class LSHADE(EvolveEngine):
 
     def on_generation_end(self, generation : Generation, logger):
         self.memory.update()
-
-    def adjust_generation_size(self, generation : Generation, logger):
-        new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self.NFE + self.N_INIT)
-        if new_size != generation.size:
-            logger(f"adjusting generation size {generation.size} --> {new_size}")
-            if new_size < generation.size:
-                size_delta = generation.size - new_size
-                for worst in sorted(generation)[:size_delta]:
-                    generation.remove(worst)
-                    logger(f"member {worst.id} with score {worst.score()} was removed from the generation.")
-            generation.size = new_size
 
     def get_control_parameters(self):
         r1 = random.randrange(0, self.memory.size)
@@ -355,3 +336,45 @@ class LSHADE(EvolveEngine):
         n_elitists = max(n_elitists, 1) # correction for too small p-values
         elitists = sorted_members[:n_elitists]
         return random.choice(elitists)
+
+class LSHADE(SHADE):
+    """
+    A general, modifiable implementation of Success-History based Adaptive Differential Evolution (SHADE)
+    with linear population size reduction.
+
+    References:
+        SHADE: https://ieeexplore.ieee.org/document/6557555
+        L-SHADE: https://ieeexplore.ieee.org/document/6900380
+
+    Parameters:
+        N_INIT: The number of members in the population {15, 16, ..., 25}.
+        r_arc: adjusts archive size with round(N_INIT * rarc) {1.0, 1.1, ..., 3.0}.
+        MAX_NFE: the maximum number of fitness evaluations (N * (end_steps / step_size))
+        p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
+        memory_size: historical memory size (H) {2, 3, ..., 10}.
+    """
+    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
+        super().__init__(N_INIT, r_arc, p, memory_size)
+        self.N_MIN = 4
+        self.NFE = 0
+        self.MAX_NFE = MAX_NFE
+
+    def on_generation_start(self, generation : Generation, logger):
+        self.adjust_generation_size(generation, logger)
+        super().on_generation_start(generation, logger)
+
+    def on_evaluation(self, member, candidate, eval_function, logger):
+        self.NFE += 1 # increment the number of fitness evaluations
+        return super().on_evaluation(member, candidate, eval_function, logger)
+
+    def adjust_generation_size(self, generation : Generation, logger):
+        new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self.NFE + self.N_INIT)
+        if new_size != generation.size:
+            logger(f"adjusting generation size {generation.size} --> {new_size}")
+            if new_size < generation.size:
+                size_delta = generation.size - new_size
+                for worst in sorted(generation)[:size_delta]:
+                    generation.remove(worst)
+                    logger(f"member {worst.id} with score {worst.score()} was removed from the generation.")
+            generation.size = new_size
+    

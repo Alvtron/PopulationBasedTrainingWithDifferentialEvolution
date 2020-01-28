@@ -46,11 +46,12 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
-    def create_subset(self, steps, hyper_parameters):
+    def create_subset(self, start_step, end_step):
         dataset_size = len(self.train_data)
-        start_index = (steps * self.batch_size) % dataset_size
-        subset = create_subset(self.train_data, start_index, dataset_size)
-        subset.update(hyper_parameters.augment)
+        start_index = (start_step * self.batch_size) % dataset_size
+        end_index = (end_step * self.batch_size) % dataset_size
+        end_index = dataset_size if end_index <= start_index else end_index
+        subset = create_subset(self.train_data, start_index, end_index)
         return iter(DataLoader(
             dataset = subset,
             batch_size = self.batch_size,
@@ -65,17 +66,17 @@ class Trainer(object):
         with torch.cuda.device(0):
             # preparing model and optimizer
             model = self.create_model(model_state)
-            model.apply_hyper_parameters(hyper_parameters.model, self.device)
+            if isinstance(model, HyperNet):
+                model.apply_hyper_parameters(hyper_parameters.model, self.device)
             model.train()
             optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
-            # create subset
-            batches = self.create_subset(steps, hyper_parameters)
             # initialize eval metrics dict
             metric_values = dict.fromkeys(self.loss_functions, 0.0)
             # loop until step_size is exhausted
             END_STEPS = steps + step_size
+            # create subset
+            batches = self.create_subset(steps, END_STEPS)
             while steps != END_STEPS:
-                # creating iterator
                 try:
                     if self.verbose: print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
                     x, y = next(batches)
@@ -99,7 +100,7 @@ class Trainer(object):
                     if self.verbose: print(end="\n")
                     steps += 1
                 except StopIteration:
-                    batches = self.create_subset(0, hyper_parameters)
+                    batches = self.create_subset(steps, END_STEPS)
                     epochs += 1
             model_state = model.state_dict()
             optimizer_state = optimizer.state_dict()

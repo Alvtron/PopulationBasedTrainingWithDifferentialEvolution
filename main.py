@@ -13,7 +13,7 @@ from analyze import Analyzer
 from controller import Controller
 from database import Database
 from evaluator import Evaluator
-from evolution import DifferentialEvolution, ExploitAndExplore, LSHADE
+from evolution import ExploitAndExplore, DifferentialEvolution, SHADE, LSHADE
 from trainer import Trainer
 
 # set random state for reproducibility
@@ -25,8 +25,8 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
-TASK = 'mnist'
-EVOLVER = 'pbt'
+TASK = 'emnist_mnist'
+EVOLVER = 'lshade'
 POPULATION_SIZE = 20
 BATCH_SIZE = 64
 STEP_SIZE = 100
@@ -120,6 +120,12 @@ def create_evolver(evolver_name, population_size):
             F = 0.2,
             Cr = 0.8,
             constraint='reflect')
+    if evolver_name == 'shade':
+        return SHADE(
+            N_INIT = population_size,
+            r_arc=2.0,
+            p=0.2,
+            memory_size=5)
     if evolver_name == 'lshade':
         return LSHADE(
             N_INIT = population_size,

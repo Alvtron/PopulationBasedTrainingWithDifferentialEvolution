@@ -11,6 +11,7 @@ from torchvision.datasets import (CIFAR10, CIFAR100, EMNIST, KMNIST, MNIST, QMNI
 from dataclasses import dataclass
 from torch.optim import Optimizer
 from torch.utils.data import Dataset
+from torchvision.datasets.vision import StandardTransform
 from hyperparameters import Hyperparameter, Hyperparameters
 from loss import F1, NLL, Accuracy, BinaryCrossEntropy, CategoricalCrossEntropy
 from functools import partial
@@ -43,7 +44,7 @@ class Mnist(Task):
         }
         # define hyper-parameter search space
         hyper_parameters = Hyperparameters(
-            augment_params=utils.data.AdaptiveDataset.create_hyper_parameters(['degrees']),
+            augment_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
@@ -56,7 +57,11 @@ class Mnist(Task):
         train_data = MNIST(
             train_data_path,
             train=True,
-            download=True)
+            download=True,
+            transform=torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.1307,), (0.3081,))
+            ]))
         test_data = MNIST(
             test_data_path,
             train=False,
@@ -68,15 +73,7 @@ class Mnist(Task):
         # split training set into training set and validation set
         train_data, _, eval_data, _ = utils.data.stratified_split(
             train_data, labels=train_data.targets, fraction=50000/60000, random_state=1)
-        train_data.suffix_transform = [
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize((0.1307,), (0.3081,))
-            ]
-        eval_data.suffix_transform = [
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize((0.1307,), (0.3081,))
-            ]
-        # initialize task
+        # initia/lize task
         super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
 
 class FashionMnist(Task):
@@ -93,21 +90,7 @@ class FashionMnist(Task):
         }
         # define hyper-parameter search space
         hyper_parameters = Hyperparameters(
-            augment_params={
-                'brightness' : Hyperparameter(0.0, 1.0),
-                'contrast' : Hyperparameter(0.0, 1.0),
-                'saturation' : Hyperparameter(0.0, 1.0),
-                'hue' : Hyperparameter(0.0, 1.0),
-                'degrees' : Hyperparameter(0, 180),
-                'translate_horizontal' : Hyperparameter(0.0, 1.0),
-                'translate_vertical' : Hyperparameter(0.0, 1.0),
-                'scale_min' : Hyperparameter(0.5, 2.0),
-                'scale_max' : Hyperparameter(0.5, 2.0),
-                'shear' : Hyperparameter(0, 90),
-                'perspective' : Hyperparameter(0.0, 1.0),
-                'vertical_flip' : Hyperparameter(0.0, 1.0),
-                'horizontal_flip' : Hyperparameter(0.0, 1.0)
-            },
+            augment_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
@@ -120,12 +103,11 @@ class FashionMnist(Task):
         train_data = FashionMNIST(
             train_data_path,
             train=True,
-            download=True)
-        train_data = AdaptiveDataset(
-            dataset=train_data,
-            suffix_transform = [
+            download=True,
+            transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize((0.1307,), (0.3081,))])
+                torchvision.transforms.Normalize((0.1307,), (0.3081,))
+            ]))
         test_data = FashionMNIST(
             test_data_path,
             train=False,
@@ -181,21 +163,7 @@ class EMnist(Task):
         }
         # define hyper-parameter search space
         hyper_parameters = Hyperparameters(
-            augment_params={
-                'brightness' : Hyperparameter(0.0, 1.0),
-                'contrast' : Hyperparameter(0.0, 1.0),
-                'saturation' : Hyperparameter(0.0, 1.0),
-                'hue' : Hyperparameter(0.0, 1.0),
-                #'degrees' : Hyperparameter(0, 90),
-                #'translate_horizontal' : Hyperparameter(0.0, 1.0),
-                #'translate_vertical' : Hyperparameter(0.0, 1.0),
-                #'scale_min' : Hyperparameter(0.5, 1.5),
-                #'scale_max' : Hyperparameter(0.5, 1.5),
-                #'shear' : Hyperparameter(0, 90),
-                #'perspective' : Hyperparameter(0.0, 1.0),
-                #'vertical_flip' : Hyperparameter(0.0, 1.0),
-                #'horizontal_flip' : Hyperparameter(0.0, 1.0)
-            },
+            augment_params=None,
             model_params=model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
