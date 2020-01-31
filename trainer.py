@@ -31,10 +31,12 @@ class Trainer(object):
         self.device = device
         self.verbose = verbose
 
-    def create_model(self, model_state = None):
+    def create_model(self, hyper_parameters : Hyperparameters = None, model_state = None):
         model = self.model_class().to(self.device)
         if model_state:
             model.load_state_dict(model_state)
+        if isinstance(model, HyperNet) and hyper_parameters.model:
+            model.apply_hyper_parameters(hyper_parameters.model, self.device)
         return model
 
     def create_optimizer(self, model : HyperNet, hyper_parameters : Hyperparameters, optimizer_state : dict  = None):
@@ -65,9 +67,7 @@ class Trainer(object):
             raise ValueError("The number of steps must be at least one or higher.")
         with torch.cuda.device(0):
             # preparing model and optimizer
-            model = self.create_model(model_state)
-            if isinstance(model, HyperNet):
-                model.apply_hyper_parameters(hyper_parameters.model, self.device)
+            model = self.create_model(hyper_parameters, model_state)
             model.train()
             optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
             # initialize eval metrics dict

@@ -232,3 +232,27 @@ class Population(Generation):
 
     def __to_generation(self) -> Generation:
         return Generation(self, size=self.size)
+
+class PopulationAsync(Generation):
+    def __init__(self, size):
+        super().__init__(self, size=size)
+        self.__history : List[MemberState] = list()
+        self.__ban = list()
+
+    @property
+    def generations(self) -> List[Generation]:
+        """ Return all generations in the population."""
+        return self.__history + [self.__to_generation()]
+
+    @property
+    def members(self) -> List[MemberState]:
+        """ Return all members across all generations in the population."""
+        return self.__history + self
+
+    def append(self, member : MemberState):
+        if self.full():
+            self.__history.append(self.pop())
+        self.append(member)
+
+    def __to_generation(self) -> Generation:
+        return Generation(self, size=self.size)

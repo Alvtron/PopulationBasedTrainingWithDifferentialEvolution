@@ -1,19 +1,19 @@
 Knowledge Sharing for Population Based Neural Network Training
 https://link.springer.com/chapter/10.1007/978-3-030-00111-7_22
 
-EMNIST Balanced LeNet5 without Knowledge Sharing
+EMNIST (split: MNIST) LeNet5 without Knowledge Sharing
 mean 99.29±.07  
 min 99.14
 max 99.46
-EMNIST Balanced LeNet5 with Knowledge Sharing
+EMNIST (split: MNIST) LeNet5 with Knowledge Sharing
 mean 99.33±.10
 min 99.09
 max 99.47
-EMNIST Balanced MLP without Knowledge Sharing
+EMNIST (split: MNIST) MLP without Knowledge Sharing
 mean 98.57±.08
 min 98.39
 max 98.69
-EMNIST Balanced MLP with Knowledge Sharing
+EMNIST (split: MNIST) MLP with Knowledge Sharing
 mean 98.73±.09
 min 98.47
 max 98.91

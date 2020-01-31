@@ -32,10 +32,10 @@ class Controller(object):
             self, context : BaseContext, population_size : int, hyper_parameters : Hyperparameters,
             trainer : Trainer, evaluator : Evaluator, evolver : EvolveEngine,
             loss_metric : str, eval_metric : str, loss_functions : dict, database : Database,
-            step_size = 1, evolve_frequency : int = 5, end_criteria : dict = {'score': 100.0}, eval_steps=1,
+            step_size = 1, end_criteria : dict = {'score': 100.0}, eval_steps=1,
             tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False, history_limit : int = None,
             device : str = 'cpu', n_jobs : int = -1, verbose : int = 1, logging : bool = True):
-        assert evolve_frequency and evolve_frequency > 0, f"Frequency must be of type {int} and 1 or higher."
+        assert step_size and step_size > 0, f"Step size must be of type {int} and 1 or higher."
         self.population = Population(population_size)
         self.database = database
         self.evolver = evolver
@@ -46,7 +46,6 @@ class Controller(object):
         self.eval_metric = eval_metric
         self.loss_functions = loss_functions
         self.step_size = step_size
-        self.evolve_frequency = evolve_frequency
         self.end_criteria = end_criteria
         self.eval_steps = eval_steps
         self.detect_NaN = detect_NaN
@@ -78,7 +77,6 @@ class Controller(object):
             'eval_metric': self.eval_metric,
             'loss_functions': self.loss_functions,
             'step_size': self.step_size,
-            'evolve_frequency': self.evolve_frequency,
             'end_criteria': self.end_criteria
         }
         pickle.dump(parameters, self.database.create_file("info", "parameters.obj").open("wb"))
@@ -204,14 +202,11 @@ class Controller(object):
                     global_step=member.steps)
 
     def is_member_ready(self, member : Checkpoint):
-        """True every n-th epoch."""
-        return member.steps % self.evolve_frequency == 0
+        """True every step size exceeded."""
+        return member.steps % self.step_size == 0
 
     def is_member_finished(self, member : Checkpoint):
         """With the end_criteria, check if the provided member is finished training."""
-        if 'epochs' in self.end_criteria and self.end_criteria['epochs'] and member.epochs >= self.end_criteria['epochs']:
-            # the number of epochs is equal or above the given treshold
-            return True
         if 'steps' in self.end_criteria and self.end_criteria['steps'] and member.steps >= self.end_criteria['steps']:
             # the number of steps is equal or above the given treshold
             return True
@@ -242,17 +237,17 @@ class Controller(object):
 
     def create_member(self, id):
         """Create a member object"""
-        # copy hyper-parameters
-        hyper_parameters = copy.deepcopy(self.hyper_parameters)
         # create new member object
         member = Checkpoint(
             id=id,
             directory=self.database.create_entry_directoy_path(id),
-            hyper_parameters=hyper_parameters,
+            hyper_parameters=copy.deepcopy(self.hyper_parameters),
             loss_metric=self.loss_metric,
             eval_metric=self.eval_metric,
             minimize=self.loss_functions[self.eval_metric].minimize,
             step_size=self.step_size)
+        # let evolver process new member
+        self.evolver.on_member_spawn(member, self.__whisper)
         return member
 
     def create_members(self, k : int):
@@ -304,6 +299,8 @@ class Controller(object):
         member.update(elitist)
         member.steps = elitist.steps
         member.epochs = elitist.epochs
+        # resample hyper parameters
+        [hp.sample_uniform() for hp in member]
 
     def eval_function(self, candidate : Checkpoint):
         """
@@ -333,8 +330,6 @@ class Controller(object):
         """
         self.__whisper("creating initial members member objects...")
         members = self.create_members(self.population.size)
-        self.__whisper("on evolver initialization")
-        self.evolver.on_initialization(members, self.__whisper)
         self.__whisper("creating worker processes...")
         n_workers = self.n_jobs if 0 < self.n_jobs <= self.population.size else self.population.size
         self.spawn_workers(n_workers)
@@ -440,6 +435,7 @@ class Controller(object):
             candidate=candidate,
             eval_function=self.eval_function,
             logger=partial(self.__log_silent, member))
+        self.nfe += 1
         self.__log_silent(member, "updating...")
         member.update(candidate)
         member.time['evolve'] = float(time.time_ns() - start_evolve_time_ns) * float(10**(-9))
@@ -447,5 +443,4 @@ class Controller(object):
     def train_member(self, member : Checkpoint):
         """Queue the provided member checkpoint for training."""
         self.__log_silent(member, "training...")
-        self.nfe += 1
         self.train_queue.put(member)

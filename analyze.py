@@ -13,6 +13,21 @@ from hyperparameters import Hyperparameter, Hyperparameters
 from utils.constraint import clip
 from utils.iterable import flatten_dict
 from collections import defaultdict
+from statistics import stdev, mean
+
+def ylim_outliers(data, minimum=None, maximum=None, strength = 1.5):
+    # calculate summary statistics
+    data_mean = mean(data)
+    data_std = stdev(data)
+    # identify outliers
+    cut_off = data_std * strength
+    lower = data_mean - cut_off
+    upper = data_mean + cut_off
+    # constrain
+    lower = max(lower, minimum) if minimum else lower
+    upper = min(upper, maximum) if maximum else upper
+    # limit
+    plt.ylim(bottom=lower, top=upper, auto=False)
 
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase):
@@ -45,21 +60,6 @@ class Analyzer(object):
                 f.write(str(checkpoint) + "\n")
         if verbose: print(result)
         return tested_subjects
-
-    def create_progression_dict(self):
-        attributes = {'steps','epochs','hyper_parameters','loss','time'}
-        population_entries = self.database.to_dict()
-        checkpoint_progression = dict()
-        for entry_id, entries in population_entries.items():
-            checkpoint_progression[entry_id] = dict()
-            for entry in entries.values():
-                entry_dict = { attribute: entry.__dict__[attribute] for attribute in attributes }
-                entry_dict = flatten_dict(entry_dict, exclude=['hyper_parameters'], delimiter='_')
-                for attribute, value in entry_dict.items():
-                    if not attribute in checkpoint_progression[entry_id]:
-                        checkpoint_progression[entry_id][attribute] = list()
-                    checkpoint_progression[entry_id][attribute] += [value]
-        return checkpoint_progression
 
     def create_statistics(self, save_directory):
         population_entries = self.database.to_dict()
@@ -109,24 +109,51 @@ class Analyzer(object):
                     file.write(info + "\n")
 
     def create_plot_files(self, save_directory):
-        exclude_attributes = {'steps','epochs','hyper_parameters'}
-        progression_dict = self.create_progression_dict()
-        attributes = next(iter(progression_dict.values())).keys()
-        for attribute in attributes:
-            if attribute in exclude_attributes:
-                continue
+        population_entries = self.database.to_dict()
+        # create data holders
+        loss_dict = defaultdict(lambda: defaultdict(dict))
+        time_dict = defaultdict(lambda: defaultdict(dict))
+        # aquire plot data
+        for entry_id, entries in population_entries.items():
+            for step, entry in entries.items():
+                for metric_type, metric_value in flatten_dict(entry.loss, delimiter ='_').items():
+                    if step not in loss_dict[metric_type][entry_id]:
+                        loss_dict[metric_type][entry_id][step] = list()
+                    loss_dict[metric_type][entry_id][step].append(metric_value)
+                for time_group, time_value in flatten_dict(entry.time, delimiter ='_').items():
+                    if step not in time_dict[time_group][entry_id]:
+                        time_dict[time_group][entry_id][step] = list()
+                    time_dict[time_group][entry_id][step].append(time_value)
+        # plot loss
+        for metric_type, members_entries in loss_dict.items():
             plt.xlabel("steps")
             plt.ylabel("value")
-            plt.title(attribute)
-            for id in progression_dict:
-                try:
-                    data = np.array(progression_dict[id][attribute])
-                    plt.plot(data, label=f"m_{id}")
-                except KeyError:
-                    continue
-            plt.legend()
-            plt.savefig(fname=Path(save_directory, f"{attribute}_plot.png"), format='png', transparent=False)
-            plt.savefig(fname=Path(save_directory, f"{attribute}_plot.svg"), format='svg', transparent=True)
+            plt.title(metric_type)
+            data = list()
+            for id, steps_entries in members_entries.items():
+                sorted_entries = list(zip(*sorted(steps_entries.items())))
+                data.extend(list(itertools.chain(*sorted_entries[1])))
+                plt.scatter(sorted_entries[0], sorted_entries[1], marker="o", s=4, label=f"m_{id}")
+            if 'acc' in metric_type:
+                ylim_outliers(data, minimum=-5, maximum=105)
+            else:
+                ylim_outliers(data, minimum=-0.05, maximum=1.05)
+            plt.savefig(fname=Path(save_directory, f"loss_{metric_type}_plot.png"), format='png', transparent=False)
+            plt.savefig(fname=Path(save_directory, f"loss_{metric_type}_plot.svg"), format='svg', transparent=True)
+            plt.clf()
+        # plot time
+        for time_group, members_entries in time_dict.items():
+            plt.xlabel("steps")
+            plt.ylabel("seconds")
+            plt.title(time_group)
+            data = list()
+            for id, steps_entries in members_entries.items():
+                sorted_entries = list(zip(*sorted(steps_entries.items())))
+                data.extend(list(itertools.chain(*sorted_entries[1])))
+                plt.scatter(sorted_entries[0], sorted_entries[1], marker="o", s=4, label=f"m_{id}")
+            ylim_outliers(data)
+            plt.savefig(fname=Path(save_directory, f"time_{time_group}_plot.png"), format='png', transparent=False)
+            plt.savefig(fname=Path(save_directory, f"time_{time_group}_plot.svg"), format='svg', transparent=True)
             plt.clf()
 
     def create_hyper_parameter_plot_files(self, save_directory, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 8, cmap = "winter", best_color = "orange", worst_color = "red"):

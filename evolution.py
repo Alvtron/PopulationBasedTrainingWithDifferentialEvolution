@@ -4,53 +4,46 @@ import copy
 import warnings
 import collections
 from hyperparameters import Hyperparameters
-from abc import abstractmethod
-from typing import Tuple, List, Dict, Iterable
+from abc import ABC, abstractmethod
+from typing import Tuple, List, Dict, Iterable, Sequence
 from member import MemberState, Generation, Population
 from de.mutation import de_rand_1, de_current_to_best_1
 from de.constraint import halving
 from utils.constraint import clip
 from utils.distribution import randn, randc
 
-def random_from_dict(members : Dict, k : int = 1, exclude=None):
+def random_from_dict(members : Dict, k : int = 1, exclude : Sequence[MemberState] = None) -> Tuple[MemberState, ...]:
     if not isinstance(exclude, collections.Sequence):
         exclude = [exclude]
     filtered = members.values() if not exclude else [m for id, m in members.values() if m not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
-def random_from_list(members : Iterable, k : int = 1, exclude=None):
+def random_from_list(members : Iterable, k : int = 1, exclude : Sequence[MemberState] = None) -> Tuple[MemberState, ...]:
     if not isinstance(exclude, collections.Sequence):
         exclude = [exclude]
     filtered = members if not exclude else [m for m in members if m not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
-class EvolveEngine(object):
+class EvolveEngine(ABC):
     """
     Base class for all evolvers.
     """
-    def __init__(self):
+    def on_member_spawn(self, member : MemberState, logger):
+        """Called for each new member."""
         pass
 
-    def on_initialization(self, generation : Generation, logger):
-        """Called before optimization begins."""
-        pass
-
-    @abstractmethod
     def on_generation_start(self, generation : Generation, logger):
         """Called before each generation."""
         pass
 
-    @abstractmethod
     def on_evolve(self, member : MemberState, generation : Generation, function, logger) -> MemberState:
         """Called for each member in generation."""
         pass
 
-    @abstractmethod
     def on_evaluation(self, member : MemberState, candidate : MemberState, eval_function, logger) -> MemberState:
         """Returns the determined 'best' member."""
         pass
 
-    @abstractmethod
     def on_generation_end(self, generation : Generation, logger):
         """Called at the end of each generation."""
         pass
@@ -68,15 +61,11 @@ class ExploitAndExplore(EvolveEngine):
         self.random_walk = random_walk
         self.constraint = constraint
 
-    def on_initialization(self, generation : Generation, logger):
-        """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
-        for member in generation:
-            for hyper_parameter in member:
-                hyper_parameter.set_constraint(self.constraint)
-                hyper_parameter.sample_uniform()
-
-    def on_generation_start(self, generation : Generation, logger):
-        pass
+    def on_member_spawn(self, member : MemberState, logger):
+        """Called for each new member."""
+        for hyper_parameter in member:
+            hyper_parameter.set_constraint(self.constraint)
+            hyper_parameter.sample_uniform()
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -116,9 +105,6 @@ class ExploitAndExplore(EvolveEngine):
                 walk_factor = random.uniform(min, max)
                 hp += walk_factor
         return explorer
-    
-    def on_generation_end(self, generation : Generation, logger):
-        pass
 
 class DifferentialEvolution(EvolveEngine):
     """
@@ -130,15 +116,11 @@ class DifferentialEvolution(EvolveEngine):
         self.Cr = Cr
         self.constraint = constraint
 
-    def on_initialization(self, generation : Generation, logger):
-        """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
-        for member in generation:
-            for hyper_parameter in member:
-                hyper_parameter.set_constraint(self.constraint)
-                hyper_parameter.sample_uniform()
-
-    def on_generation_start(self, generation : Generation, logger):
-        pass
+    def on_member_spawn(self, member : MemberState, logger):
+        """Called for each new member."""
+        for hyper_parameter in member:
+            hyper_parameter.set_constraint(self.constraint)
+            hyper_parameter.sample_uniform()
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """
@@ -172,9 +154,6 @@ class DifferentialEvolution(EvolveEngine):
         else:
             logger(f"maintain member (x {member.score():.4f} > u {candidate.score():.4f}).")
             return member
-
-    def on_generation_end(self, generation : Generation, logger):
-        pass
 
 def mean_wl(S, weights):
     """
@@ -230,7 +209,7 @@ class ExternalArchive(list):
     def insert(self, index, parent):
         raise NotImplementedError()
     
-    def extend(self, parent):
+    def extend(self, parents):
         raise NotImplementedError()
 
 class SHADE(EvolveEngine):
@@ -259,37 +238,32 @@ class SHADE(EvolveEngine):
         self.CR_i = None
         self.F_i = None
         
-    def on_initialization(self, generation : Generation, logger):
-        """For every hyperparameter, sample a new random, uniform sample within the constrained search space."""
-        for member in generation:
-            for hyper_parameter in member:
-                hyper_parameter.sample_uniform()
+    def on_member_spawn(self, member : MemberState, logger):
+        """Called for each new member."""
+        for hyper_parameter in member:
+            hyper_parameter.sample_uniform()
 
     def on_generation_start(self, generation : Generation, logger):
         self.memory.reset()
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """
-        Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
-        implementation of differential evolution.
+        Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
+        implementation of differential evolution, with adapted CR and F parameters.
         """
         if generation.size < 4:
             raise ValueError("generation size must be at least 4 or higher.")
         # hyper-parameter dimension size
-        hp_dimension_size = len(member)
+        dimension_size = len(member)
         # control parameter assignment
         self.CR_i, self.F_i = self.get_control_parameters()
-        # random unique members
-        if self.archive:
-            x_r1 = random_from_list(generation, exclude=member)
-            x_r2 = random_from_list(self.archive + generation,  exclude=(member, x_r1))
-        else:
-            x_r1, x_r2 = random_from_list(generation, k=2, exclude=member)
-        # random best member
+        # select random unique members from the union of the generation and archive
+        x_r1, x_r2 = random_from_list(self.archive + generation, k=2, exclude=member)
+        # select random best member
         x_pbest = self.pbest_member(generation)
-        # random parameter dimension
-        j_rand = random.randrange(0, hp_dimension_size)
-        for j in range(hp_dimension_size):
+        # choose random parameter dimension
+        j_rand = random.randrange(0, dimension_size)
+        for j in range(dimension_size):
             base = member[j].normalized
             if random.uniform(0.0, 1.0) <= self.CR_i or j == j_rand:
                 mutant = de_current_to_best_1(
@@ -327,21 +301,31 @@ class SHADE(EvolveEngine):
         self.memory.update()
 
     def get_control_parameters(self):
+        """
+        The crossover probability CRi is generated according to a normal distribution
+        of mean μCR and standard deviation 0.1 and then truncated to [0, 1].
+
+        The mutation factor Fi is generated according to a Cauchy distribution
+        with location parameter μF and scale parameter 0.1 and then
+        truncated to be 1 if Fi >= 1 or regenerated if Fi <= 0.
+        """
         # select random from memory
         r1 = random.randrange(0, self.memory.size)
         MF_i = self.memory.m_f[r1]
         MCR_i = self.memory.m_cr[r1]
-        # constrain MCR_i
-        CR_i = MCR_i
+        # generate MCR_i
         if MCR_i == None:
             CR_i = 0.0
-        CR_i = clip(randn(MCR_i, 0.1), 0.0, 1.0)
-        # constrain MF_i
-        F_i = randc(MF_i, 0.1)
-        if F_i > 1.0:
-            F_i = 1.0
-        while F_i <= 0.0 or F_i > 1.0:
+        else:
+            CR_i = clip(randn(MCR_i, 0.1), 0.0, 1.0)
+        # generate MF_i
+        while True:
             F_i = randc(MF_i, 0.1)
+            if F_i <= 0.0:
+                continue
+            if F_i >= 1.0:
+                F_i = 1.0
+                break
         return CR_i, F_i
         
     def pbest_member(self, generation : List[MemberState]):

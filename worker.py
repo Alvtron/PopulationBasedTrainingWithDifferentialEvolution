@@ -8,13 +8,12 @@ from member import Checkpoint
 
 STOP_FLAG = None
 
-# set random state for reproducibility
-torch.manual_seed(0)
+# reproducibility
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
+# multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
-
 mp = torch.multiprocessing.get_context('spawn')
 
 class Worker(mp.Process):

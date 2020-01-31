@@ -16,43 +16,148 @@ from hyperparameters import Hyperparameter, Hyperparameters
 from loss import F1, NLL, Accuracy, BinaryCrossEntropy, CategoricalCrossEntropy
 from functools import partial
 from utils.data import AdaptiveDataset
+from abc import ABC, abstractmethod, abstractproperty
 
-@dataclass
-class Task(object):
-    name: str
-    model_class : models.HyperNet
-    optimizer_class : Optimizer
-    loss_metric : str
-    eval_metric : str
-    loss_functions : dict
-    train_data : Dataset
-    eval_data : Dataset
-    test_data : Dataset
-    hyper_parameters : Hyperparameters
+class Datasets(object):
+    def __init__(self, train, eval, test):
+        self.train = train
+        self.eval = eval
+        self.test = test
 
-class Mnist(Task):
+class Task(ABC):
+    """
+    Base class for all tasks.
+    """
+
+    @property
+    def model_class(self) -> models.HyperNet:
+        raise NotImplementedError()
+
+    @property
+    def optimizer_class(self) -> Optimizer:
+        raise NotImplementedError()
+
+    @property
+    def hyper_parameters(self) -> Hyperparameters:
+        """Define hyper-parameter search space. """
+        raise NotImplementedError()
+
+    @property
+    def loss_functions(self) -> dict:
+        raise NotImplementedError()
+
+    @property
+    def loss_metric(self) -> str:
+        raise NotImplementedError()
+
+    @property
+    def eval_metric(self) -> str:
+        raise NotImplementedError()
+
+    @property
+    def datasets(self) -> Datasets:
+        raise NotImplementedError()
+
+class CreditCardFraud(Task):
     def __init__(self):
-        classes = 10
-        model_class = models.MnistNet10Larger
-        optimizer_class = torch.optim.SGD
-        loss_metric = 'cce'
-        eval_metric = 'acc'
-        loss_functions = {
-            'cce': CategoricalCrossEntropy(),
-            'acc': Accuracy(),
-            'f1': F1(classes=classes)
-        }
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
+        pass
+
+    @property
+    def model_class(self) -> models.HyperNet:
+        return models.FraudNet
+
+    @property
+    def optimizer_class(self) -> Optimizer:
+        return torch.optim.SGD
+
+    @property
+    def hyper_parameters(self) -> Hyperparameters:
+        return Hyperparameters(
             augment_params=None,
-            model_params=model_class.create_hyper_parameters(),
+            model_params= self.model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 0.5),
+                'momentum': Hyperparameter(1e-6, 1.0),
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        # prepare training and testing data
+
+    @property
+    def loss_functions(self) -> dict:
+        return \
+        {
+            'bce': BinaryCrossEntropy(),
+            'acc': Accuracy(),
+            'f1': F1(classes=2)
+        }
+
+    @property
+    def loss_metric(self) -> str:
+        return 'bce'
+
+    @property
+    def eval_metric(self) -> str:
+        return 'bce'
+
+    @property
+    def datasets(self) -> Datasets:
+        df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
+        inputs = df.iloc[:, :-1].values
+        labels = df.iloc[:, -1].values
+        sc = sklearn.preprocessing.StandardScaler()
+        torch_inputs = sc.fit_transform(inputs)
+        torch_inputs = torch.from_numpy(torch_inputs).float()
+        torch_labels = torch.from_numpy(labels).float()
+        dataset = torch.utils.data.TensorDataset(torch_inputs, torch_labels)
+        # split dataset into training-, testing- and validation set
+        train_data, train_labels, test_data, _ = utils.data.stratified_split(
+            dataset, labels, fraction=0.9, random_state=1)
+        train_data, _, eval_data, _ = utils.data.stratified_split(
+            train_data, train_labels, fraction=0.9, random_state=1)
+        return Datasets(train_data, eval_data, test_data)
+
+class Mnist(Task):
+    def __init__(self):
+        pass
+
+    @property
+    def model_class(self) -> models.HyperNet:
+        return models.MnistNet10Larger
+
+    @property
+    def optimizer_class(self) -> Optimizer:
+        return torch.optim.SGD
+
+    @property
+    def hyper_parameters(self) -> Hyperparameters:
+        return Hyperparameters(
+            augment_params=None,
+            model_params= self.model_class.create_hyper_parameters(),
+            optimizer_params={
+                'lr': Hyperparameter(1e-6, 1e-1),
+                'momentum': Hyperparameter(1e-6, 1.0),
+                'weight_decay': Hyperparameter(0.0, 1e-5),
+                'nesterov': Hyperparameter(False, True, is_categorical=True)
+            })
+
+    @property
+    def loss_functions(self) -> dict:
+        return \
+        {
+            'cce': CategoricalCrossEntropy(),
+            'acc': Accuracy()
+        }
+
+    @property
+    def loss_metric(self) -> str:
+        return 'cce'
+
+    @property
+    def eval_metric(self) -> str:
+        return 'cce'
+
+    @property
+    def datasets(self) -> Datasets:
         train_data_path = test_data_path = './data'
         train_data = MNIST(
             train_data_path,
@@ -73,32 +178,53 @@ class Mnist(Task):
         # split training set into training set and validation set
         train_data, _, eval_data, _ = utils.data.stratified_split(
             train_data, labels=train_data.targets, fraction=50000/60000, random_state=1)
-        # initia/lize task
-        super().__init__("mnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
-
-class FashionMnist(Task):
+        return Datasets(train_data, eval_data, test_data)
+        
+class MnistKnowledgeSharing(Mnist):
     def __init__(self):
-        classes = 10
-        model_class = models.MnistNet10Larger
-        optimizer_class = torch.optim.SGD
-        loss_metric = 'cce'
-        eval_metric = 'acc'
-        loss_functions = {
-            'cce': CategoricalCrossEntropy(),
-            'acc': Accuracy(),
-            'f1': F1(classes=classes)
-        }
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
+        pass
+    
+    @property
+    def hyper_parameters(self) -> Hyperparameters:
+        model_hyper_parameters = self.model_class.create_hyper_parameters(['dropout_rate_1', 'dropout_rate_2', 'dropout_rate_3'])
+        return Hyperparameters(
             augment_params=None,
-            model_params=model_class.create_hyper_parameters(),
+            model_params= model_hyper_parameters,
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 0.5),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
+                'momentum': Hyperparameter(1e-6, 1.0)
             })
-        # prepare training and testing data
+
+    @property
+    def datasets(self) -> Datasets:
+        train_data_path = test_data_path = './data'
+        train_data = MNIST(
+            train_data_path,
+            train=True,
+            download=True,
+            transform=torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.1307,), (0.3081,))
+            ]))
+        test_data = MNIST(
+            test_data_path,
+            train=False,
+            download=True,
+            transform=torchvision.transforms.Compose([
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.1307,), (0.3081,))
+            ]))
+        # split training set into training set and validation set
+        train_data, _, eval_data, _ = utils.data.stratified_split(
+            train_data, labels=train_data.targets, fraction=54000/60000, random_state=1)
+        return Datasets(train_data, eval_data, test_data)
+
+class FashionMnist(Mnist):
+    def __init__(self):
+        pass
+    
+    @property
+    def datasets(self) -> Datasets:
         train_data_path = test_data_path = './data'
         train_data = FashionMNIST(
             train_data_path,
@@ -118,12 +244,10 @@ class FashionMnist(Task):
             ]))
         # split training set into training set and validation set
         train_data, _, eval_data, _ = utils.data.stratified_split(
-            train_data, labels=train_data.targets, fraction=50000/60000, random_state=1)
-        # initialize task
-        super().__init__("fashionmnist", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
+            train_data, labels=train_data.targets, fraction=54000/60000, random_state=1)
+        return Datasets(train_data, eval_data, test_data)
 
-
-class EMnist(Task):
+class EMnist(Mnist):
     """
     The EMNIST dataset is a set of handwritten character digits derived from the NIST Special Database 19 (https://www.nist.gov/srd/nist-special-database-19)
     and converted to a 28x28 pixel image format and dataset structure that directly matches the MNIST dataset (http://yann.lecun.com/exdb/mnist/).\n
@@ -142,40 +266,46 @@ class EMnist(Task):
     The validation set is the last portion of the training set, equal to the size of the testing set.
     """
     def __init__(self, split : str = 'mnist'):
-        num_classes = {'byclass': 62, 'bymerge': 47, 'balanced': 47, 'letters': 26, 'digits': 10, 'mnist': 10}
-        models_classes = {
+        self.split = split
+        self.num_classes = {'byclass': 62, 'bymerge': 47, 'balanced': 47, 'letters': 26, 'digits': 10, 'mnist': 10}
+        self.models_classes = {
             'byclass': models.MnistNet62Larger,
             'bymerge': models.MnistNet47Larger,
             'balanced': models.MnistNet47Larger,
             'letters': models.MnistNet26Larger,
             'digits': models.MnistNet10Larger,
-            'mnist': models.MnistNet10Larger
-            }
-        classes = num_classes[split]
-        model_class = models_classes[split]
-        optimizer_class = torch.optim.SGD
-        loss_metric = 'cce'
-        eval_metric = 'acc'
-        loss_functions = {
-            'cce': CategoricalCrossEntropy(),
-            'acc': Accuracy(),
-            'f1': F1(classes=classes)
-        }
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
+            'mnist': models.MnistNet10Larger}
+    
+    @property
+    def num_classes(self) -> int:
+        return self.num_classes[self.split]
+
+    @property
+    def model_class(self) -> models.HyperNet:
+        return self.models_classes[self.split]
+
+    @property
+    def optimizer_class(self) -> Optimizer:
+        return torch.optim.SGD
+
+    @property
+    def hyper_parameters(self) -> Hyperparameters:
+        return Hyperparameters(
             augment_params=None,
-            model_params=model_class.create_hyper_parameters(),
+            model_params=self.model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': Hyperparameter(1e-6, 1e-1),
                 'momentum': Hyperparameter(1e-6, 0.5),
                 'weight_decay': Hyperparameter(0.0, 1e-5),
                 'nesterov': Hyperparameter(False, True, is_categorical=True)
             })
-        # prepare dataset
+
+    @property
+    def datasets(self) -> Datasets:
         train_data_path = test_data_path = './data'
         train_data = EMNIST(
             train_data_path,
-            split=split,
+            split=self.split,
             train=True,
             download=True,
             transform=torchvision.transforms.Compose([
@@ -184,7 +314,7 @@ class EMnist(Task):
             ]))
         test_data = EMNIST(
             test_data_path,
-            split=split,
+            split=self.split,
             train=False,
             download=True,
             transform=torchvision.transforms.Compose([
@@ -200,46 +330,8 @@ class EMnist(Task):
             'letters': partial(utils.data.split, train_data, (124800-20800)/124800),
             'mnist': partial(utils.data.split, train_data, (60000-10000)/60000)
             }
-        if split in ['byclass', 'bymerge']:
-            train_data, _, eval_data, _ = split_method[split]()
+        if self.split in ['byclass', 'bymerge']:
+            train_data, _, eval_data, _ = split_method[self.split]()
         else:
-            train_data, eval_data = split_method[split]()
-        # initialize task
-        super().__init__(f"emnist_{split}", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
-
-class CreditCardFraud(Task):
-    def __init__(self):
-        model_class = models.FraudNet
-        optimizer_class = torch.optim.SGD
-        loss_metric = 'bce'
-        eval_metric = 'bce'
-        loss_functions = {
-            'bce': BinaryCrossEntropy(),
-            'acc': Accuracy(),
-            'f1': F1(classes=2)
-        }
-        # define hyper-parameter search space
-        hyper_parameters = Hyperparameters(
-            augment_params=None,
-            model_params=model_class.create_hyper_parameters(),
-            optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 0.5),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
-            })
-        # prepare dataset
-        df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
-        inputs = df.iloc[:, :-1].values
-        labels = df.iloc[:, -1].values
-        sc = sklearn.preprocessing.StandardScaler()
-        torch_inputs = sc.fit_transform(inputs)
-        torch_inputs = torch.from_numpy(torch_inputs).float()
-        torch_labels = torch.from_numpy(labels).float()
-        dataset = torch.utils.data.TensorDataset(torch_inputs, torch_labels)
-        # split dataset into training-, testing- and validation set
-        train_data, train_labels, test_data, _ = utils.data.stratified_split(
-            dataset, labels, fraction=0.9, random_state=1)
-        train_data, _, eval_data, _ = utils.data.stratified_split(
-            train_data, train_labels, fraction=0.9, random_state=1)
-        super().__init__("creditfraud", model_class, optimizer_class, loss_metric, eval_metric, loss_functions, train_data, eval_data, test_data, hyper_parameters)
+            train_data, eval_data = split_method[self.split]()
+        return Datasets(train_data, eval_data, test_data)

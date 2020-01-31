@@ -1,14 +1,15 @@
-import argparse
 import os
+import copy
 import random
-import numpy
+import argparse
+import task
 import torch
-from functools import partial
-from task import Mnist, EMnist, FashionMnist, CreditCardFraud
-from tensorboard import program
-import torch
-from torch.utils.tensorboard import SummaryWriter
+import numpy as np
 
+from dataclasses import dataclass
+from functools import partial
+from tensorboard import program
+from torch.utils.tensorboard import SummaryWriter
 from analyze import Analyzer
 from controller import Controller
 from database import Database
@@ -16,46 +17,53 @@ from evaluator import Evaluator
 from evolution import ExploitAndExplore, DifferentialEvolution, SHADE, LSHADE
 from trainer import Trainer
 
-# set random state for reproducibility
+# various settings for reproducibility
+# set random state 
 random.seed(0)
-numpy.random.seed(0)
+np.random.seed(0)
 torch.manual_seed(0)
+# set torch settings
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
+# multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
-TASK = 'emnist_mnist'
-EVOLVER = 'lshade'
-POPULATION_SIZE = 20
-BATCH_SIZE = 64
-STEP_SIZE = 100
-END_STEPS = None # * STEP_SIZE
-END_EPOCHS = None
-END_NFE = POPULATION_SIZE * 100
-END_SCORE = None
-TEST_LIMIT = 100
-HISTORY_LIMIT = 100
-DIRECTORY = 'checkpoints'
-DEVICE = 'cuda'
-N_JOBS = 6
+@dataclass
+class Arguments():
+    task : str
+    evolver : str
+    directory : str
+    population_size : int = 10
+    batch_size : int = 32
+    step_size : int = 100
+    end_nfe : int = None
+    end_steps : int = 1000
+    end_score : float = None
+    test_limit : int = 50
+    history_limit : int = 50
+    device : str = 'cpu'
+    n_jobs : int = 1
+    tensorboard : bool = False
+    detect_NaN : bool = False
+    verbose : int = 1
+    logging : bool = False
 
 def import_arguments():
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--task", type=str, default=TASK, help="Select tasks such as 'mnist', 'creditfraud'.")
-    parser.add_argument("--evolver", type=str, default=EVOLVER, help="Select which evolve algorithm to use.")
-    parser.add_argument("--population_size", type=int, default=POPULATION_SIZE, help="The number of members in the population.")
-    parser.add_argument("--batch_size", type=int, default=BATCH_SIZE, help="The number of batches in which the training set will be divided into.")
-    parser.add_argument("--step_size", type=int, default=STEP_SIZE, help="Number of steps to train each training process.")
-    parser.add_argument("--end_steps", type=int, default=END_STEPS, help="Perform early stopping after the specified number of steps.")
-    parser.add_argument("--end_epochs", type=int, default=END_EPOCHS, help="Perform early stopping after the specified number of epochs.")
-    parser.add_argument("--end_nfe", type=int, default=END_NFE, help="Perform early stopping after the specified number of fitness evaluations.")
-    parser.add_argument("--end_score", type=int, default=END_SCORE, help="Perform early stopping when the specified score is met.")
-    parser.add_argument("--test_limit", type=int, default=TEST_LIMIT, help="Number of top performing database entries to test with the testing set.")    
-    parser.add_argument("--history_limit", type=int, default=HISTORY_LIMIT, help="Sets the number of network model- and optimizer states to keep stored in database.")
-    parser.add_argument("--directory", type=str, default=DIRECTORY, help="The directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
-    parser.add_argument("--device", type=str, default=DEVICE, help="Sets the torch processor device ('cpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
-    parser.add_argument("--n_jobs", type=int, default=N_JOBS, help="Sets the number of training processes. If n_jobs is less than 1 or higher than population size, the population size will be used instead.")
+    parser.add_argument("--task", type=str, help="Select tasks such as 'mnist', 'creditfraud'.")
+    parser.add_argument("--evolver", type=str, help="Select which evolve algorithm to use.")
+    parser.add_argument("--directory", type=str, help="The directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--population_size", type=int, default=10, help="The number of members in the population.")
+    parser.add_argument("--batch_size", type=int, default=32, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--step_size", type=int, default=100, help="Number of steps to train each training process.")
+    parser.add_argument("--end_nfe", type=int, default=None, help="Perform early stopping after the specified number of fitness evaluations.")
+    parser.add_argument("--end_steps", type=int, default=1000, help="Perform early stopping after the specified number of steps.")
+    parser.add_argument("--end_score", type=int, default=None, help="Perform early stopping when the specified score is met.")
+    parser.add_argument("--test_limit", type=int, default=50, help="Number of top performing database entries to test with the testing set.")    
+    parser.add_argument("--history_limit", type=int, default=50, help="Sets the number of network model- and optimizer states to keep stored in database.")
+    parser.add_argument("--device", type=str, default='cpu', help="Sets the torch processor device ('cpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
+    parser.add_argument("--n_jobs", type=int, default=1, help="Sets the number of training processes. If n_jobs is less than 1 or higher than population size, the population size will be used instead.")
     parser.add_argument("--tensorboard", type=bool, default=False, help="Decides whether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--detect_NaN", type=bool, default=True, help="Decides whether the controller will detect NaN loss values.")    
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity level.")
@@ -79,23 +87,23 @@ def validate_arguments(args):
 
 def import_task(task_name : str):
     if task_name == "creditfraud":
-        return CreditCardFraud()
+        return task.CreditCardFraud()
     elif task_name == "mnist":
-        return Mnist()
+        return task.Mnist()
     elif task_name == "fashionmnist":
-        return FashionMnist()
+        return task.FashionMnist()
     elif task_name == "emnist_byclass":
-        return EMnist("byclass")
+        return task.EMnist("byclass")
     elif task_name == "emnist_bymerge":
-        return EMnist("bymerge")
+        return task.EMnist("bymerge")
     elif task_name == "emnist_balanced":
-        return EMnist("balanced")
+        return task.EMnist("balanced")
     elif task_name == "emnist_letters":
-        return EMnist("letters")
+        return task.EMnist("letters")
     elif task_name == "emnist_digits":
-        return EMnist("digits")
+        return task.EMnist("digits")
     elif task_name == "emnist_mnist":
-        return EMnist("mnist")
+        return task.EMnist("mnist")
     else:
         raise NotImplementedError(f"Your requested task '{task_name}'' is not available.")
 
@@ -143,14 +151,13 @@ def create_tensorboard(log_directory):
     url = tb.launch()
     return SummaryWriter(tensorboard_log_path), url
 
-if __name__ == "__main__":
-    args = import_arguments()
+def run_task(args : Arguments):
     # prepare objective
     print(f"Importing task...")
     task = import_task(args.task)
     # prepare database
     print(f"Preparing database...")
-    database = Database(f"{args.directory}/{task.name}/{args.evolver}")
+    database = Database(f"{args.directory}/{args.task}/{args.population_size}/{args.evolver}")
     # prepare tensorboard writer
     tensorboard_writer = None
     if args.tensorboard:    
@@ -159,16 +166,15 @@ if __name__ == "__main__":
         print(f"Tensoboard is launched and accessible at: {tensorboard_url}")
     # print and save objective info
     obj_info = [
-        f"Task: {task.name}",
+        f"Task: {args.task}",
         f"Evolver: {args.evolver}",
         f"Database path: {database.path}",
         f"Population size: {args.population_size}",
         f"Hyper-parameters: {len(task.hyper_parameters)} {task.hyper_parameters.keys()}",
         f"Batch size: {args.batch_size}",
         f"Step size: {args.step_size}",
-        f"End criterium - steps: {args.end_steps}",
-        f"End criterium - epochs: {args.end_epochs}",
         f"End criterium - fitness evaluations: {args.end_nfe}",        
+        f"End criterium - steps: {args.end_steps}",
         f"End criterium - score: {args.end_score}",
         f"Loss-metric: {task.loss_metric}",
         f"Eval-metric: {task.eval_metric}",
@@ -176,10 +182,10 @@ if __name__ == "__main__":
         f"Test limit: {args.test_limit}",
         f"History limit: {args.history_limit}",
         f"Detect NaN: {args.detect_NaN}",
-        f"Training set length: {len(task.train_data)}",
-        f"Evaluation set length: {len(task.eval_data)}",
-        f"Testing set length: {len(task.test_data)}",
-        f"Total dataset length: {len(task.train_data) + len(task.eval_data) + len(task.test_data)}",
+        f"Training set length: {len(task.datasets.train)}",
+        f"Evaluation set length: {len(task.datasets.eval)}",
+        f"Testing set length: {len(task.datasets.test)}",
+        f"Total dataset length: {len(task.datasets.train) + len(task.datasets.eval) + len(task.datasets.test)}",
         f"Verbosity: {args.verbose}",
         f"Logging: {args.logging}",
         f"Device: {args.device}",
@@ -194,7 +200,7 @@ if __name__ == "__main__":
     TRAINER = Trainer(
         model_class = task.model_class,
         optimizer_class = task.optimizer_class,
-        train_data = task.train_data,
+        train_data = task.datasets.train,
         loss_functions = task.loss_functions,
         loss_metric = task.loss_metric,
         batch_size = args.batch_size,
@@ -202,14 +208,14 @@ if __name__ == "__main__":
     print(f"Creating evaluator...")
     EVALUATOR = Evaluator(
         model_class = task.model_class,
-        test_data = task.eval_data,
+        test_data = task.datasets.eval,
         loss_functions=task.loss_functions,
         batch_size = args.batch_size,
         device = args.device)
     print(f"Creating tester...")
     TESTER = Evaluator(
         model_class = task.model_class,
-        test_data = task.test_data,
+        test_data = task.datasets.test,
         loss_functions=task.loss_functions,
         batch_size = args.batch_size,
         device = args.device)
@@ -230,8 +236,7 @@ if __name__ == "__main__":
         loss_functions=task.loss_functions,
         database=database,
         step_size=args.step_size,
-        evolve_frequency=args.step_size,
-        end_criteria={'steps': args.end_steps, 'epochs': args.end_epochs, 'nfe': args.end_nfe, 'score': args.end_score},
+        end_criteria={'nfe': args.end_nfe, 'steps': args.end_steps, 'score': args.end_score},
         detect_NaN=args.detect_NaN,
         device=args.device,
         n_jobs=args.n_jobs,
@@ -244,7 +249,7 @@ if __name__ == "__main__":
     controller.start()    # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database)
-    print(f"Testing the top {args.test_limit} members on the test set of {len(task.test_data)} samples...")
+    print(f"Testing the top {args.test_limit} members on the test set of {len(task.datasets.test)} samples...")
     tested_checkpoints = analyzer.test(
         evaluator=TESTER,
         save_directory=database.create_file("results", "top_members.txt"),
@@ -259,3 +264,39 @@ if __name__ == "__main__":
     analyzer.create_plot_files(save_directory=database.create_folder("results/plots"))
     analyzer.create_hyper_parameter_plot_files(save_directory=database.create_folder("results/plots"), sensitivity=20)
     print("Program completed! You can now exit if needed.")
+
+
+"""
+        PROGRAM STARTS HERE
+"""
+
+if __name__ == "__main__":
+    population_size = 20
+    #args = import_arguments()
+    args = Arguments(
+        task = 'mnist',
+        evolver = 'pbt',
+        population_size = population_size,
+        batch_size = 128,
+        step_size = 250,
+        end_nfe = population_size * 100,
+        end_steps = None,
+        end_score = None,
+        test_limit = 100,
+        history_limit = 100,
+        directory = 'checkpoints',
+        device = 'cuda',
+        n_jobs = 6,
+        tensorboard = False,
+        detect_NaN = True,
+        verbose = 1,
+        logging = True
+    )
+    # run task
+    run_task(args)
+    args.evolver = 'de'
+    run_task(args)
+    args.evolver = 'shade'
+    run_task(args)
+    args.evolver = 'lshade'
+    run_task(args)

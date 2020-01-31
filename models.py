@@ -235,9 +235,8 @@ class MnistNetLarger(HyperNet):
         self.softmax = nn.LogSoftmax(dim=1)
         
     @staticmethod
-    def create_hyper_parameters():
-        return \
-        {
+    def create_hyper_parameters(include : list = None):
+        hparams = {
             'dropout_rate_1': Hyperparameter(0.0, 1.0),
             'dropout_rate_2': Hyperparameter(0.0, 1.0),
             'dropout_rate_3': Hyperparameter(0.0, 1.0),
@@ -246,17 +245,26 @@ class MnistNetLarger(HyperNet):
             'prelu_alpha_3': Hyperparameter(0.0, 1.0),
             'prelu_alpha_4': Hyperparameter(0.0, 1.0),
             'prelu_alpha_5': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_6': Hyperparameter(0.0, 1.0)
-        }
+            'prelu_alpha_6': Hyperparameter(0.0, 1.0)}
+        if not include:
+            return hparams
+        return {hp_name: hp_value for hp_name, hp_value in hparams.items() if hp_name in include}
 
     def apply_hyper_parameters(self, hyper_parameters, device):
-        self.dropout_1.p = hyper_parameters['dropout_rate_1'].value
-        self.dropout_2.p = hyper_parameters['dropout_rate_2'].value
-        self.dropout_3.p = hyper_parameters['dropout_rate_3'].value
-        self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value).to(device)
-        self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value).to(device)
-        self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
-        self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value).to(device)
+        if 'dropout_rate_1' in hyper_parameters:
+            self.dropout_1.p = hyper_parameters['dropout_rate_1'].value
+        if 'dropout_rate_2' in hyper_parameters:
+            self.dropout_2.p = hyper_parameters['dropout_rate_2'].value
+        if 'dropout_rate_3' in hyper_parameters:
+            self.dropout_3.p = hyper_parameters['dropout_rate_3'].value
+        if 'prelu_alpha_1' in hyper_parameters:
+            self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value).to(device)
+        if 'prelu_alpha_2' in hyper_parameters:
+            self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value).to(device)
+        if 'prelu_alpha_3' in hyper_parameters:
+            self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
+        if 'prelu_alpha_4' in hyper_parameters:
+            self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value).to(device)
 
     def forward(self, x):
         for module in self.children():
