@@ -2,20 +2,20 @@ import os
 import copy
 import random
 import argparse
-import task
 import torch
 import numpy as np
-
-from dataclasses import dataclass
 from functools import partial
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
-from analyze import Analyzer
-from controller import Controller
-from database import Database
-from evaluator import Evaluator
-from evolution import ExploitAndExplore, DifferentialEvolution, SHADE, LSHADE
-from trainer import Trainer
+from dataclasses import dataclass
+
+from pbt.task import mnist, creditfraud
+from pbt.analyze import Analyzer
+from pbt.controller import Controller
+from pbt.database import Database
+from pbt.evaluator import Evaluator
+from pbt.evolution import ExploitAndExplore, DifferentialEvolution, SHADE, LSHADE
+from pbt.trainer import Trainer
 
 # various settings for reproducibility
 # set random state 
@@ -87,23 +87,23 @@ def validate_arguments(args):
 
 def import_task(task_name : str):
     if task_name == "creditfraud":
-        return task.CreditCardFraud()
+        return creditfraud.CreditCardFraud()
     elif task_name == "mnist":
-        return task.Mnist()
+        return mnist.Mnist()
     elif task_name == "fashionmnist":
-        return task.FashionMnist()
+        return mnist.FashionMnist()
     elif task_name == "emnist_byclass":
-        return task.EMnist("byclass")
+        return mnist.EMnist("byclass")
     elif task_name == "emnist_bymerge":
-        return task.EMnist("bymerge")
+        return mnist.EMnist("bymerge")
     elif task_name == "emnist_balanced":
-        return task.EMnist("balanced")
+        return mnist.EMnist("balanced")
     elif task_name == "emnist_letters":
-        return task.EMnist("letters")
+        return mnist.EMnist("letters")
     elif task_name == "emnist_digits":
-        return task.EMnist("digits")
+        return mnist.EMnist("digits")
     elif task_name == "emnist_mnist":
-        return task.EMnist("mnist")
+        return mnist.EMnist("mnist")
     else:
         raise NotImplementedError(f"Your requested task '{task_name}'' is not available.")
 
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     population_size = 20
     #args = import_arguments()
     args = Arguments(
-        task = 'mnist',
+        task = 'emnist_mnist',
         evolver = 'pbt',
         population_size = population_size,
         batch_size = 128,
