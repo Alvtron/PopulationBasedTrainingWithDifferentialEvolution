@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .hypernet import HyperNet
-from ..hyperparameters import Hyperparameter
+from ..hyperparameters import ContiniousHyperparameter
 
 class BasicBlock(nn.Module):
     """https://github.com/xternalz/WideResNet-pytorch"""
@@ -48,8 +48,9 @@ class NetworkBlock(nn.Module):
     def forward(self, x):
         return self.layer(x)
 
-class WideResNet(nn.Module):
+class WideResNet(HyperNet):
     """https://github.com/xternalz/WideResNet-pytorch"""
+    
     def __init__(self, depth, num_classes, widen_factor=1, dropRate=0.0):
         super(WideResNet, self).__init__()
         nChannels = [16, 16*widen_factor, 32*widen_factor, 64*widen_factor]
@@ -75,6 +76,7 @@ class WideResNet(nn.Module):
                 m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
+
     def forward(self, x):
         out = self.conv1(x)
         out = self.block1(out)

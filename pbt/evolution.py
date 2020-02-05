@@ -12,23 +12,13 @@ from .de.mutation import de_rand_1, de_current_to_best_1
 from .de.constraint import halving
 from .utils.constraint import clip
 from .utils.distribution import randn, randc
-
-def random_from_dict(members : Dict, k : int = 1, exclude : Sequence[MemberState] = None) -> Tuple[MemberState, ...]:
-    if not isinstance(exclude, collections.Sequence):
-        exclude = [exclude]
-    filtered = members.values() if not exclude else [m for id, m in members.values() if m not in exclude]
-    return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
-
-def random_from_list(members : Iterable, k : int = 1, exclude : Sequence[MemberState] = None) -> Tuple[MemberState, ...]:
-    if not isinstance(exclude, collections.Sequence):
-        exclude = [exclude]
-    filtered = members if not exclude else [m for m in members if m not in exclude]
-    return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
+from .utils.iterable import split_number, grid, random_from_list
 
 class EvolveEngine(ABC):
     """
     Base class for all evolvers.
     """
+
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
         pass
@@ -49,23 +39,60 @@ class EvolveEngine(ABC):
         """Called at the end of each generation."""
         pass
 
+class RandomSearch(EvolveEngine):
+    def __init__(self):
+        super().__init__()
+
+    def on_member_spawn(self, member : MemberState, logger):
+        """Called for each new member."""
+        for hyper_parameter in member:
+            hyper_parameter.sample_uniform()
+
+    def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
+        """Simply returns the member. No mutation conducted."""
+        return member.copy()
+
+    def on_evaluation(self, member : MemberState, candidate : MemberState, eval_function, logger) -> MemberState:
+        """Simply returns the candidate. No evaluation conducted."""
+        return candidate
+
+class RandomWalk(EvolveEngine):
+    def __init__(self, explore_factor = 0.2):
+        super().__init__()
+        self.explore_factor = explore_factor
+
+    def on_member_spawn(self, member : MemberState, logger):
+        """Called for each new member."""
+        for hyper_parameter in member:
+            hyper_parameter.sample_uniform()
+
+    def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
+        """ Explore search space with random walk. """
+        logger("exploring...")
+        explorer = member.copy()
+        for hp in explorer:
+            walk_factor = random.uniform(-self.explore_factor, self.explore_factor)
+            hp += walk_factor
+        return explorer
+
+    def on_evaluation(self, member : MemberState, candidate : MemberState, eval_function, logger) -> MemberState:
+        """Simply returns the candidate. No evaluation conducted."""
+        return candidate
+
 class ExploitAndExplore(EvolveEngine):
     """
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """
-    def __init__(self, exploit_factor = 0.2, explore_factors = (0.8, 1.2), random_walk=False, constraint='clip'):
+    def __init__(self, exploit_factor = 0.2, explore_factors = (0.8, 1.2)):
         super().__init__()
         assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
         assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
-        self.random_walk = random_walk
-        self.constraint = constraint
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
         for hyper_parameter in member:
-            hyper_parameter.set_constraint(self.constraint)
             hyper_parameter.sample_uniform()
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
@@ -97,30 +124,22 @@ class ExploitAndExplore(EvolveEngine):
         logger("exploring...")
         explorer = member.copy()
         for hp in explorer:
-            if not self.random_walk:
-                perturb_factor = random.choice(self.explore_factors)
-                hp *= perturb_factor
-            else:
-                min = 1.0 - self.explore_factors[0]
-                max = 1.0 - self.explore_factors[1]
-                walk_factor = random.uniform(min, max)
-                hp += walk_factor
+            perturb_factor = random.choice(self.explore_factors)
+            hp *= perturb_factor
         return explorer
 
 class DifferentialEvolution(EvolveEngine):
     """
     A general, modifiable implementation of Differential Evolution (DE)
     """
-    def __init__(self, F = 0.2, Cr = 0.8, constraint='clip'):
+    def __init__(self, F = 0.2, Cr = 0.8):
         super().__init__()
         self.F = F
         self.Cr = Cr
-        self.constraint = constraint
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
         for hyper_parameter in member:
-            hyper_parameter.set_constraint(self.constraint)
             hyper_parameter.sample_uniform()
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
@@ -149,6 +168,7 @@ class DifferentialEvolution(EvolveEngine):
     def on_evaluation(self, member : MemberState, candidate : MemberState, eval_function, logger) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         candidate = eval_function(candidate)
+        member = eval_function(member)
         if member <= candidate :
             logger(f"mutate member (x {member.score():.4f} <= u {candidate.score():.4f}).")
             return candidate
@@ -287,6 +307,7 @@ class SHADE(EvolveEngine):
     def on_evaluation(self, member : MemberState, candidate : MemberState, eval_function, logger) -> MemberState:
         """Evaluates candidate, compares it to the original member and returns the best performer."""
         candidate = eval_function(candidate)
+        member = eval_function(member)
         if member < candidate:
             logger(f"mutation is better. Add parent member to archive.")
             self.archive.append(member.copy())

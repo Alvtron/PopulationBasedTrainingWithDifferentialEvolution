@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from .task import Task
 from ..models import hypernet, fraudnet
 from ..utils.data import split, random_split, stratified_split
-from ..hyperparameters import Hyperparameter, Hyperparameters
+from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from ..loss import F1, NLL, Accuracy, BinaryCrossEntropy
 from ..dataset import Datasets
 
@@ -33,10 +33,10 @@ class CreditCardFraud(Task):
             augment_params=None,
             model_params= self.model_class.create_hyper_parameters(),
             optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 1.0),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
+                'lr': ContiniousHyperparameter(1e-6, 1e-1),
+                'momentum': ContiniousHyperparameter(1e-6, 1.0),
+                'weight_decay': ContiniousHyperparameter(0.0, 1e-5),
+                'nesterov': CategoricalContiniousHyperparameter(False, True)
             })
 
     @property

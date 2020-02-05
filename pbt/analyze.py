@@ -1,6 +1,5 @@
 import math
 import random
-import pickle
 import itertools
 from pathlib import Path
 from collections import defaultdict
@@ -13,7 +12,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from .database import ReadOnlyDatabase
 from .evaluator import Evaluator
-from .hyperparameters import Hyperparameter, Hyperparameters
+from .hyperparameters import ContiniousHyperparameter, Hyperparameters
 from .utils.constraint import clip
 from .utils.iterable import flatten_dict
 
@@ -35,7 +34,20 @@ class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase):
         self.database : ReadOnlyDatabase = database
 
-    def test(self, evaluator : Evaluator, save_directory, limit = None, verbose = False):
+    def test(self, evaluator : Evaluator, save_directory, verbose = False):
+        best = max(self.database.latest())
+        model_state, _ = best.load_state()
+        if verbose: print(f"Testing {best}...", end=" ")
+        best.loss['test'] = evaluator.eval(model_state)
+        # save top members to file
+        result = f"Best checkpoint: {best}: {best.performance_details()}"
+        with Path(save_directory).open('a+') as f:
+            f.write(f"{result}\n\n")
+        if verbose:
+            print(result)
+        return best
+
+    def test_generations(self, evaluator : Evaluator, save_directory, limit = None, verbose = False):
         tested_subjects = list()
         minimize = next(iter(self.database)).minimize
         subjects = sorted(self.database, reverse=True)[:limit]
@@ -119,6 +131,8 @@ class Analyzer(object):
         for entry_id, entries in population_entries.items():
             for step, entry in entries.items():
                 for metric_type, metric_value in flatten_dict(entry.loss, delimiter ='_').items():
+                    if "test" in metric_type:
+                        continue
                     if step not in loss_dict[metric_type][entry_id]:
                         loss_dict[metric_type][entry_id][step] = list()
                     loss_dict[metric_type][entry_id][step].append(metric_value)
@@ -163,9 +177,8 @@ class Analyzer(object):
         color_map = plt.get_cmap(cmap)
         tab_colors = [color_map(i/10) for i in range(0, 11, 1)]
         tab_map = matplotlib.colors.ListedColormap(tab_colors)
-        # get objective data
-        objective_info = pickle.load(Path(self.database.path, "info", "parameters.obj").open("rb"))
-        hyper_parameters = objective_info['hyper_parameters']
+        # keep list of hyper_parameters
+        hyper_parameters = set()
         # get entries
         population_entries = self.database.to_dict()
         best_entries = dict()
@@ -175,6 +188,7 @@ class Analyzer(object):
         # determine best and worst entries
         for entries in population_entries.values():
             for entry in entries.values():
+                hyper_parameters.update(entry.hyper_parameters.keys())
                 if entry.steps not in best_entries or entry > best_entries[entry.steps]:
                     best_entries[entry.steps] = entry
                     if not best_score or entry > best_score:

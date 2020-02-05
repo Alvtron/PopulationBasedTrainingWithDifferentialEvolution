@@ -14,7 +14,7 @@ from pbt.analyze import Analyzer
 from pbt.controller import Controller
 from pbt.database import Database
 from pbt.evaluator import Evaluator
-from pbt.evolution import ExploitAndExplore, DifferentialEvolution, SHADE, LSHADE
+from pbt.evolution import RandomWalk, ExploitAndExplore, DifferentialEvolution, SHADE, LSHADE
 from pbt.trainer import Trainer
 
 # various settings for reproducibility
@@ -40,8 +40,7 @@ class Arguments():
     end_nfe : int = None
     end_steps : int = 1000
     end_score : float = None
-    test_limit : int = 50
-    history_limit : int = 50
+    history_limit : int = 2
     device : str = 'cpu'
     n_jobs : int = 1
     tensorboard : bool = False
@@ -58,10 +57,9 @@ def import_arguments():
     parser.add_argument("--batch_size", type=int, default=32, help="The number of batches in which the training set will be divided into.")
     parser.add_argument("--step_size", type=int, default=100, help="Number of steps to train each training process.")
     parser.add_argument("--end_nfe", type=int, default=None, help="Perform early stopping after the specified number of fitness evaluations.")
-    parser.add_argument("--end_steps", type=int, default=1000, help="Perform early stopping after the specified number of steps.")
+    parser.add_argument("--end_steps", type=int, default=100, help="Perform early stopping after the specified number of steps.")
     parser.add_argument("--end_score", type=int, default=None, help="Perform early stopping when the specified score is met.")
-    parser.add_argument("--test_limit", type=int, default=50, help="Number of top performing database entries to test with the testing set.")    
-    parser.add_argument("--history_limit", type=int, default=50, help="Sets the number of network model- and optimizer states to keep stored in database.")
+    parser.add_argument("--history_limit", type=int, default=2, help="Sets the number of network model- and optimizer states to keep stored in database.")
     parser.add_argument("--device", type=str, default='cpu', help="Sets the torch processor device ('cpu' or 'cuda'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--n_jobs", type=int, default=1, help="Sets the number of training processes. If n_jobs is less than 1 or higher than population size, the population size will be used instead.")
     parser.add_argument("--tensorboard", type=bool, default=False, help="Decides whether to enable tensorboard 2.0 for real-time monitoring of the training process.")
@@ -92,6 +90,10 @@ def import_task(task_name : str):
         return mnist.Mnist()
     elif task_name == "fashionmnist":
         return mnist.FashionMnist()
+    elif task_name == "mnist_lenet5":
+        return mnist.MnistKnowledgeSharing('lenet5')
+    elif task_name == "mnist_mlp":
+        return mnist.MnistKnowledgeSharing('mlp')
     elif task_name == "emnist_byclass":
         return mnist.EMnist("byclass")
     elif task_name == "emnist_bymerge":
@@ -107,40 +109,17 @@ def import_task(task_name : str):
     else:
         raise NotImplementedError(f"Your requested task '{task_name}'' is not available.")
 
-def create_evolver(evolver_name, population_size):
+def create_evolver(evolver_name, population_size, end_nfe):
+    if evolver_name == 'rw':
+        return RandomWalk(explore_factor = 0.2)
     if evolver_name == 'pbt':
-        return ExploitAndExplore(
-            exploit_factor = 0.2,
-            explore_factors = (0.8, 1.2),
-            random_walk=False)
-    if evolver_name == 'pbt_rw':
-        return ExploitAndExplore(
-            exploit_factor = 0.2,
-            explore_factors = (0.8, 1.2),
-            random_walk=True)
+        return ExploitAndExplore( exploit_factor = 0.2, explore_factors = (0.9, 1.1))
     if evolver_name == 'de':
-        return DifferentialEvolution(
-            F = 0.2,
-            Cr = 0.8,
-            constraint='clip')
-    if evolver_name == 'de_r':
-        return DifferentialEvolution(
-            F = 0.2,
-            Cr = 0.8,
-            constraint='reflect')
+        return DifferentialEvolution( F = 0.2, Cr = 0.8)
     if evolver_name == 'shade':
-        return SHADE(
-            N_INIT = population_size,
-            r_arc=2.0,
-            p=0.2,
-            memory_size=5)
+        return SHADE( N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
-        return LSHADE(
-            N_INIT = population_size,
-            MAX_NFE=args.end_nfe,
-            r_arc=2.0,
-            p=0.2,
-            memory_size=5)
+        return LSHADE( N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     else:
         raise NotImplementedError(f"Your evolver request '{evolver_name}'' is not available.")
 
@@ -150,6 +129,7 @@ def create_tensorboard(log_directory):
     tb.configure(argv=[None, '--logdir', tensorboard_log_path])
     url = tb.launch()
     return SummaryWriter(tensorboard_log_path), url
+    tb
 
 def run_task(args : Arguments):
     # prepare objective
@@ -179,7 +159,6 @@ def run_task(args : Arguments):
         f"Loss-metric: {task.loss_metric}",
         f"Eval-metric: {task.eval_metric}",
         f"Loss functions: {[loss.name for loss in task.loss_functions.values()]}",
-        f"Test limit: {args.test_limit}",
         f"History limit: {args.history_limit}",
         f"Detect NaN: {args.detect_NaN}",
         f"Training set length: {len(task.datasets.train)}",
@@ -221,7 +200,7 @@ def run_task(args : Arguments):
         device = args.device)
     # define controller
     print(f"Creating evolver...")
-    EVOLVER = create_evolver(args.evolver, args.population_size)
+    EVOLVER = create_evolver(args.evolver, args.population_size, args.end_nfe)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
@@ -236,6 +215,7 @@ def run_task(args : Arguments):
         loss_functions=task.loss_functions,
         database=database,
         step_size=args.step_size,
+        eval_steps=1,
         end_criteria={'nfe': args.end_nfe, 'steps': args.end_steps, 'score': args.end_score},
         detect_NaN=args.detect_NaN,
         device=args.device,
@@ -249,15 +229,12 @@ def run_task(args : Arguments):
     controller.start()    # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database)
-    print(f"Testing the top {args.test_limit} members on the test set of {len(task.datasets.test)} samples...")
-    tested_checkpoints = analyzer.test(
+    checkpoint = analyzer.test(
         evaluator=TESTER,
         save_directory=database.create_file("results", "top_members.txt"),
-        limit=args.test_limit,
         verbose=args.verbose)
     print("Updating database with results...")
-    for checkpoint in tested_checkpoints:
-        database.update(checkpoint.id, checkpoint.steps, checkpoint)
+    database.update(checkpoint.id, checkpoint.steps, checkpoint)
     print("Creating statistics...")
     analyzer.create_statistics(save_directory=database.create_folder("results/statistics"))
     print("Creating plot-files...")
@@ -265,38 +242,33 @@ def run_task(args : Arguments):
     analyzer.create_hyper_parameter_plot_files(save_directory=database.create_folder("results/plots"), sensitivity=20)
     print("Program completed! You can now exit if needed.")
 
+"""
+        CONFIGURATIONS
+"""
+
+def test_like_knowledge_sharing(task='mnist_lenet5'):
+    population_size = 30
+    # lshade
+    args = Arguments( task = task, evolver = 'lshade', population_size = population_size, batch_size = 64,
+        step_size = 250, end_nfe = population_size * 40, end_steps = None, end_score = None, history_limit = 2,
+        directory = 'checkpoints', device = 'cuda', n_jobs = 6, tensorboard = True, detect_NaN = True, verbose = 1, logging = True
+    )
+    run_task(args)
+    # shade
+    args.evolver = 'shade'
+    run_task(args)
+    # de
+    args.evolver = 'de'
+    run_task(args)
+    # pbt
+    args.evolver = 'pbt'
+    run_task(args)
 
 """
         PROGRAM STARTS HERE
 """
 
 if __name__ == "__main__":
-    population_size = 20
     #args = import_arguments()
-    args = Arguments(
-        task = 'emnist_mnist',
-        evolver = 'pbt',
-        population_size = population_size,
-        batch_size = 128,
-        step_size = 250,
-        end_nfe = population_size * 100,
-        end_steps = None,
-        end_score = None,
-        test_limit = 100,
-        history_limit = 100,
-        directory = 'checkpoints',
-        device = 'cuda',
-        n_jobs = 6,
-        tensorboard = False,
-        detect_NaN = True,
-        verbose = 1,
-        logging = True
-    )
-    # run task
-    run_task(args)
-    args.evolver = 'de'
-    run_task(args)
-    args.evolver = 'shade'
-    run_task(args)
-    args.evolver = 'lshade'
-    run_task(args)
+    test_like_knowledge_sharing('mnist_lenet5')
+    test_like_knowledge_sharing('mnist_mlp')

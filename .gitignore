@@ -1,7 +1,7 @@
 # Ignore folders
 data/
 checkpoints/
-test/
+test_output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

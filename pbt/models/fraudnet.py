@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .hypernet import HyperNet
-from ..hyperparameters import Hyperparameter
+from ..hyperparameters import ContiniousHyperparameter
 
 class FraudNet(HyperNet):
     def __init__(self):
@@ -27,11 +27,11 @@ class FraudNet(HyperNet):
     def create_hyper_parameters():
         return \
         { 
-            'dropout_rate_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_3': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_4': Hyperparameter(0.0, 1.0)
+            'dropout_rate_1': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_1': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_2': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_3': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_4': ContiniousHyperparameter(0.0, 1.0)
         }
 
     def apply_hyper_parameters(self, hyper_parameters, device):
@@ -40,8 +40,3 @@ class FraudNet(HyperNet):
         self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value).to(device)
         self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
         self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value).to(device)
-
-    def forward(self, x):
-        for module in self.children():
-            x = module(x)
-        return x

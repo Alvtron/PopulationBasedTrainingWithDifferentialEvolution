@@ -11,14 +11,14 @@ from typing import List, Iterable, Sequence, Generator
 
 from .utils.conversion import dict_to_binary, binary_to_dict
 from .utils.iterable import chunks, insert_sequence
-from .hyperparameters import Hyperparameter, Hyperparameters
+from .hyperparameters import ContiniousHyperparameter, Hyperparameters
 
 class MemberState(object):
     '''Base class for member states.'''
     def __init__(self, id, hyper_parameters : Hyperparameters, minimize : bool):
         self.id = id
-        self.hyper_parameters : Hyperparameters = hyper_parameters
-        self.minimize : bool = minimize
+        self.hyper_parameters = hyper_parameters
+        self.minimize = minimize
 
     @abstractmethod
     def score(self):
@@ -33,8 +33,8 @@ class MemberState(object):
     def __getitem__(self, index):
         return self.hyper_parameters[index]
 
-    def __setitem__(self, index, value : Hyperparameter):
-        if not isinstance(value, Hyperparameter):
+    def __setitem__(self, index, value : ContiniousHyperparameter):
+        if not isinstance(value, ContiniousHyperparameter):
             raise TypeError()
         self.hyper_parameters[index] = value
 
@@ -185,9 +185,12 @@ class Checkpoint(MemberState):
         Replace own hyper-parameters, model state and optimizer state from the provided checkpoint.\n
         Resets loss and time.
         """
+        self.epochs = other.epochs
+        self.steps = other.steps
+        self.step_size = other.step_size
         self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
-        self.model_state_load_path = copy.deepcopy(other.model_state_load_path)
-        self.optimizer_state_load_path = copy.deepcopy(other.optimizer_state_load_path)
+        self.model_state_load_path = other.model_state_load_path
+        self.optimizer_state_load_path = other.optimizer_state_load_path
         self.loss = dict()
         self.time = dict()
 

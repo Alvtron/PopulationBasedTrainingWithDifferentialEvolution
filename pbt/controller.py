@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from .member import Checkpoint, Population, Generation
 from .worker import Worker
 from .utils.date import get_datetime_string
-from .hyperparameters import Hyperparameters
+from .hyperparameters import DiscreteHyperparameter, Hyperparameters
 from .trainer import Trainer
 from .evaluator import Evaluator
 from .evolution import EvolveEngine
@@ -63,7 +63,7 @@ class Controller(object):
         self.evolve_queue = self.context.Queue()
         self.__workers = []
         self.__n_active_workers = 0
-        self.history_limit = history_limit
+        self.history_limit = history_limit if history_limit and history_limit > 2 else 2
         self.__tensorboard_writer = tensorboard_writer
         # TODO: implement save and load function for controller
         self.save_objective_info()
@@ -125,17 +125,14 @@ class Controller(object):
     def remove_bad_member_states(self):
         if self.history_limit is None:
             return
-        population_sorted = sorted(self.database, reverse=True)
         # select the excess members with history_limit
-        for bad_member in population_sorted[self.history_limit:]:
-            if not bad_member.has_state():
-                # skipping the member as it has no state to delete
-                continue
-            if bad_member in self.population:
-                # skipping the member as it is still a part of the population
-                continue
-            self.__whisper(f"deleting the state from member {bad_member.id} at step {bad_member.steps} with score {bad_member.score():.2f}...")
-            bad_member.delete_state()
+        for generation in self.population.generations[:-self.history_limit]:
+            for bad_member in generation:
+                if not bad_member.has_state():
+                    # skipping the member as it has no state to delete
+                    continue
+                self.__whisper(f"deleting the state from member {bad_member.id} at step {bad_member.steps} with score {bad_member.score():.2f}...")
+                bad_member.delete_state()
 
     def delete_inactive_workers(self):
         """Delete all inactive workers."""
@@ -182,25 +179,25 @@ class Controller(object):
 
     def __update_tensorboard(self):
         """Plots member data to tensorboard"""
-        # plot eval metrics
         for member in self.population:
+            # plot eval metrics
             for eval_metric_group, eval_metrics in member.loss.items():
                 for metric_name, metric_value in eval_metrics.items():
-                    self.__tensorboard_writer.add_scalars(
-                        main_tag=f"metrics/{eval_metric_group}_{metric_name}",
-                        tag_scalar_dict={f"{member.id:03d}": metric_value},
+                    self.__tensorboard_writer.add_scalar(
+                        tag=f"metrics/{eval_metric_group}_{metric_name}/{member.id:03d}",
+                        scalar_value=metric_value,
                         global_step=member.steps)
             # plot time
             for time_type, time_value in member.time.items():
-                self.__tensorboard_writer.add_scalars(
-                    main_tag=f"time/{time_type}",
-                    tag_scalar_dict={f"{member.id:03d}": time_value},
+                self.__tensorboard_writer.add_scalar(
+                    tag=f"time/{time_type}/{member.id:03d}",
+                    scalar_value=time_value,
                     global_step=member.steps)
             # plot hyper-parameters
             for hparam_name, hparam in member.hyper_parameters:
-                self.__tensorboard_writer.add_scalars(
-                    main_tag=f"hyperparameters/{hparam_name}",
-                    tag_scalar_dict={f"{member.id:03d}": hparam.normalized if hparam.is_categorical else hparam.value},
+                self.__tensorboard_writer.add_scalar(
+                    tag=f"hyperparameters/{hparam_name}/{member.id:03d}",
+                    scalar_value=hparam.normalized if isinstance(hparam, DiscreteHyperparameter) else hparam.value,
                     global_step=member.steps)
 
     def is_member_ready(self, member : Checkpoint):
@@ -321,6 +318,8 @@ class Controller(object):
             steps=candidate.steps,
             step_size=self.eval_steps
             )
+        # save state
+        candidate.save_state(model_state, optimizer_state)
         # eval
         candidate.loss['eval'] = self.evaluator.eval(model_state)
         return candidate
@@ -405,10 +404,9 @@ class Controller(object):
             self.__whisper("on generation start")
             self.evolver.on_generation_start(self.population, self.__whisper)
             for member in self.population:
-                # make a copy of the member
-                candidate = member.copy()
                 # evolve member if ready
-                if self.is_member_ready(candidate):
+                candidate = member.copy()
+                if self.is_member_ready(member):
                     self.evolve_member(candidate)
                 # train candidate
                 self.train_member(candidate)
@@ -444,5 +442,8 @@ class Controller(object):
 
     def train_member(self, member : Checkpoint):
         """Queue the provided member checkpoint for training."""
+        # adjust step size
+        member.step_size = self.step_size - (member.steps % self.step_size)
         self.__log_silent(member, "training...")
+        # train
         self.train_queue.put(member)

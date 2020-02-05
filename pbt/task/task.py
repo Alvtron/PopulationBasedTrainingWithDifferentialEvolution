@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 from ..models.hypernet import HyperNet
 from ..utils.data import split, random_split, stratified_split
-from ..hyperparameters import Hyperparameter, Hyperparameters
+from ..hyperparameters import ContiniousHyperparameter, Hyperparameters
 from ..loss import _Loss
 from ..dataset import Datasets
 

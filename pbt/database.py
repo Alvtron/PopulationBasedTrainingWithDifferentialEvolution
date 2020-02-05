@@ -55,7 +55,7 @@ class ReadOnlyDatabase(object):
     def latest(self):
         """ Iterate over all entry directories and yield the latest entry. """
         for entry_dir in self.entry_directories():
-            yield max(entry_dir.glob(f"*.{self.ENTRY_EXT}"), key=os.path.getctime)
+            yield self.read(max(entry_dir.glob(f"*.{self.ENTRY_EXT}"), key=os.path.getctime))
 
     def entry_directories(self):
         entries_path = Path(self.path, self.ENTRIES_TAG)

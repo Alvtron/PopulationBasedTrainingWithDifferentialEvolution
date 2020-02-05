@@ -5,7 +5,7 @@ import context
 from pbt.database import ReadOnlyDatabase
 
 print(f"Creating databse...")
-database = ReadOnlyDatabase("checkpoints/mnist/pbt/20200121112716")
+database = ReadOnlyDatabase("checkpoints/mnist_lenet5/30/pbt/20200203211539")
 print(f"Database exist: {database.exists}")
 print(f"Database consists of {len(database)} entries.")
 print(f"Latest entries are:")

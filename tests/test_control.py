@@ -67,7 +67,7 @@ def test(test_data, model, loss_functions, device):
 epochs = 100
 batch_size = 64
 device = "cuda"
-model= main.models.MnistNet10Larger().to(device)
+model= pbt.models.MnistNet10Larger().to(device)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0, dampening=0, weight_decay=0, nesterov=False)
 loss_metric = 'cce'
 eval_metric = 'acc'
@@ -94,7 +94,7 @@ test_set = torchvision.datasets.MNIST(
         torchvision.transforms.Normalize((0.1307,), (0.3081,))
     ]))
 # split training set into training set and validation set
-train_set, _, eval_set, _ = utils.data.stratified_split(
+train_set, _, eval_set, _ = pbt.utils.data.stratified_split(
     train_data, labels=train_data.targets, fraction=50000/60000, random_state=1)
 
 train_data = torch.utils.data.DataLoader(

@@ -1,0 +1,14 @@
+-- Why LSHADE could be better than SHADE and DE
+
+For DE and SHADE, for a given search space that has multiple local minimas, bad performing members can get
+stuck in a bad local minima and disturb the other members heading towards the global minima.
+
+LSHADE helps prevent this by iteratively discarding bad performing members.
+This is sadly no guarantee that bad members are not throwing good candidates out of course.
+
+-- Why SHADE/LSHADE could be better than DE
+
+SHADE automatically adjusts the F and Cr parameter. With DE, we would have to manually adjust it before each training session.
+For problems where there are one ore more local minimas, a small Cr and F would lead to less exploration and shorter exploration,
+meaning the local minima might never be escaped. If SHADE eventually generate a higher Cr and F, the local minima might be escaped,
+and the bad member could become a good member as well as pass on better genetics to the rest of the population.

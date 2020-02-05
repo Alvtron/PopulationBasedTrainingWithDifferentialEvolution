@@ -3,28 +3,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from abc import abstractmethod, abstractstaticmethod
-from .hypernet import HyperNet
-from ..hyperparameters import Hyperparameter
+from .hypernet import HyperNet, Print
+from ..hyperparameters import ContiniousHyperparameter
 
-class LeNet5(nn.Module):
+class LeNet5(HyperNet):
     def __init__(self):
         super(LeNet5, self).__init__()
-        self.conv_1 = nn.Conv2d(1, 6, kernel_size=(5,5))
-        self.relu_1 = nn.ReLU()
-        self.max_pool_1 = nn.MaxPool2d(kernel_size=(2, 2), stride=2)
-        self.conv_2 = nn.Conv2d(6, 16, kernel_size=(5, 5))
-        self.relu_2 = nn.ReLU()
-        self.max_pool_2 = nn.MaxPool2d(kernel_size=(2, 2), stride=2)
+        self.conv1 = nn.Conv2d(1, 6, kernel_size=5, stride=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=5, stride=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.relu2 = nn.ReLU()
         self.flatten = nn.modules.Flatten()
-        self.fc_1 = nn.Linear(120, 84)
-        self.relu_4 = nn.ReLU()
-        self.fc_2 = nn.Linear(84, 10)
+        self.fc1 = nn.Linear(16*5*5, 120)
+        self.relu3 = nn.ReLU()
+        self.fc2 = nn.Linear(120, 84)
+        self.relu4 = nn.ReLU()
+        self.fc3 = nn.Linear(84, 10)
         self.softmax = nn.LogSoftmax(dim=1)
-
-    def forward(self, x):
-        for module in self.children():
-            x = module(x)
-        return x
 
 class MnistNet(HyperNet):
     def __init__(self, output_size : int):
@@ -47,11 +44,11 @@ class MnistNet(HyperNet):
     def create_hyper_parameters():
         return \
         {
-            'dropout_rate_1': Hyperparameter(0.0, 1.0),
-            'dropout_rate_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_3': Hyperparameter(0.0, 1.0),
+            'dropout_rate_1': ContiniousHyperparameter(0.0, 1.0),
+            'dropout_rate_2': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_1': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_2': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_3': ContiniousHyperparameter(0.0, 1.0),
         }
 
     def apply_hyper_parameters(self, hyper_parameters, device):
@@ -60,19 +57,6 @@ class MnistNet(HyperNet):
         self.prelu_1 = nn.PReLU(init=hyper_parameters['prelu_alpha_1'].value).to(device)
         self.prelu_2 = nn.PReLU(init=hyper_parameters['prelu_alpha_2'].value).to(device)
         self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
-
-    def forward(self, x):
-        for module in self.children():
-            x = module(x)
-        return x
-
-class MnistNet10(MnistNet):
-    def __init__(self):
-        super().__init__(output_size=10)
-
-class MnistNet26(MnistNet):
-    def __init__(self):
-        super().__init__(output_size=26)
 
 class MnistNetLarger(HyperNet):
     def __init__(self, output_size):
@@ -97,15 +81,15 @@ class MnistNetLarger(HyperNet):
     @staticmethod
     def create_hyper_parameters(include : list = None):
         hparams = {
-            'dropout_rate_1': Hyperparameter(0.0, 1.0),
-            'dropout_rate_2': Hyperparameter(0.0, 1.0),
-            'dropout_rate_3': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_3': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_4': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_5': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_6': Hyperparameter(0.0, 1.0)}
+            'dropout_rate_1': ContiniousHyperparameter(0.0, 1.0),
+            'dropout_rate_2': ContiniousHyperparameter(0.0, 1.0),
+            'dropout_rate_3': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_1': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_2': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_3': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_4': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_5': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_6': ContiniousHyperparameter(0.0, 1.0)}
         if not include:
             return hparams
         return {hp_name: hp_value for hp_name, hp_value in hparams.items() if hp_name in include}
@@ -125,27 +109,6 @@ class MnistNetLarger(HyperNet):
             self.prelu_3 = nn.PReLU(init=hyper_parameters['prelu_alpha_3'].value).to(device)
         if 'prelu_alpha_4' in hyper_parameters:
             self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value).to(device)
-
-    def forward(self, x):
-        for module in self.children():
-            x = module(x)
-        return x
-
-class MnistNet10Larger(MnistNetLarger):
-    def __init__(self):
-        super().__init__(output_size=10)
-
-class MnistNet26Larger(MnistNetLarger):
-    def __init__(self):
-        super().__init__(output_size=26)
-
-class MnistNet47Larger(MnistNetLarger):
-    def __init__(self):
-        super().__init__(output_size=47)
-
-class MnistNet62Larger(MnistNetLarger):
-    def __init__(self):
-        super().__init__(output_size=62)
 
 class MnistNetLargest(HyperNet):
     def __init__(self, output_size : int):
@@ -181,15 +144,15 @@ class MnistNetLargest(HyperNet):
     def create_hyper_parameters():
         return \
         {
-            'dropout_rate_1': Hyperparameter(0.0, 1.0),
-            'dropout_rate_2': Hyperparameter(0.0, 1.0),
-            'dropout_rate_3': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_1': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_2': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_3': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_4': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_5': Hyperparameter(0.0, 1.0),
-            'prelu_alpha_6': Hyperparameter(0.0, 1.0)
+            'dropout_rate_1': ContiniousHyperparameter(0.0, 1.0),
+            'dropout_rate_2': ContiniousHyperparameter(0.0, 1.0),
+            'dropout_rate_3': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_1': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_2': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_3': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_4': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_5': ContiniousHyperparameter(0.0, 1.0),
+            'prelu_alpha_6': ContiniousHyperparameter(0.0, 1.0)
         }
 
     def apply_hyper_parameters(self, hyper_parameters, device):
@@ -202,24 +165,3 @@ class MnistNetLargest(HyperNet):
         self.prelu_4 = nn.PReLU(init=hyper_parameters['prelu_alpha_4'].value).to(device)
         self.prelu_5 = nn.PReLU(init=hyper_parameters['prelu_alpha_5'].value).to(device)
         self.prelu_6 = nn.PReLU(init=hyper_parameters['prelu_alpha_6'].value).to(device)
-
-    def forward(self, x):
-        for module in self.children():
-            x = module(x)
-        return x
-
-class MnistNet10Largest(MnistNetLargest):
-    def __init__(self):
-        super().__init__(output_size=10)
-
-class MnistNet26Largest(MnistNetLargest):
-    def __init__(self):
-        super().__init__(output_size=26)
-
-class MnistNet47Largest(MnistNetLargest):
-    def __init__(self):
-        super().__init__(output_size=47)
-
-class MnistNet62Largest(MnistNetLargest):
-    def __init__(self):
-        super().__init__(output_size=62)

@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 from .task import Task
 from ..models import hypernet, lenet5, mlp, wideresnet
 from ..utils.data import split, random_split, stratified_split
-from ..hyperparameters import Hyperparameter, Hyperparameters
+from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from ..loss import F1, Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
@@ -19,7 +19,7 @@ class Mnist(Task):
 
     @property
     def model_class(self) -> hypernet.HyperNet:
-        return lenet5.MnistNet10Larger
+        return partial(lenet5.MnistNetLarger, 10)
 
     @property
     def optimizer_class(self) -> Optimizer:
@@ -31,10 +31,10 @@ class Mnist(Task):
             augment_params=None,
             model_params= self.model_class.create_hyper_parameters(),
             optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 1.0),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
+                'lr': ContiniousHyperparameter(1e-9, 1e-1),
+                'momentum': ContiniousHyperparameter(1e-9, 1.0),
+                'weight_decay': ContiniousHyperparameter(1e-9, 1e-5),
+                'nesterov': CategoricalContiniousHyperparameter(False, True)
             })
 
     @property
@@ -51,7 +51,7 @@ class Mnist(Task):
 
     @property
     def eval_metric(self) -> str:
-        return 'cce'
+        return 'acc'
 
     @property
     def datasets(self) -> Datasets:
@@ -78,19 +78,45 @@ class Mnist(Task):
         return Datasets(train_data, eval_data, test_data)
         
 class MnistKnowledgeSharing(Mnist):
-    def __init__(self):
+    def __init__(self, model = 'lenet5'):
+        self.model = model
         pass
     
     @property
+    def model_class(self) -> hypernet.HyperNet:
+        if self.model == 'lenet5':
+            return lenet5.LeNet5
+        elif self.model == 'mlp':
+            return mlp.MLP
+        else:
+            raise NotImplementedError
+
+    @property
     def hyper_parameters(self) -> Hyperparameters:
-        model_hyper_parameters = self.model_class.create_hyper_parameters(['dropout_rate_1', 'dropout_rate_2', 'dropout_rate_3'])
+        model_hyper_parameters = self.model_class.create_hyper_parameters()
         return Hyperparameters(
             augment_params=None,
             model_params= model_hyper_parameters,
             optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 1.0)
+                'lr': ContiniousHyperparameter(0.0, 1e-1),
+                'momentum': ContiniousHyperparameter(0.0, 1.0)
             })
+
+    @property
+    def loss_functions(self) -> dict:
+        return \
+        {
+            'cce': CategoricalCrossEntropy(),
+            'acc': Accuracy()
+        }
+
+    @property
+    def loss_metric(self) -> str:
+        return 'cce'
+
+    @property
+    def eval_metric(self) -> str:
+        return 'cce'
 
     @property
     def datasets(self) -> Datasets:
@@ -100,6 +126,7 @@ class MnistKnowledgeSharing(Mnist):
             train=True,
             download=True,
             transform=torchvision.transforms.Compose([
+                torchvision.transforms.Pad(padding=2, padding_mode='edge'),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
@@ -108,6 +135,7 @@ class MnistKnowledgeSharing(Mnist):
             train=False,
             download=True,
             transform=torchvision.transforms.Compose([
+                torchvision.transforms.Pad(padding=2, padding_mode='edge'),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
@@ -165,13 +193,6 @@ class EMnist(Mnist):
     def __init__(self, split : str = 'mnist'):
         self.split = split
         self.num_classes_dict = {'byclass': 62, 'bymerge': 47, 'balanced': 47, 'letters': 26, 'digits': 10, 'mnist': 10}
-        self.models_classes = {
-            'byclass': lenet5.MnistNet62Larger,
-            'bymerge': lenet5.MnistNet47Larger,
-            'balanced': lenet5.MnistNet47Larger,
-            'letters': lenet5.MnistNet26Larger,
-            'digits': lenet5.MnistNet10Larger,
-            'mnist': lenet5.MnistNet10Larger}
 
     @property
     def num_classes(self) -> int:
@@ -179,7 +200,7 @@ class EMnist(Mnist):
 
     @property
     def model_class(self) -> hypernet.HyperNet:
-        return self.models_classes[self.split]
+        return partial(lenet5.MnistNetLarger, self.num_classes_dict[self.split])
 
     @property
     def optimizer_class(self) -> Optimizer:
@@ -191,10 +212,10 @@ class EMnist(Mnist):
             augment_params=None,
             model_params=self.model_class.create_hyper_parameters(),
             optimizer_params={
-                'lr': Hyperparameter(1e-6, 1e-1),
-                'momentum': Hyperparameter(1e-6, 0.5),
-                'weight_decay': Hyperparameter(0.0, 1e-5),
-                'nesterov': Hyperparameter(False, True, is_categorical=True)
+                'lr': ContiniousHyperparameter(1e-6, 1e-1),
+                'momentum': ContiniousHyperparameter(1e-6, 0.5),
+                'weight_decay': ContiniousHyperparameter(0.0, 1e-5),
+                'nesterov': CategoricalContiniousHyperparameter(False, True)
             })
 
     @property

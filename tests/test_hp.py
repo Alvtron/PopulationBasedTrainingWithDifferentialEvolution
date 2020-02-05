@@ -1,13 +1,13 @@
 import random
 
 import context
-from pbt.hyperparameters import Hyperparameter, Hyperparameters
+from pbt.hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from pbt.utils.iterable import unwrap_iterable
 
 def hyperparameter_math_test():
     print("Hyperparameter Math Test")
-    a = Hyperparameter(0, 100)
-    b = Hyperparameter(0, 100)
+    a = ContiniousHyperparameter(0, 100)
+    b = ContiniousHyperparameter(0, 100)
     print(f"a = {a}")
     print(f"b = {b}")
     print(f"{a} + {b} = {a + b}")
@@ -32,8 +32,8 @@ def hyperparameter_math_test():
     print(f"a.value = -0.40 --> a.normalized: {a.normalized}, a.value: {a.value}")
 
 def categorical_hyperparameter_test():
-    print("Categorical Hyperparameter Test")
-    categorical = Hyperparameter("A","B","C","D","E","F","G","H","I", is_categorical = True)
+    print("Discrete Hyperparameter Test")
+    categorical = DiscreteHyperparameter("A","B","C","D","E","F","G","H","I")
     print("sampling uniform...")
     for _ in range(3):
         categorical.sample_uniform()
@@ -53,9 +53,9 @@ def categorical_hyperparameter_test():
     for value in categorical.search_space:
         print(f"Value {value} gives me normalized value {categorical.from_value(value)}")
     print("--")
-    print("Tuple Categorical Hyperparameter Test")
+    print("Tuple Categorical ContiniousHyperparameter Test")
     # tuples in categorical hyper-parameter
-    tuple_hp = Hyperparameter((0.9, 0.999), is_categorical=True)
+    tuple_hp = DiscreteHyperparameter((0.9, 0.999))
     
     print("--")
     print(f"Normalized: {tuple_hp.normalized}")
@@ -68,21 +68,21 @@ def hyperparameter_configuration_test():
     print("Hyperparameter Configuration Test")
     hp1 = Hyperparameters(
             augment_params = {
-                'a': Hyperparameter(1, 256)},
+                'a': ContiniousHyperparameter(1, 256)},
             model_params = {
-                'b': Hyperparameter(1e-6, 1e-0)},
+                'b': ContiniousHyperparameter(1e-6, 1e-0)},
             optimizer_params = {
-                'c': Hyperparameter(0.0, 1e-5),
-                'd': Hyperparameter(False, True, is_categorical = True)
+                'c': ContiniousHyperparameter(0.0, 1e-5),
+                'd': DiscreteHyperparameter(False, True)
                 })
     hp2 = Hyperparameters(
             augment_params = {
-                'a': Hyperparameter(1, 256)},
+                'a': ContiniousHyperparameter(1, 256)},
             model_params = {
-                'b': Hyperparameter(1e-6, 1e-0)},
+                'b': ContiniousHyperparameter(1e-6, 1e-0)},
             optimizer_params = {
-                'c': Hyperparameter(0.0, 1e-5),
-                'd': Hyperparameter(False, True, is_categorical = True)
+                'c': ContiniousHyperparameter(0.0, 1e-5),
+                'd': DiscreteHyperparameter(False, True)
                 })
 
     print(len(hp1))
@@ -124,10 +124,10 @@ def hyperparameter_configuration_test():
     print("--")
     print("Hyperparameter Alteration Test")
     params = [
-        Hyperparameter(1, 256),
-        Hyperparameter(1e-6, 1e-0),
-        Hyperparameter(0.0, 1e-5),
-        Hyperparameter(False, True, is_categorical = True)]
+        ContiniousHyperparameter(1, 256),
+        ContiniousHyperparameter(1e-6, 1e-0),
+        ContiniousHyperparameter(0.0, 1e-5),
+        DiscreteHyperparameter(False, True)]
 
     hp1.set(params)
     for param_name, param_value in hp1:
@@ -137,7 +137,7 @@ def hyperparameter_configuration_test():
 
     print("hp1[1] =", hp1[1])
     print("changing hp1[1]...")
-    hp1[1] = Hyperparameter(1e-6, 1e-0)
+    hp1[1] = ContiniousHyperparameter(1e-6, 1e-0)
     print("hp1[1] =", hp1[1])
 
     print("--")
@@ -150,7 +150,7 @@ def hyperparameter_configuration_test():
         print(f"hp1[{index}]: {hp1[index]}")
     print("change with for loop with indices:")
     for index in range(len(hp1)):
-        hp1[index] = Hyperparameter(1, 256)
+        hp1[index] = ContiniousHyperparameter(1, 256)
         print(f"hp1[{index}]: {hp1[index]}")
 
 if __name__ == "__main__":

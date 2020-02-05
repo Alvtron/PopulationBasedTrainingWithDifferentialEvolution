@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, Subset
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
 
-from .hyperparameters import Hyperparameter, Hyperparameters
+from .hyperparameters import ContiniousHyperparameter, Hyperparameters
 
 class Datasets(object):
     def __init__(self, train, eval, test):
@@ -66,28 +66,28 @@ class AdaptiveDataset(Dataset):
         return Subset
 
     @staticmethod
-    def create_hyper_parameters(include : Sequence[str] = None) -> Dict[str, Hyperparameter]:
+    def create_hyper_parameters(include : Sequence[str] = None) -> Dict[str, ContiniousHyperparameter]:
         hparams = {
-            'brightness' : Hyperparameter(0.0, 1.0),
-            'contrast' : Hyperparameter(0.0, 1.0),
-            'saturation' : Hyperparameter(0.0, 1.0),
-            'hue' : Hyperparameter(0.0, 1.0),
-            'rotate' : Hyperparameter(0, 180),
-            'translate_horizontal' : Hyperparameter(0.0, 1.0),
-            'translate_vertical' : Hyperparameter(0.0, 1.0),
-            'scale_min' : Hyperparameter(0.5, 1.5),
-            'scale_max' : Hyperparameter(0.5, 1.5),
-            'shear' : Hyperparameter(0, 90),
-            'perspective' : Hyperparameter(0.0, 1.0),
-            'vertical_flip' : Hyperparameter(0.0, 1.0),
-            'horizontal_flip' : Hyperparameter(0.0, 1.0)}
+            'brightness' : ContiniousHyperparameter(0.0, 1.0),
+            'contrast' : ContiniousHyperparameter(0.0, 1.0),
+            'saturation' : ContiniousHyperparameter(0.0, 1.0),
+            'hue' : ContiniousHyperparameter(0.0, 1.0),
+            'rotate' : ContiniousHyperparameter(0, 180),
+            'translate_horizontal' : ContiniousHyperparameter(0.0, 1.0),
+            'translate_vertical' : ContiniousHyperparameter(0.0, 1.0),
+            'scale_min' : ContiniousHyperparameter(0.5, 1.5),
+            'scale_max' : ContiniousHyperparameter(0.5, 1.5),
+            'shear' : ContiniousHyperparameter(0, 90),
+            'perspective' : ContiniousHyperparameter(0.0, 1.0),
+            'vertical_flip' : ContiniousHyperparameter(0.0, 1.0),
+            'horizontal_flip' : ContiniousHyperparameter(0.0, 1.0)}
         if include:
             exclude = [param_name for param_name in hparams if param_name not in include]
             for param_name in exclude:
                 del hparams[param_name]
         return hparams
 
-    def update(self, hparams : Dict[str, Hyperparameter] = None):
+    def update(self, hparams : Dict[str, ContiniousHyperparameter] = None):
         transforms = list()
         target_transforms = list()
         # add original transform at the end

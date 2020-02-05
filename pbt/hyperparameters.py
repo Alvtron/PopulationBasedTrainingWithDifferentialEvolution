@@ -3,294 +3,414 @@ import copy
 import warnings
 from functools import partial
 from typing import Dict
+from abc import abstractmethod
 
 from .utils.constraint import translate, clip, reflect
 
-class Hyperparameter(object):
+class _Hyperparameter(object):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.
     '''
-    def __init__(self, *args, value=None, is_categorical = False, constraint='clip'):
+    def __init__(self, *args, value=None, constraint='clip'):
         ''' 
         Provide a set of [lower bound, upper bound] as float/int, or categorical elements [obj1, obj2, ..., objn].
-        Make sure to set is_categorical = True if categorical values are provided.
         Sets the search space and samples a new candidate from an uniform distribution.
         '''
         if args == None:
             raise ValueError("No arguments provided.")
         self.MIN_NORM = 0.0
         self.MAX_NORM = 1.0
-        if not is_categorical and not all(isinstance(arg, (float, int)) for arg in args):
-            raise ValueError(f"Non-categorical hyperparameters must be of type {float} or {int}.")
         self.set_constraint(constraint)
         self.search_space = list(args)
-        self.is_categorical = is_categorical
-        self.__value = self.from_value(value) if value else random.uniform(self.MIN_NORM, self.MAX_NORM)
+        self._normalized = self.from_value(value) if value is not None else random.uniform(self.MIN_NORM, self.MAX_NORM)
 
-    def __translate_from_norm(self, normalized_value):
+    def _translate_from_norm(self, normalized_value) -> float:
         return translate(normalized_value, self.MIN_NORM, self.MAX_NORM, self.lower_bound, self.upper_bound)
     
-    def __translate_from_value(self, value):
+    def _translate_from_value(self, value) -> float:
         return translate(value, self.lower_bound, self.upper_bound, self.MIN_NORM, self.MAX_NORM)
 
     def set_constraint(self, constraint):
         if isinstance(constraint, str):
             if constraint == 'clip':
-                self.__constrain = partial(clip, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
+                self._constrain = partial(clip, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
             elif constraint == 'reflect':
-                self.__constrain = partial(reflect, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
+                self._constrain = partial(reflect, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
             else:
                 raise NotImplementedError(f"No constraint matches '{constraint}'")
         elif callable(constraint):
-            self.__constrain = partial(constraint, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
+            self._constrain = partial(constraint, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
         else:
             raise ValueError("The provided constraint must be of type str or callable.")
         
 
-    def __str__(self):
-        return f"{self.value} U({self.lower_bound},{self.upper_bound})"
+    def __str__(self) -> str:
+        return f"v: {self.value}, n: {self.normalized:.3f} U({self.lower_bound},{self.upper_bound})"
 
     @property
-    def normalized(self):
+    def normalized(self) -> float:
         """Returns the normalized hyperparameter value."""
-        return self.__value
+        return self._normalized
 
     @normalized.setter
-    def normalized(self, value):
+    def normalized(self, value) -> float:
         """Sets the normalized hyperparameter value."""
-        self.__value = self.__constrain(value)
+        self._normalized = self._constrain(value)
+    
+    @property
+    @abstractmethod
+    def value(self):
+        raise NotImplementedError
+
+    @value.setter
+    @abstractmethod
+    def value(self, value):
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def lower_bound(self):
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def upper_bound(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def from_value(self, value):
+        raise NotImplementedError
+
+    @abstractmethod
+    def from_normalized(self, normalized_value):
+        raise NotImplementedError
+
+    def sample_uniform(self):
+        ''' Samples a new candidate from an uniform distribution bound by the lower and upper bounds. '''
+        self._normalized = random.uniform(self.MIN_NORM, self.MAX_NORM)
+        return self.value
+
+    def update(self, expression):
+        ''' Changes the hyper-parameter value with the given expression. '''
+        self._normalized = float(self._constrain(expression(self._normalized)))
+        return self.value
+
+    def equal_search_space(self, other) -> bool:
+        """Return true if the search space is equal."""
+        return isinstance(other, _Hyperparameter) and self.search_space == other.search_space
+
+    def __add__(self, other):
+        new_hp = copy.deepcopy(self)
+        if isinstance(other, _Hyperparameter):
+            if not new_hp.equal_search_space(other):
+                raise ValueError("Addition is not supported for hyperparameters of unequal search spaces.")
+            new_hp._normalized = self._constrain(new_hp._normalized + other._normalized)
+            return new_hp
+        elif isinstance(other, (float, int)):
+            new_hp._normalized = self._constrain(new_hp._normalized + other)
+            return new_hp
+        else:
+            raise ValueError(f"Addition is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+
+    def __sub__(self, other):
+        new_hp = copy.deepcopy(self)
+        if isinstance(other, _Hyperparameter):
+            if not new_hp.equal_search_space(other):
+                raise ValueError("Subtraction is not supported for hyperparameters of unequal search spaces.")
+            new_hp._normalized = self._constrain(new_hp._normalized - other._normalized)
+            return new_hp
+        elif isinstance(other, (float, int)):
+            new_hp._normalized = self._constrain(new_hp._normalized - other)
+            return new_hp
+        else:
+            raise ValueError(f"Subtraction is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+
+    def __mul__(self, other):
+        new_hp = copy.deepcopy(self)
+        if isinstance(other, _Hyperparameter):
+            if not new_hp.equal_search_space(other):
+                raise ValueError("Multiplication is not supported for hyperparameters of unequal search spaces.")
+            new_hp._normalized = self._constrain(new_hp._normalized * other._normalized)
+            return new_hp
+        elif isinstance(other, (float, int)):
+            new_hp._normalized = self._constrain(new_hp._normalized * other)
+            return new_hp
+        else:
+            raise ValueError(f"Multiplication is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+
+    def __truediv__(self, other):
+        new_hp = copy.deepcopy(self)
+        if isinstance(other, _Hyperparameter):
+            if not new_hp.equal_search_space(other):
+                raise ValueError("Divition is not supported for hyperparameters of unequal search spaces.")
+            new_hp._normalized = self._constrain(new_hp._normalized / other._normalized)
+            return new_hp
+        elif isinstance(other, (float, int)):
+            new_hp._normalized = self._constrain(new_hp._normalized / other)
+            return new_hp
+        else:
+            raise ValueError(f"Divition is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+
+    def __pow__(self, other):
+        new_hp = copy.deepcopy(self)
+        if isinstance(other, _Hyperparameter):
+            if not new_hp.equal_search_space(other):
+                raise ValueError("Exponentiation is not supported for hyperparameters of unequal search spaces.")
+            new_hp._normalized = self._constrain(new_hp._normalized ** other._normalized)
+            return new_hp
+        elif isinstance(other, (float, int)):
+            new_hp._normalized = self._constrain(new_hp._normalized ** other)
+            return new_hp
+        else:
+            raise ValueError(f"Exponentiation is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+
+    def __iadd__(self, other):
+        if isinstance(other, _Hyperparameter):
+            if not self.equal_search_space(other):
+                raise ValueError("Addition is not supported for hyperparameters of unequal search spaces.")
+            self._normalized = self._constrain(self._normalized + other._normalized)
+        elif isinstance(other, (float, int)):
+            self._normalized = self._constrain(self._normalized + other)
+        else:
+            raise ValueError(f"Addition is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+        return self
+
+    def __isub__(self, other):
+        if isinstance(other, _Hyperparameter):
+            if not self.equal_search_space(other):
+                raise ValueError("Subtraction is not supported for hyperparameters of unequal search spaces.")
+            self._normalized = self._constrain(self._normalized - other._normalized)
+        elif isinstance(other, (float, int)):
+            self._normalized = self._constrain(self._normalized - other)
+        else:
+            raise ValueError(f"Subtraction is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+        return self
+
+    def __imul__(self, other):
+        if isinstance(other, _Hyperparameter):
+            if not self.equal_search_space(other):
+                raise ValueError("Multiplication is not supported for hyperparameters of unequal search spaces.")
+            self._normalized = self._constrain(self._normalized * other._normalized)
+        elif isinstance(other, (float, int)):
+            self._normalized = self._constrain(self._normalized * other)
+        else:
+            raise ValueError(f"Multiplication is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+        return self
+
+    def __idiv__(self, other):
+        if isinstance(other, _Hyperparameter):
+            if not self.equal_search_space(other):
+                raise ValueError("Divition is not supported for hyperparameters of unequal search spaces.")
+            self._normalized = self._constrain(self._normalized / other._normalized)
+        elif isinstance(other, (float, int)):
+            self._normalized = self._constrain(self._normalized / other)
+        else:
+            raise ValueError(f"Divition is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+        return self
+
+    def __ipow__(self, other):
+        if isinstance(other, _Hyperparameter):
+            if not self.equal_search_space(other):
+                raise ValueError("Exponentiation is not supported for hyperparameters of unequal search spaces.")
+            self._normalized = self._constrain(self._normalized ** other._normalized)
+        elif isinstance(other, (float, int)):
+            self._normalized = clip(self._normalized ** other)
+        else:
+            raise ValueError(f"Exponentiation is only supported for values of type {_Hyperparameter}, {float} or {int}.")
+        return self
+
+    def __lt__(self, other):
+        if isinstance(other, _Hyperparameter) and self.search_space == other.search_space:
+            return self._normalized < other._normalized
+        else:
+            raise ValueError(f"Comparison operations is supported for values of type {_Hyperparameter} in equal search space.")
+
+    def __gt__(self, other):
+        if isinstance(other, _Hyperparameter) and self.search_space == other.search_space:
+            return self._normalized > other._normalized
+        else:
+            raise ValueError(f"Comparison operations is supported for values of type {_Hyperparameter} in equal search space.")
+
+    def __le__(self, other):
+        if isinstance(other, _Hyperparameter) and self.search_space == other.search_space:
+            return self._normalized <= other._normalized
+        else:
+            raise ValueError(f"Comparison operations is supported for values of type {_Hyperparameter} in equal search space.")
+
+    def __ge__(self, other):
+        if isinstance(other, _Hyperparameter) and self.search_space == other.search_space:
+            return self._normalized >= other._normalized
+        else:
+            raise ValueError(f"Comparison operations is supported for values of type {_Hyperparameter} in equal search space.")
+
+    def __eq__(self, other):
+        if isinstance(other, _Hyperparameter):
+            return self.search_space == other.search_space and self._normalized == other._normalized
+        else:
+            raise ValueError(f"Comparison operations is supported for values of type {_Hyperparameter} in equal search space.")
+
+    def __ne__(self, other):
+        if isinstance(other, _Hyperparameter):
+            return self.search_space != other.search_space or self._normalized != other._normalized
+        else:
+            raise ValueError(f"Comparison operations is supported for values of type {_Hyperparameter} in equal search space.")
+
+class ContiniousHyperparameter(_Hyperparameter):
+    '''
+    Class for creating and storing a hyperparameter in a given, constrained search space.
+    '''
+    def __init__(self, minimum, maximum, value=None, constraint='clip'):
+        ''' 
+        Provide a set of [lower bound, upper bound] as float/int.
+        Sets the search space and samples a new candidate from an uniform distribution.
+        '''
+        if not isinstance(minimum, (float, int)) or not isinstance(maximum, (float, int)):
+            raise TypeError(f"Continious hyperparameters must be of type {float} or {int}.")
+        if minimum > maximum:
+            raise ValueError("The minimum must be lower than the maximum.")
+        if value and not isinstance(value, (float, int)):
+            raise TypeError(f"Continious hyperparameters must be of type {float} or {int}.")
+        if value and not (minimum <= value <= maximum):
+            raise ValueError(f"The provided value must be in range [{minimum},{maximum}].")
+        super().__init__(minimum, maximum, value=value, constraint=constraint)
 
     @property
     def value(self):
         """Returns the representative hyperparameter value."""
-        if self.__value == None:
-            raise ValueError("Developer error. '__value' is None.")
-        return self.from_normalized(self.__value)
+        if self._normalized == None:
+            raise ValueError("Developer error. '_normalized' is None.")
+        return self.from_normalized(self._normalized)
 
     @value.setter
     def value(self, value):
         """Sets the hyperparameter value."""
-        if not self.is_categorical and not(self.lower_bound <= value <= self.upper_bound):
+        if not(self.lower_bound <= value <= self.upper_bound):
             warnings.warn(f"The value {value} is outside the search space U({self.lower_bound}, {self.upper_bound}). The value will be constrained.")
-        self.__value = self.__constrain(self.from_value(value))
+        self._normalized = self._constrain(self.from_value(value))
 
     @property
     def lower_bound(self):
         ''' Returns the lower bounds of the hyper-parameter search space. If categorical, return the first search space index. '''
-        return 0 if self.is_categorical else self.search_space[0]
+        return self.search_space[0]
 
     @property 
     def upper_bound(self):
         ''' Returns the upper bounds of the hyper-parameter search space. If categorical, return the last search space index. '''
-        return len(self.search_space) - 1 if self.is_categorical else self.search_space[-1]
+        return self.search_space[-1]
 
     def from_value(self, value):
         """Returns a normalized version of the provided value."""
-        if self.is_categorical:
-            assert value in self.search_space, f"The provided value {value} does not exist within the categorical search space."
-            index = self.search_space.index(value)
-            return self.__translate_from_value(index)
-        elif isinstance(value, (int, float)):
-            return self.__translate_from_value(value)
+        if isinstance(value, (int, float)):
+            return self._translate_from_value(value)
         else:
             raise Exception(f"Non-categorical hyperparameters must be of type {float} or {int}.")
 
     def from_normalized(self, normalized_value):
         """Returns a search space value from the provided normalized value."""
-        constrained = self.__constrain(normalized_value)
-        trainslated = self.__translate_from_norm(constrained)
-        if self.is_categorical:
-            index = int(round(trainslated))
-            return self.search_space[index]
-        elif isinstance(self.search_space[0], float):
+        constrained = self._constrain(normalized_value)
+        trainslated = self._translate_from_norm(constrained)
+        if isinstance(self.search_space[0], float):
             return float(trainslated)
         elif isinstance(self.search_space[0], int):
             return int(round(trainslated))
         else:
             raise Exception(f"Non-categorical hyperparameters must be of type {float} or {int}.")
 
-    def sample_uniform(self):
-        ''' Samples a new candidate from an uniform distribution bound by the lower and upper bounds. '''
-        self.__value = random.uniform(self.MIN_NORM, self.MAX_NORM)
-        return self.value
+class DiscreteHyperparameter(_Hyperparameter):
+    def __init__(self, *search_space, value=None, constraint='clip'):
+        ''' 
+        Provide a set of categorical elements [obj1, obj2, ..., objn].
+        Sets the search space and samples a new candidate from an uniform distribution.
+        '''
+        if not search_space:
+            raise ValueError("No search space provided.")
+        if value is not None and value not in search_space:
+            raise ValueError("The provided value must be present in the provided categorical search space.")
+        super().__init__(*search_space, value=value, constraint=constraint)
+    
+    @property
+    def value(self):
+        """Returns the representative hyperparameter value."""
+        if self._normalized == None:
+            raise ValueError("Developer error. '_normalized' is None.")
+        return self.from_normalized(self._normalized)
 
-    def update(self, expression):
-        ''' Changes the hyper-parameter value with the given expression. '''
-        self.__value = float(self.__constrain(expression(self.__value)))
-        return self.value
+    @value.setter
+    def value(self, value):
+        """Sets the hyperparameter value."""
+        if value not in self.search_space:
+            raise ValueError("The provided value must be present in the categorical search space.")
+        self._normalized = self._constrain(self.from_value(value))
+
+    @property
+    def lower_bound(self):
+        ''' Returns the lower bounds of the hyper-parameter search space. If categorical, return the first search space index. '''
+        return 0
+
+    @property 
+    def upper_bound(self):
+        ''' Returns the upper bounds of the hyper-parameter search space. If categorical, return the last search space index. '''
+        return len(self.search_space) - 1
+
+    def from_value(self, value):
+        """Returns a normalized version of the provided value."""
+        assert value in self.search_space, f"The provided value {value} does not exist within the categorical search space."
+        index = self.search_space.index(value)
+        return self._translate_from_value(index)
+
+    def from_normalized(self, normalized_value):
+        """Returns a search space value from the provided normalized value."""
+        constrained = self._constrain(normalized_value)
+        trainslated = self._translate_from_norm(constrained)
+        index = int(round(trainslated))
+        return self.search_space[index]
 
     def equal_search_space(self, other):
-        return self.search_space == other.search_space and self.is_categorical == other.is_categorical
-
-    def __add__(self, other):
-        new_hp = copy.deepcopy(self)
-        if isinstance(other, Hyperparameter):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Addition is not supported for hyperparameters of unequal search spaces.")
-            new_hp.__value = self.__constrain(new_hp.__value + other.__value)
-            return new_hp
-        elif isinstance(other, (float, int)):
-            new_hp.__value = self.__constrain(new_hp.__value + other)
-            return new_hp
-        else:
-            raise ValueError(f"Addition is only supported for values of type {Hyperparameter}, {float} or {int}.")
-
-    def __sub__(self, other):
-        new_hp = copy.deepcopy(self)
-        if isinstance(other, Hyperparameter):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Subtraction is not supported for hyperparameters of unequal search spaces.")
-            new_hp.__value = self.__constrain(new_hp.__value - other.__value)
-            return new_hp
-        elif isinstance(other, (float, int)):
-            new_hp.__value = self.__constrain(new_hp.__value - other)
-            return new_hp
-        else:
-            raise ValueError(f"Subtraction is only supported for values of type {Hyperparameter}, {float} or {int}.")
-
-    def __mul__(self, other):
-        new_hp = copy.deepcopy(self)
-        if isinstance(other, Hyperparameter):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Multiplication is not supported for hyperparameters of unequal search spaces.")
-            new_hp.__value = self.__constrain(new_hp.__value * other.__value)
-            return new_hp
-        elif isinstance(other, (float, int)):
-            new_hp.__value = self.__constrain(new_hp.__value * other)
-            return new_hp
-        else:
-            raise ValueError(f"Multiplication is only supported for values of type {Hyperparameter}, {float} or {int}.")
-
-    def __truediv__(self, other):
-        new_hp = copy.deepcopy(self)
-        if isinstance(other, Hyperparameter):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Divition is not supported for hyperparameters of unequal search spaces.")
-            new_hp.__value = self.__constrain(new_hp.__value / other.__value)
-            return new_hp
-        elif isinstance(other, (float, int)):
-            new_hp.__value = self.__constrain(new_hp.__value / other)
-            return new_hp
-        else:
-            raise ValueError(f"Divition is only supported for values of type {Hyperparameter}, {float} or {int}.")
-
-    def __pow__(self, other):
-        new_hp = copy.deepcopy(self)
-        if isinstance(other, Hyperparameter):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Exponentiation is not supported for hyperparameters of unequal search spaces.")
-            new_hp.__value = self.__constrain(new_hp.__value ** other.__value)
-            return new_hp
-        elif isinstance(other, (float, int)):
-            new_hp.__value = self.__constrain(new_hp.__value ** other)
-            return new_hp
-        else:
-            raise ValueError(f"Exponentiation is only supported for values of type {Hyperparameter}, {float} or {int}.")
-
-    def __iadd__(self, other):
-        if isinstance(other, Hyperparameter):
-            if not self.equal_search_space(other):
-                raise ValueError("Addition is not supported for hyperparameters of unequal search spaces.")
-            self.__value = self.__constrain(self.__value + other.__value)
-        elif isinstance(other, (float, int)):
-            self.__value = self.__constrain(self.__value + other)
-        else:
-            raise ValueError(f"Addition is only supported for values of type {Hyperparameter}, {float} or {int}.")
-        return self
-
-    def __isub__(self, other):
-        if isinstance(other, Hyperparameter):
-            if not self.equal_search_space(other):
-                raise ValueError("Subtraction is not supported for hyperparameters of unequal search spaces.")
-            self.__value = self.__constrain(self.__value - other.__value)
-        elif isinstance(other, (float, int)):
-            self.__value = self.__constrain(self.__value - other)
-        else:
-            raise ValueError(f"Subtraction is only supported for values of type {Hyperparameter}, {float} or {int}.")
-        return self
-
-    def __imul__(self, other):
-        if isinstance(other, Hyperparameter):
-            if not self.equal_search_space(other):
-                raise ValueError("Multiplication is not supported for hyperparameters of unequal search spaces.")
-            self.__value = self.__constrain(self.__value * other.__value)
-        elif isinstance(other, (float, int)):
-            self.__value = self.__constrain(self.__value * other)
-        else:
-            raise ValueError(f"Multiplication is only supported for values of type {Hyperparameter}, {float} or {int}.")
-        return self
-
-    def __idiv__(self, other):
-        if isinstance(other, Hyperparameter):
-            if not self.equal_search_space(other):
-                raise ValueError("Divition is not supported for hyperparameters of unequal search spaces.")
-            self.__value = self.__constrain(self.__value / other.__value)
-        elif isinstance(other, (float, int)):
-            self.__value = self.__constrain(self.__value / other)
-        else:
-            raise ValueError(f"Divition is only supported for values of type {Hyperparameter}, {float} or {int}.")
-        return self
-
-    def __ipow__(self, other):
-        if isinstance(other, Hyperparameter):
-            if not self.equal_search_space(other):
-                raise ValueError("Exponentiation is not supported for hyperparameters of unequal search spaces.")
-            self.__value = self.__constrain(self.__value ** other.__value)
-        elif isinstance(other, (float, int)):
-            self.__value = clip(self.__value ** other)
-        else:
-            raise ValueError(f"Exponentiation is only supported for values of type {Hyperparameter}, {float} or {int}.")
-        return self
+        return isinstance(other, DiscreteHyperparameter) and super().equal_search_space(other)
 
     def __lt__(self, other):
-        if isinstance(other, Hyperparameter) and self.search_space == other.search_space and self.is_categorical == other.is_categorical:
-            return self.__value < other.__value
-        else:
-            raise ValueError(f"Comparison operations is supported for values of type {Hyperparameter} in equal search space.")
+        if not isinstance(other, DiscreteHyperparameter):
+            raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
+        return super().__lt__(other)
 
     def __gt__(self, other):
-        if isinstance(other, Hyperparameter) and self.search_space == other.search_space and self.is_categorical == other.is_categorical:
-            return self.__value > other.__value
-        else:
-            raise ValueError(f"Comparison operations is supported for values of type {Hyperparameter} in equal search space.")
+        if not isinstance(other, DiscreteHyperparameter):
+            raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
+        return super().__gt__(other)
 
     def __le__(self, other):
-        if isinstance(other, Hyperparameter) and self.search_space == other.search_space and self.is_categorical == other.is_categorical:
-            return self.__value <= other.__value
-        else:
-            raise ValueError(f"Comparison operations is supported for values of type {Hyperparameter} in equal search space.")
+        if not isinstance(other, DiscreteHyperparameter):
+            raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
+        return super().__le__(other)
 
     def __ge__(self, other):
-        if isinstance(other, Hyperparameter) and self.search_space == other.search_space and self.is_categorical == other.is_categorical:
-            return self.__value >= other.__value
-        else:
-            raise ValueError(f"Comparison operations is supported for values of type {Hyperparameter} in equal search space.")
+        if not isinstance(other, DiscreteHyperparameter):
+            raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
+        return super().__ge__(other)
 
     def __eq__(self, other):
-        if isinstance(other, Hyperparameter):
-            return self.search_space == other.search_space and self.is_categorical == other.is_categorical and self.__value == other.__value
-        else:
-            raise ValueError(f"Comparison operations is supported for values of type {Hyperparameter} in equal search space.")
+        if not isinstance(other, DiscreteHyperparameter):
+            raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
+        return super().__eq__(other)
 
     def __ne__(self, other):
-        if isinstance(other, Hyperparameter):
-            return self.search_space != other.search_space or self.is_categorical != other.is_categorical or self.__value != other.__value
-        else:
-            raise ValueError(f"Comparison operations is supported for values of type {Hyperparameter} in equal search space.")
+        if not isinstance(other, DiscreteHyperparameter):
+            raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
+        return super().__ne__(other)
 
 class Hyperparameters(object):
     ''' Class for storing and updating hyperparameters. '''
 
-    def __init__(self, augment_params : Dict[str, Hyperparameter], model_params : Dict[str, Hyperparameter], optimizer_params : Dict[str, Hyperparameter]):
-        if augment_params and not all(isinstance(hyper_param, Hyperparameter) for hyper_param in augment_params.values()):
-            raise TypeError(f"General hyperparameters can only contain {Hyperparameter} objects.")
-        if model_params and not all(isinstance(hyper_param, Hyperparameter) for hyper_param in model_params.values()):
-            raise TypeError(f"Model hyperparameters can only contain {Hyperparameter} objects.")
-        if optimizer_params and not all(isinstance(hyper_param, Hyperparameter) for hyper_param in optimizer_params.values()):
-            raise TypeError(f"Optimizer hyperparameters can only contain {Hyperparameter} objects.")
-        self.augment : Dict[str, Hyperparameter] = augment_params  if augment_params else {}
-        self.model : Dict[str, Hyperparameter] = model_params if model_params else {}
-        self.optimizer : Dict[str, Hyperparameter] = optimizer_params if optimizer_params else {}
+    def __init__(self, augment_params : Dict[str, _Hyperparameter], model_params : Dict[str, _Hyperparameter], optimizer_params : Dict[str, _Hyperparameter]):
+        if augment_params and not all(isinstance(hyper_param, _Hyperparameter) for hyper_param in augment_params.values()):
+            raise TypeError(f"General hyperparameters can only contain {_Hyperparameter} objects.")
+        if model_params and not all(isinstance(hyper_param, _Hyperparameter) for hyper_param in model_params.values()):
+            raise TypeError(f"Model hyperparameters can only contain {_Hyperparameter} objects.")
+        if optimizer_params and not all(isinstance(hyper_param, _Hyperparameter) for hyper_param in optimizer_params.values()):
+            raise TypeError(f"Optimizer hyperparameters can only contain {_Hyperparameter} objects.")
+        self.augment : Dict[str, _Hyperparameter] = augment_params  if augment_params else {}
+        self.model : Dict[str, _Hyperparameter] = model_params if model_params else {}
+        self.optimizer : Dict[str, _Hyperparameter] = optimizer_params if optimizer_params else {}
 
     def __str__(self):
         info = []
@@ -349,10 +469,16 @@ class Hyperparameters(object):
         return general_paths + model_paths + optimizer_paths
 
     def values(self):
-        return (i[1].value for i in self)
+        return (hp_object.value for _, hp_object in self)
     
     def normalized(self):
-        return (i[1].normalized for i in self)
+        return (hp_object.normalized for _, hp_object in self)
+
+    def categorical(self):
+        return {hp_name: hp_object for hp_name, hp_object in self if isinstance(hp_object, DiscreteHyperparameter)}
+
+    def non_categorical(self):
+        return {hp_name: hp_object for hp_name, hp_object in self if not isinstance(hp_object, DiscreteHyperparameter)}
 
     def set(self, list):
         length = len(self)
@@ -361,14 +487,14 @@ class Hyperparameters(object):
         for index in range(length):
             self[index] += list[index]
 
-    def get_general_value_dict(self):
-        return {param_name:param.value for param_name, param in self.augment.items()}
+    def get_augment_value_dict(self):
+        return {name:param.value for name, param in self.augment.items()}
 
     def get_model_value_dict(self):
-        return {param_name:param.value for param_name, param in self.model.items()}
+        return {name:param.value for name, param in self.model.items()}
 
     def get_optimizer_value_dict(self):
-        return {param_name:param.value for param_name, param in self.optimizer.items()}
+        return {name:param.value for name, param in self.optimizer.items()}
 
     def equal_search_space(self, other):
         # Check if each hyperparameter type is of same length

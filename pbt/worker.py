@@ -32,10 +32,10 @@ class Worker(mp.Process):
         numpy.random.seed(random_seed)
         torch.manual_seed(random_seed)
 
-    def __log(self, message : str):
+    def __log(self, message : str, force_print : bool = False):
         prefix = f"Worker {self.id}, PID {os.getpid()}"
         full_message = f"{prefix}: {message}"
-        if self.verbose:
+        if self.verbose or force_print:
             print(full_message)
 
     def run(self):
@@ -52,7 +52,7 @@ class Worker(mp.Process):
                 self.__log("loading checkpoint state...")
                 model_state, optimizer_state = checkpoint.load_state()
                 if (model_state is None or optimizer_state is None) and checkpoint.steps >= checkpoint.step_size:
-                    self.__log(f"WARNING: received trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
+                    self.__log(f"WARNING: received trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.", True)
                 # train checkpoint model
                 start_train_time_ns = time.time_ns()
                 self.__log("training...")
