@@ -7,6 +7,10 @@ from abc import abstractmethod
 
 from .utils.constraint import translate, clip, reflect
 
+class InvalidSearchSpaceException(Exception):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
 class _Hyperparameter(object):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.

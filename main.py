@@ -1,13 +1,15 @@
 import os
 import copy
 import random
+import time
 import argparse
+from functools import partial
+from dataclasses import dataclass
+
 import torch
 import numpy as np
-from functools import partial
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
-from dataclasses import dataclass
 
 from pbt.task import mnist, creditfraud
 from pbt.analyze import Analyzer
@@ -129,7 +131,6 @@ def create_tensorboard(log_directory):
     tb.configure(argv=[None, '--logdir', tensorboard_log_path])
     url = tb.launch()
     return SummaryWriter(tensorboard_log_path), url
-    tb
 
 def run_task(args : Arguments):
     # prepare objective
@@ -137,10 +138,12 @@ def run_task(args : Arguments):
     task = import_task(args.task)
     # prepare database
     print(f"Preparing database...")
-    database = Database(f"{args.directory}/{args.task}/{args.population_size}/{args.evolver}")
+    database = Database(
+        directory_path=f"{args.directory}/{args.task}/{args.population_size}/{args.evolver}",
+        read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
-    if args.tensorboard:    
+    if args.tensorboard:
         print(f"Launching tensorboard...")
         tensorboard_writer, tensorboard_url = create_tensorboard(database.path)
         print(f"Tensoboard is launched and accessible at: {tensorboard_url}")
@@ -226,7 +229,8 @@ def run_task(args : Arguments):
         logging=args.logging)
     # run controller
     print(f"Starting controller...")
-    controller.start()    # analyze results stored in database
+    controller.start() 
+    # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database)
     checkpoint = analyzer.test(
@@ -246,23 +250,26 @@ def run_task(args : Arguments):
         CONFIGURATIONS
 """
 
-def test_like_knowledge_sharing(task='mnist_lenet5'):
-    population_size = 30
-    # lshade
-    args = Arguments( task = task, evolver = 'lshade', population_size = population_size, batch_size = 64,
+def test_mnist(population_size = 30, evolver='lshade'):
+    args = Arguments( task = 'mnist', evolver = evolver, population_size = population_size, batch_size = 64,
         step_size = 250, end_nfe = population_size * 40, end_steps = None, end_score = None, history_limit = 2,
-        directory = 'checkpoints', device = 'cuda', n_jobs = 6, tensorboard = True, detect_NaN = True, verbose = 1, logging = True
-    )
+        directory = 'checkpoints', device = 'cuda', n_jobs = 5, tensorboard = True, detect_NaN = True, verbose = 1, logging = True)
     run_task(args)
-    # shade
-    args.evolver = 'shade'
+    time.sleep(10)
+
+def test_like_knowledge_sharing_lenet5(population_size = 30, evolver='lshade'):
+    args = Arguments( task = 'mnist_lenet5', evolver = evolver, population_size = population_size, batch_size = 64,
+        step_size = 250, end_nfe = population_size * 40, end_steps = None, end_score = None, history_limit = 2,
+        directory = 'checkpoints', device = 'cuda', n_jobs = 6, tensorboard = True, detect_NaN = True, verbose = 1, logging = True)
     run_task(args)
-    # de
-    args.evolver = 'de'
+    time.sleep(10)
+
+def test_like_knowledge_sharing_mlp(population_size = 30, evolver='lshade'):
+    args = Arguments( task = 'mnist_mlp', evolver = evolver, population_size = population_size, batch_size = 64,
+        step_size = 250, end_nfe = population_size * 40, end_steps = None, end_score = None, history_limit = 2,
+        directory = 'checkpoints', device = 'cuda', n_jobs = 6, tensorboard = True, detect_NaN = True, verbose = 1, logging = True)
     run_task(args)
-    # pbt
-    args.evolver = 'pbt'
-    run_task(args)
+    time.sleep(10)
 
 """
         PROGRAM STARTS HERE
@@ -270,5 +277,26 @@ def test_like_knowledge_sharing(task='mnist_lenet5'):
 
 if __name__ == "__main__":
     #args = import_arguments()
-    test_like_knowledge_sharing('mnist_lenet5')
-    test_like_knowledge_sharing('mnist_mlp')
+    #test_mnist(population_size = 30, evolver='lshade')
+    #test_mnist(population_size = 30, evolver='shade')
+    #test_mnist(population_size = 30, evolver='de')
+    #test_mnist(population_size = 30, evolver='pbt')
+    test_like_knowledge_sharing_lenet5(population_size = 30, evolver='lshade')
+    test_like_knowledge_sharing_lenet5(population_size = 30, evolver='pbt')
+    test_like_knowledge_sharing_lenet5(population_size = 30, evolver='shade')
+    test_like_knowledge_sharing_lenet5(population_size = 30, evolver='de')
+    test_like_knowledge_sharing_mlp(population_size = 30, evolver='lshade')
+    test_like_knowledge_sharing_mlp(population_size = 30, evolver='pbt')
+    test_like_knowledge_sharing_mlp(population_size = 30, evolver='shade')
+    test_like_knowledge_sharing_mlp(population_size = 30, evolver='de')
+
+    # b = 64
+    # x = 250
+    # tren x steg frem
+    # evaluer
+    # mutasjon
+    # tren mutasjon 1 steg frem
+    # evaluer mutasjon
+    # repeat
+
+    # [b0, b1, b2, b3, b4, ..., bn]

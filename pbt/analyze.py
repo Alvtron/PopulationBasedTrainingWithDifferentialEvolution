@@ -35,10 +35,11 @@ class Analyzer(object):
         self.database : ReadOnlyDatabase = database
 
     def test(self, evaluator : Evaluator, save_directory, verbose = False):
-        best = max(self.database.latest())
-        model_state, _ = best.load_state()
+        latest_members = list(self.database.latest())
+        max_steps = max(member.steps for member in latest_members)
+        best = max(member for member in latest_members if member.steps == max_steps)
         if verbose: print(f"Testing {best}...", end=" ")
-        best.loss['test'] = evaluator.eval(model_state)
+        best.loss['test'] = evaluator.eval(best.model_state)
         # save top members to file
         result = f"Best checkpoint: {best}: {best.performance_details()}"
         with Path(save_directory).open('a+') as f:
@@ -55,9 +56,8 @@ class Analyzer(object):
             if not entry.has_model_state():
                 if verbose: print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model state.")
                 continue
-            model_state, _ = entry.load_state()
             if verbose: print(f"({index}/{len(subjects)}) Testing {entry}...", end=" ")
-            entry.loss['test'] = evaluator.eval(model_state)
+            entry.loss['test'] = evaluator.eval(entry.model_state)
             tested_subjects.append(entry)
             if verbose:
                 for metric_type, metric_value in entry.loss['test'].items():

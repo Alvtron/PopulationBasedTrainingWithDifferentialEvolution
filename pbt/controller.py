@@ -5,6 +5,7 @@ import time
 import random
 import copy
 import pickle
+import shutil
 from typing import List, Dict
 from functools import partial 
 from collections import defaultdict
@@ -18,8 +19,9 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
 
-from .member import Checkpoint, Population, Generation
-from .worker import Worker
+import pbt.member
+from .member import Checkpoint, Population, Generation, clear_member_states
+from .worker import Worker, WorkerTask
 from .utils.date import get_datetime_string
 from .hyperparameters import DiscreteHyperparameter, Hyperparameters
 from .trainer import Trainer
@@ -55,6 +57,7 @@ class Controller(object):
         self.n_jobs = n_jobs
         self.verbose = verbose
         self.logging = logging
+        self.__tensorboard_writer = tensorboard_writer
         self.context = context
         # create shared event for when to end training
         self.end_event = self.context.Event()
@@ -64,7 +67,6 @@ class Controller(object):
         self.__workers = []
         self.__n_active_workers = 0
         self.history_limit = history_limit if history_limit and history_limit > 2 else 2
-        self.__tensorboard_writer = tensorboard_writer
         # TODO: implement save and load function for controller
         self.save_objective_info()
         self.nfe = 0
@@ -125,21 +127,28 @@ class Controller(object):
     def remove_bad_member_states(self):
         if self.history_limit is None:
             return
-        # select the excess members with history_limit
-        for generation in self.population.generations[:-self.history_limit]:
-            for bad_member in generation:
-                if not bad_member.has_state():
-                    # skipping the member as it has no state to delete
-                    continue
-                self.__whisper(f"deleting the state from member {bad_member.id} at step {bad_member.steps} with score {bad_member.score():.2f}...")
-                bad_member.delete_state()
+        if len(self.population.generations) < self.history_limit + 1:
+            return
+        for member in self.population.generations[-(self.history_limit + 1)]:
+            if not member.has_state():
+                # skipping the member as it has no state to delete
+                continue
+            self.__whisper(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.2f}...")
+            member.delete_state()
+            # updating database
+            self.database.update(member.id, member.steps, member)
+        # clean tmp states
+        for state_folder in pbt.member.MEMBER_STATE_DIRECTORY.glob("*"):
+            step = int(state_folder.name)
+            if step < len(self.population.generations) * self.step_size - self.history_limit * self.step_size: 
+                shutil.rmtree(state_folder)
 
     def delete_inactive_workers(self):
         """Delete all inactive workers."""
-        for index in range(len(self.__workers) - 1, -1, -1):
-            if not self.__workers[index].is_alive():
-                self.__whisper(f"removing worker {self.__workers[index].id}...")
-                del self.__workers[index]
+        stopped_workers_idx = set(index for index, worker in enumerate(self.__workers) if not worker.is_alive())
+        for index in sorted(stopped_workers_idx, reverse=True):
+            self.__whisper(f"removing worker {self.__workers[index].id}...")
+            del self.__workers[index]
 
     def adjust_workers_size(self):
         delta_size = self.__n_active_workers - self.population.size
@@ -169,8 +178,6 @@ class Controller(object):
             Worker(
                 id=id,
                 end_event_global=self.end_event,
-                trainer=self.trainer,
-                evaluator=self.evaluator,
                 evolve_queue=self.evolve_queue,
                 train_queue=self.train_queue,
                 random_seed=id,
@@ -239,12 +246,10 @@ class Controller(object):
         # create new member object
         member = Checkpoint(
             id=id,
-            directory=self.database.create_entry_directoy_path(id),
             hyper_parameters=copy.deepcopy(self.hyper_parameters),
             loss_metric=self.loss_metric,
             eval_metric=self.eval_metric,
-            minimize=self.loss_functions[self.eval_metric].minimize,
-            step_size=self.step_size)
+            minimize=self.loss_functions[self.eval_metric].minimize)
         # let evolver process new member
         self.evolver.on_member_spawn(member, self.__whisper)
         return member
@@ -292,12 +297,10 @@ class Controller(object):
         """Replace member with one of the best performing members in a previous generation."""
         previous_generation = self.population.generations[-2]
         n_elitists = max(1, round(len(previous_generation) * p))
-        elitists = sorted((m for m in previous_generation if m.id != member.id), reverse=True)[:n_elitists]
+        elitists = sorted((m for m in previous_generation if m != member), reverse=True)[:n_elitists]
         elitist = random.choice(elitists)
         self.__log_silent(member, f"replacing with member {elitist.id}...")
         member.update(elitist)
-        member.steps = elitist.steps
-        member.epochs = elitist.epochs
         # resample hyper parameters
         [hp.sample_uniform() for hp in member]
 
@@ -307,21 +310,21 @@ class Controller(object):
         Returns the candidate checkpoint.
         The checkpoint object holds the loss result.
         """
-        # load state
-        model_state, optimizer_state = candidate.load_state()
+        # load candidate state
+        candidate.load_state()
         # train
-        model_state, optimizer_state, candidate.epochs, candidate.steps, candidate.loss['train'] = self.trainer.train(
+        candidate.model_state, candidate.optimizer_state, candidate.epochs, candidate.steps, candidate.loss['train'] = self.trainer.train(
             hyper_parameters=candidate.hyper_parameters,
-            model_state=model_state,
-            optimizer_state=optimizer_state,
+            model_state=candidate.model_state,
+            optimizer_state=candidate.optimizer_state,
             epochs=candidate.epochs,
             steps=candidate.steps,
             step_size=self.eval_steps
             )
-        # save state
-        candidate.save_state(model_state, optimizer_state)
         # eval
-        candidate.loss['eval'] = self.evaluator.eval(model_state)
+        candidate.loss['eval'] = self.evaluator.eval(candidate.model_state)
+        # unload candidate state
+        candidate.unload_state()
         return candidate
 
     def start_training_procedure(self):
@@ -341,6 +344,8 @@ class Controller(object):
         """
         Start global training procedure. Ends when end_criteria is met.
         """
+        # reset member state folder
+        clear_member_states()
         try:
             # start controller loop
             self.__say("Starting training procedure...")
@@ -355,6 +360,11 @@ class Controller(object):
         [worker.join() for worker in self.__workers]
         self.delete_inactive_workers()
         self.__whisper("termination was successfull!")
+        # reset member state folder
+        clear_member_states()
+        # clear CUDA memory
+        if self.device.startswith('cuda'):
+            torch.cuda.empty_cache()
 
     def train_synchronously(self):
         """
@@ -391,7 +401,9 @@ class Controller(object):
                 self.population.append(member)
                 # Save member to database directory.
                 self.__log_silent(member, "updating database...")
+                member.load_state()
                 self.database.update(member.id, member.steps, member)
+                member.unload_state()
             # write to tensorboard if enabled
             if self.__tensorboard_writer:
                 self.__update_tensorboard()
@@ -404,8 +416,9 @@ class Controller(object):
             self.__whisper("on generation start")
             self.evolver.on_generation_start(self.population, self.__whisper)
             for member in self.population:
-                # evolve member if ready
+                # make a copy of the member
                 candidate = member.copy()
+                # evolve member if ready
                 if self.is_member_ready(member):
                     self.evolve_member(candidate)
                 # train candidate
@@ -422,9 +435,9 @@ class Controller(object):
 
     def evolve_member(self, member : Checkpoint):
         """Evolve the provided member checkpoint with the evolve engine."""
-        start_evolve_time_ns = time.time_ns()
-        self.__log_silent(member, "evolving...")
         candidate = member.copy()
+        self.__log_silent(member, "evolving...")
+        start_evolve_time_ns = time.time_ns()
         candidate = self.evolver.on_evolve(
             member=candidate,
             generation=self.population,
@@ -443,7 +456,8 @@ class Controller(object):
     def train_member(self, member : Checkpoint):
         """Queue the provided member checkpoint for training."""
         # adjust step size
-        member.step_size = self.step_size - (member.steps % self.step_size)
+        step_size = self.step_size - (member.steps % self.step_size)
+        # create worker task
+        task = WorkerTask(member, self.trainer, self.evaluator, step_size=step_size)
         self.__log_silent(member, "training...")
-        # train
-        self.train_queue.put(member)
+        self.train_queue.put(task)

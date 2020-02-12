@@ -1,4 +1,5 @@
 import random
+import time
 from collections import defaultdict
 
 import torch
@@ -7,8 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import context
-import pbt.models
 import pbt.utils.data
+from pbt.models.lenet5 import LeNet5, MnistNetLarger
 from pbt.database import ReadOnlyDatabase
 from pbt.analyze import Analyzer 
 from pbt.loss import CategoricalCrossEntropy, Accuracy, F1
@@ -64,11 +65,12 @@ def test(test_data, model, loss_functions, device):
             test_loss[metric_type] += loss.item() / len(eval_data)
     return test_loss
 
-epochs = 100
+# this gets test_cce 0.03494, test_acc 99.07444 after 12 epochs
+epochs = 12
 batch_size = 64
 device = "cuda"
-model= pbt.models.MnistNet10Larger().to(device)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0, dampening=0, weight_decay=0, nesterov=False)
+model= LeNet5().to(device)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, dampening=0, weight_decay=0, nesterov=False)
 loss_metric = 'cce'
 eval_metric = 'acc'
 loss_functions = {
@@ -82,6 +84,7 @@ train_data = torchvision.datasets.MNIST(
     train=True,
     download=True,
     transform=torchvision.transforms.Compose([
+        torchvision.transforms.Pad(padding=2, padding_mode='edge'),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize((0.1307,), (0.3081,))
     ]))
@@ -90,6 +93,7 @@ test_set = torchvision.datasets.MNIST(
     train=False,
     download=True,
     transform=torchvision.transforms.Compose([
+        torchvision.transforms.Pad(padding=2, padding_mode='edge'),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize((0.1307,), (0.3081,))
     ]))
@@ -128,12 +132,17 @@ print("training...")
 for e in range(epochs):
     result = list()
     result.append(f"epoch {e}")
+    train_time = time.time_ns()
     train_loss = train(train_data, model, optimizer, loss_functions, device)
+    train_time = float(time.time_ns() - train_time) * float(10**(-9))
+    eval_time = time.time_ns()
     eval_loss = eval(eval_data, model, loss_functions, device)
+    eval_time = float(time.time_ns() - eval_time) * float(10**(-9))
     for loss_name, loss_value in train_loss.items():
         result.append(f"train_{loss_name} {loss_value:.5f}")
     for loss_name, loss_value in eval_loss.items():
         result.append(f"eval_{loss_name} {loss_value:.5f}")
+    print(f"Time: {train_time:.2f}s train, {eval_time:.2f}s eval")
     print(", ".join(result))
     train_scores.append(train_loss)
     eval_scores.append(eval_loss) 

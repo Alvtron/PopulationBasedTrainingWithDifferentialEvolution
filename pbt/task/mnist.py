@@ -7,7 +7,7 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
 from .task import Task
-from ..models import hypernet, lenet5, mlp, wideresnet
+from ..models import hypernet, lenet5, mlp
 from ..utils.data import split, random_split, stratified_split
 from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from ..loss import F1, Accuracy, CategoricalCrossEntropy
@@ -29,12 +29,12 @@ class Mnist(Task):
     def hyper_parameters(self) -> Hyperparameters:
         return Hyperparameters(
             augment_params=None,
-            model_params= self.model_class.create_hyper_parameters(),
+            model_params= lenet5.MnistNetLarger.create_hyper_parameters(),
             optimizer_params={
-                'lr': ContiniousHyperparameter(1e-9, 1e-1),
+                'lr': ContiniousHyperparameter(0.0, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),
                 'weight_decay': ContiniousHyperparameter(1e-9, 1e-5),
-                'nesterov': CategoricalContiniousHyperparameter(False, True)
+                'nesterov': DiscreteHyperparameter(False, True)
             })
 
     @property
@@ -51,7 +51,7 @@ class Mnist(Task):
 
     @property
     def eval_metric(self) -> str:
-        return 'acc'
+        return 'cce'
 
     @property
     def datasets(self) -> Datasets:
@@ -215,7 +215,7 @@ class EMnist(Mnist):
                 'lr': ContiniousHyperparameter(1e-6, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-6, 0.5),
                 'weight_decay': ContiniousHyperparameter(0.0, 1e-5),
-                'nesterov': CategoricalContiniousHyperparameter(False, True)
+                'nesterov': DiscreteHyperparameter(False, True)
             })
 
     @property

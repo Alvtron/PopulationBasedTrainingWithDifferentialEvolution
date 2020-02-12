@@ -2,6 +2,7 @@ import copy
 import torch
 import math
 import warnings
+import shutil
 
 from pathlib import Path
 from abc import abstractmethod 
@@ -11,7 +12,27 @@ from typing import List, Iterable, Sequence, Generator
 
 from .utils.conversion import dict_to_binary, binary_to_dict
 from .utils.iterable import chunks, insert_sequence
-from .hyperparameters import ContiniousHyperparameter, Hyperparameters
+from .hyperparameters import ContiniousHyperparameter, _Hyperparameter, Hyperparameters
+
+# extend Path to include copy method
+def _copy(self, target):
+    assert self.is_file()
+    shutil.copy(self, target)
+Path.copy = _copy
+
+# global member state directory
+MEMBER_STATE_DIRECTORY = Path('.member_states')
+# ensure that the state directory is created
+MEMBER_STATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
+
+def clear_member_states():
+    # delete folder
+    shutil.rmtree(MEMBER_STATE_DIRECTORY)
+    # create folder
+    MEMBER_STATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
+
+class MissingStateError(Exception):
+    pass
 
 class MemberState(object):
     '''Base class for member states.'''
@@ -27,31 +48,31 @@ class MemberState(object):
     def __iter__(self):
         return self.hyper_parameters.parameters()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.hyper_parameters)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> _Hyperparameter:
         return self.hyper_parameters[index]
 
-    def __setitem__(self, index, value : ContiniousHyperparameter):
-        if not isinstance(value, ContiniousHyperparameter):
+    def __setitem__(self, index, value : _Hyperparameter):
+        if not isinstance(value, _Hyperparameter):
             raise TypeError()
         self.hyper_parameters[index] = value
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Member {self.id:03d}"
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if other is None:
             return False
         return self.id == other.id
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         if other is None:
             return True
         return self.id != other.id
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         if other is None:
             return False
         if isinstance(other, (float, int)):
@@ -61,7 +82,7 @@ class MemberState(object):
         else:
             raise NotImplementedError()
 
-    def __le__(self, other):
+    def __le__(self, other) -> bool:
         if other is None:
             return False
         if isinstance(other, (float, int)):
@@ -71,7 +92,7 @@ class MemberState(object):
         else:
             raise NotImplementedError()
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> bool:
         if other is None:
             return True
         if isinstance(other, (float, int)):
@@ -81,7 +102,7 @@ class MemberState(object):
         else:
             raise NotImplementedError()
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> bool:
         if other is None:
             return True
         if isinstance(other, (float, int)):
@@ -98,21 +119,17 @@ class MemberState(object):
         return copy.deepcopy(self)
 
 class Checkpoint(MemberState):
-    '''Class for keeping track of a checkpoint, where the model- and optimizer state are stored locally on a file instead of in memory.'''
-    def __init__(self, id, directory: Path, hyper_parameters : Hyperparameters, loss_metric : str, eval_metric : str, minimize : bool, step_size : int = 1):
+    '''Class for keeping track of a checkpoint, where the model- and optimizer state are stored in system memory.'''
+    def __init__(self, id, hyper_parameters : Hyperparameters, loss_metric : str, eval_metric : str, minimize : bool):
         super().__init__(id, hyper_parameters, minimize)
         self.epochs : int = 0
         self.steps : int = 0
-        self.model_state_load_path : Path = None
-        self.optimizer_state_load_path : Path = None
-        self.directory : Path = directory
-        self.step_size : int = step_size
+        self.model_state : dict = None
+        self.optimizer_state : dict = None
         self.loss_metric : str = loss_metric
         self.eval_metric : str = eval_metric
         self.loss : dict = dict()
         self.time : dict = dict()
-        # ensure directory is created
-        self.directory.mkdir(parents=True, exist_ok=True)
 
     def __str__(self) -> str:
         return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
@@ -120,23 +137,15 @@ class Checkpoint(MemberState):
     def __eq__(self, other) -> bool:
         if other is None:
             return False
-        return self.id == other.id and self.steps == other.steps and self.step_size == other.step_size
+        return self.id == other.id and self.steps == other.steps
 
     def __ne__(self, other) -> bool:
         if other is None:
             return True
-        return self.id != other.id or self.steps != other.steps or self.step_size != other.step_size
+        return self.id != other.id or self.steps != other.steps
 
     def score(self) -> float:
         return self.loss['eval'][self.eval_metric]
-
-    @property
-    def model_state_save_path(self) -> Path:
-        return Path(self.directory, f"{self.steps:05d}_model_state.pth")
-
-    @property 
-    def optimizer_state_save_path(self) -> Path:
-        return Path(self.directory, f"{self.steps:05d}_optimizer_state.pth")
 
     def train_score(self) -> float:
         return self.loss['train'][self.eval_metric]
@@ -146,39 +155,74 @@ class Checkpoint(MemberState):
 
     def test_score(self) -> float:
         return self.loss['test'][self.eval_metric]
+    
+    @property
+    def __state_directory_path(self) -> Path:
+        return Path(MEMBER_STATE_DIRECTORY, f"{self.steps}/{self.id}")
+
+    @property
+    def __model_state_path(self) -> Path:
+        return Path(self.__state_directory_path, "model_state.pth")
+
+    @property 
+    def __optimizer_state_path(self) -> Path:
+        return Path(self.__state_directory_path, "optimizer_state.pth")
 
     def has_model_state(self) -> bool:
-        return self.model_state_load_path and self.model_state_load_path.is_file()
+        return self.__model_state_path.is_file()
 
     def has_optimizer_state(self) -> bool:
-        return self.optimizer_state_load_path and self.optimizer_state_load_path.is_file()
+        return self.__optimizer_state_path.is_file()
 
     def has_state(self) -> bool:
         return self.has_model_state() and self.has_optimizer_state() 
-    
+
+    def load_state(self, missing_ok=False):
+        if not self.has_model_state():
+            if missing_ok:
+                self.model_state = None
+            else:
+                raise MissingStateError(f"Model state file is missing at {self.__model_state_path}")
+        else:
+            self.model_state = torch.load(self.__model_state_path)
+        if not self.has_optimizer_state():
+            if missing_ok:
+                self.optimizer_state = None
+            else:
+                raise MissingStateError(f"Optimizer state file is missing at {self.__model_state_path}")
+        else:
+            self.optimizer_state = torch.load(self.__optimizer_state_path)
+
+    def unload_state(self):
+        if self.model_state is None:
+            raise AttributeError("Can't unload when model state is None. Nothing to unload.")
+        if self.optimizer_state is None:
+            raise AttributeError("Can't unload when optimizer state is None. Nothing to unload.")
+        # ensure state directory created
+        self.__state_directory_path.mkdir(parents=True, exist_ok=True)
+        # save state objects to file
+        torch.save(self.model_state, self.__model_state_path)
+        torch.save(self.optimizer_state, self.__optimizer_state_path)
+        # unload state objects
+        del self.model_state
+        del self.optimizer_state
+        # clear GPU memory
+        torch.cuda.empty_cache()
+
+    def delete_state(self):
+        # delete state in memory
+        self.model_state = None
+        self.optimizer_state = None
+        # delete state files
+        self.__model_state_path.unlink()
+        self.__optimizer_state_path.unlink()
+
     def performance_details(self) -> str:
         strings = list()
         for loss_group, loss_values in self.loss.items():
             for loss_name, loss_value in loss_values.items():
                 strings.append(f"{loss_group}_{loss_name} {loss_value:.5f}")
         return ", ".join(strings)
-
-    def load_state(self):
-        model_state = torch.load(self.model_state_load_path) if self.has_model_state() else None
-        optimizer_state = torch.load(self.optimizer_state_load_path) if self.has_optimizer_state() else None
-        return model_state, optimizer_state
-
-    def save_state(self, model_state, optimizer_state):
-        torch.save(model_state, self.model_state_save_path)
-        torch.save(optimizer_state, self.optimizer_state_save_path)
-        self.model_state_load_path = self.model_state_save_path
-        self.optimizer_state_load_path = self.optimizer_state_save_path
-
-    def delete_state(self):
-        if self.has_model_state() and self.model_state_load_path.parent == self.directory:
-            self.model_state_load_path.unlink()
-        if self.has_optimizer_state() and self.optimizer_state_load_path.parent == self.directory:
-            self.optimizer_state_load_path.unlink()
 
     def update(self, other):
         """
@@ -187,10 +231,10 @@ class Checkpoint(MemberState):
         """
         self.epochs = other.epochs
         self.steps = other.steps
-        self.step_size = other.step_size
         self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
-        self.model_state_load_path = other.model_state_load_path
-        self.optimizer_state_load_path = other.optimizer_state_load_path
+        if self != other:
+            other.__model_state_path.copy(self.__model_state_path)
+            other.__optimizer_state_path.copy(self.__optimizer_state_path)
         self.loss = dict()
         self.time = dict()
 

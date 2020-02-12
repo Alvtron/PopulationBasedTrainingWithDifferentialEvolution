@@ -33,12 +33,18 @@ class Trainer(object):
         self.device = device
         self.verbose = verbose
 
+    def _print(self, message : str = None, end : str = '\n'):
+        if not self.verbose:
+            return
+        print(value=message, end=end)
+
     def create_model(self, hyper_parameters : Hyperparameters = None, model_state = None):
         model = self.model_class().to(self.device)
-        if model_state:
+        if model_state is not None:
             model.load_state_dict(model_state)
-        if isinstance(model, HyperNet) and hyper_parameters.model:
+        if isinstance(model, HyperNet) and hyper_parameters and hyper_parameters.model:
             model.apply_hyper_parameters(hyper_parameters.model, self.device)
+        model.train()
         return model
 
     def create_optimizer(self, model : HyperNet, hyper_parameters : Hyperparameters, optimizer_state : dict  = None):
@@ -68,43 +74,58 @@ class Trainer(object):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
         with torch.cuda.device(0):
-            # preparing model and optimizer
-            model = self.create_model(hyper_parameters, model_state)
-            model.train()
-            optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
-            # initialize eval metrics dict
             metric_values = dict.fromkeys(self.loss_functions, 0.0)
-            # loop until step_size is exhausted
             END_STEPS = steps + step_size
-            # create subset
+            # preparing model and optimizer
+            self._print("Creating model...")
+            model = self.create_model(hyper_parameters, model_state)
+            self._print("Creating optimizer...")
+            optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
+            self._print("Creating batches...")
             batches = self.create_subset(steps, END_STEPS)
+            self._print("Training...")
             while steps != END_STEPS:
+                self._print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
                 try:
-                    if self.verbose: print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
                     x, y = next(batches)
-                    #grid_img = torchvision.utils.make_grid(x, nrow=8)
-                    #plt.imshow(grid_img.permute(1, 2, 0))
-                    #plt.show()
-                    x, y = x.to(self.device), y.to(self.device)
+                    x = x.to(self.device, non_blocking=True)
+                    y = y.to(self.device, non_blocking=True)
+                    # 1. Forward pass: compute predicted y by passing x to the model.
+                    output = model(x)
                     for metric_type, metric_function in self.loss_functions.items():
                         if metric_type == self.loss_metric:
-                            output = model(x)
-                            model.zero_grad()
+                            # 2. Compute loss and save loss.
                             loss = metric_function(output, y)
+                            metric_values[metric_type] += loss.item() / float(step_size)
+                            # 3. Before the backward pass, use the optimizer object to zero all of the gradients
+                            # for the variables it will update (which are the learnable weights of the model).
                             optimizer.zero_grad()
+                            # 4. Backward pass: compute gradient of the loss with respect to model parameters
                             loss.backward()
+                            # 5. Calling the step function on an Optimizer makes an update to its parameters
                             optimizer.step()
-                            metric_values[metric_type] += loss.item() / float(step_size)
                         else:
-                            loss = metric_function(output, y)
+                            # 2. Compute loss and save loss
+                            with torch.no_grad():
+                                loss = metric_function(output, y)
                             metric_values[metric_type] += loss.item() / float(step_size)
-                        if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
-                    if self.verbose: print(end="\n")
+                        self._print(f"{metric_type}: {loss.item():4f}", end=" ")
+                        del loss
+                    del output
                     steps += 1
                 except StopIteration:
                     batches = self.create_subset(steps, END_STEPS)
                     epochs += 1
+                finally:
+                    self._print(end="\n")
             model_state = model.state_dict()
             optimizer_state = optimizer.state_dict()
+            del model
+            del optimizer
         torch.cuda.empty_cache()
         return model_state, optimizer_state, epochs, steps, metric_values
+
+    def grid_plot(self, x):
+        grid_img = torchvision.utils.make_grid(x, nrow=8)
+        plt.imshow(grid_img.permute(1, 2, 0))
+        plt.show()

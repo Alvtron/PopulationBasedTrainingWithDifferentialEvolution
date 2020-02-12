@@ -33,6 +33,7 @@ class Evaluator(object):
         model = self.model_class().to(self.device)
         if model_state:
             model.load_state_dict(model_state)
+        model.eval()
         return model
 
     def eval(self, model_state : dict):
@@ -41,16 +42,20 @@ class Evaluator(object):
         metric_values = dict.fromkeys(self.loss_functions, 0.0)
         with torch.cuda.device(0):
             model = self.create_model(model_state)
-            # model.eval() #breaks when using gpu
-            with torch.no_grad():
-                for batch_index, (x, y) in enumerate(self.test_data, start=1):
-                    if self.verbose: print(f"({batch_index}/{dataset_length})", end=" ")
-                    x, y = x.to(self.device), y.to(self.device)
+            for batch_index, (x, y) in enumerate(self.test_data, start=1):
+                if self.verbose: print(f"({batch_index}/{dataset_length})", end=" ")
+                x = x.to(self.device, non_blocking=True)
+                y = y.to(self.device, non_blocking=True)
+                with torch.no_grad():
                     output = model(x)
-                    for metric_type, metric_function in self.loss_functions.items():
+                for metric_type, metric_function in self.loss_functions.items():
+                    with torch.no_grad():
                         loss = metric_function(output, y)
-                        metric_values[metric_type] += loss.item() / float(dataset_length)
-                        if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
-                    if self.verbose: print(end="\n")
+                    metric_values[metric_type] += loss.item() / float(dataset_length)
+                    if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
+                    del loss
+                if self.verbose: print(end="\n")
+                del output
+            del model
         torch.cuda.empty_cache()
         return metric_values

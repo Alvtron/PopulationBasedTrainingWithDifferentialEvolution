@@ -7,9 +7,9 @@ from pathlib import Path
 from datetime import datetime
 
 class ReadOnlyDatabase(object):
-    def __init__(self, database_path, read_function=None):
-        self.ENTRY_EXT = "obj"
+    def __init__(self, database_path, read_function=None, extension = "obj"):
         self.ENTRIES_TAG = 'entries'
+        self.extension = extension
         self.path = Path(database_path)
         # set read function
         def read(path): return pickle.load(path.open('rb'))
@@ -21,7 +21,7 @@ class ReadOnlyDatabase(object):
 
     def __len__(self):
         entries_path = Path(self.path, self.ENTRIES_TAG)
-        return len(list(entries_path.glob(f'**/*.{self.ENTRY_EXT}')))
+        return len(list(entries_path.glob(f'**/*.{self.extension}')))
 
     def __iter__(self):
         for directory in self.entry_directories():
@@ -31,6 +31,9 @@ class ReadOnlyDatabase(object):
     def __contains__(self, id):
         return self.create_entry_directoy_path(id).exists()
 
+    def create_entry_file_name(self, key):
+        return f"{key:05d}.{self.extension}"
+
     def create_entry_directoy_path(self, id):
         """ Creates a new entry directory file path. """
         return Path(self.path, self.ENTRIES_TAG, f"{id:03d}")
@@ -38,7 +41,7 @@ class ReadOnlyDatabase(object):
     def create_entry_file_path(self, id, key):
         """ Creates and returns a new database entry file path in the appropriate entry directory. """
         entry_directory = self.create_entry_directoy_path(id)
-        entry_file_name = f"{key:05d}.{self.ENTRY_EXT}"
+        entry_file_name = self.create_entry_file_name(key)
         return Path(entry_directory, entry_file_name)
 
     def entry(self, id, key):
@@ -49,13 +52,14 @@ class ReadOnlyDatabase(object):
     def entries(self, id):
         """ Iterate over the entry directory matching the specified id and yield all entries inside the directory. """
         entry_directory = self.create_entry_directoy_path(id)
-        for content in entry_directory.glob(f"*.{self.ENTRY_EXT}"):
+        for content in entry_directory.glob(f"*.{self.extension}"):
             yield self.read(content)
 
     def latest(self):
         """ Iterate over all entry directories and yield the latest entry. """
         for entry_dir in self.entry_directories():
-            yield self.read(max(entry_dir.glob(f"*.{self.ENTRY_EXT}"), key=os.path.getctime))
+            newest_entry = max(entry_dir.glob(f"*.{self.extension}"), key=os.path.getctime)
+            yield self.read(newest_entry)
 
     def entry_directories(self):
         entries_path = Path(self.path, self.ENTRIES_TAG)
@@ -64,7 +68,7 @@ class ReadOnlyDatabase(object):
 
     def entries_from_path(self, entry_directory_path):
         """ Retrieve all entries made on the specified id. """
-        for content in entry_directory_path.glob(f"*.{self.ENTRY_EXT}"):
+        for content in entry_directory_path.glob(f"*.{self.extension}"):
             yield self.read(content)
 
     def to_dict(self):
@@ -84,7 +88,7 @@ class ReadOnlyDatabase(object):
             print(entry)
 
 class Database(ReadOnlyDatabase):
-    def __init__(self, directory_path, database_name=None, read_function=None, write_function=None):
+    def __init__(self, directory_path, database_name=None, read_function=None, write_function=None, extension = "obj"):
         # set database path
         if not database_name:
             database_name = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -92,7 +96,7 @@ class Database(ReadOnlyDatabase):
         if database_path.exists():
             raise ValueError(f"Database path is occupied: {database_path}")
         # init parent object
-        super().__init__(database_path=database_path, read_function=read_function)
+        super().__init__(database_path=database_path, read_function=read_function, extension=extension)
         # create database directory
         self.path.mkdir(parents=True, exist_ok=True)
         # set write function

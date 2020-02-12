@@ -45,8 +45,7 @@ class RandomSearch(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        for hyper_parameter in member:
-            hyper_parameter.sample_uniform()
+        [hp.sample_uniform() for hp in member]
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """Simply returns the member. No mutation conducted."""
@@ -63,8 +62,7 @@ class RandomWalk(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        for hyper_parameter in member:
-            hyper_parameter.sample_uniform()
+        [hp.sample_uniform() for hp in member]
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """ Explore search space with random walk. """
@@ -92,8 +90,7 @@ class ExploitAndExplore(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        for hyper_parameter in member:
-            hyper_parameter.sample_uniform()
+        [hp.sample_uniform() for hp in member]
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -109,7 +106,7 @@ class ExploitAndExplore(EvolveEngine):
         """A fraction of the bottom performing members exploit the top performing members."""
         exploiter = member.copy()
         n_elitists = max(1, round(generation.size * self.exploit_factor))
-        elitists = sorted((m for m in generation if m.id != member.id), reverse=True)[:n_elitists]
+        elitists = sorted((m for m in generation if m != member), reverse=True)[:n_elitists]
         # exploit if member is not elitist
         if elitists:
             elitist = random.choice(elitists)
@@ -139,8 +136,7 @@ class DifferentialEvolution(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        for hyper_parameter in member:
-            hyper_parameter.sample_uniform()
+        [hp.sample_uniform() for hp in member]
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
         """
@@ -209,7 +205,7 @@ class HistoricalMemory(object):
 
     def update(self):
         if self.s_cr and self.s_f:
-            if self.m_cr[self.k] == None or max(self.s_cr) == 0:
+            if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
                 self.m_cr[self.k] = None
             else:
                 self.m_cr[self.k] = mean_wl(self.s_cr, self.weights)
@@ -261,8 +257,7 @@ class SHADE(EvolveEngine):
         
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        for hyper_parameter in member:
-            hyper_parameter.sample_uniform()
+        [hp.sample_uniform() for hp in member]
 
     def on_generation_start(self, generation : Generation, logger):
         self.memory.reset()
@@ -308,6 +303,7 @@ class SHADE(EvolveEngine):
         """Evaluates candidate, compares it to the original member and returns the best performer."""
         candidate = eval_function(candidate)
         member = eval_function(member)
+        # eval on random subset of training set
         if member < candidate:
             logger(f"mutation is better. Add parent member to archive.")
             self.archive.append(member.copy())
@@ -348,6 +344,7 @@ class SHADE(EvolveEngine):
             if F_i >= 1.0:
                 F_i = 1.0
                 break
+            break
         return CR_i, F_i
         
     def pbest_member(self, generation : List[MemberState]):
@@ -396,6 +393,6 @@ class LSHADE(SHADE):
                 size_delta = generation.size - new_size
                 for worst in sorted(generation)[:size_delta]:
                     generation.remove(worst)
-                    logger(f"member {worst.id} with score {worst.score()} was removed from the generation.")
+                    logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
             generation.size = new_size
     
