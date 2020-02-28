@@ -50,31 +50,24 @@ trainer = Trainer(
     train_data=task.datasets.train,
     batch_size=batch_size,
     loss_functions=task.loss_functions,
-    loss_metric=task.loss_metric,
-    device=device
-)
+    loss_metric=task.loss_metric)
 evaluator = Evaluator(
     model_class=task.model_class,
     test_data=task.datasets.eval,
     batch_size=batch_size,
-    loss_functions=task.loss_functions,
-    device=device
-)
+    loss_functions=task.loss_functions)
 tester = Evaluator(
     model_class=task.model_class,
     test_data=task.datasets.test,
     batch_size=batch_size,
-    loss_functions=task.loss_functions,
-    device=device
-)
+    loss_functions=task.loss_functions)
 hp = Hyperparameters(
     augment_params=None,
     model_params=None,
     optimizer_params={
         'lr': ContiniousHyperparameter(0.000001, 0.1, value=0.01),
         'momentum': ContiniousHyperparameter(0.001, 0.9, value=0.5)
-    }
-)
+    })
 
 step_size = 100
 checkpoint = Checkpoint(
@@ -88,16 +81,17 @@ checkpoint = Checkpoint(
 print("training...")
 while(checkpoint.epochs < epochs):
     start_train_time_ns = time.time_ns()
-    checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = trainer.train(
+    checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = trainer(
         hyper_parameters=checkpoint.hyper_parameters,
         model_state=checkpoint.model_state,
         optimizer_state=checkpoint.optimizer_state,
         epochs=checkpoint.epochs,
         steps=checkpoint.steps,
-        step_size=step_size)
+        step_size=step_size,
+        device=device)
     checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
     start_eval_time_ns = time.time_ns()
-    checkpoint.loss['eval'] = evaluator.eval(checkpoint.model_state)
+    checkpoint.loss['eval'] = evaluator(checkpoint.model_state, device)
     checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
     print(f"Time: {checkpoint.time['train']:.2f}s train, {checkpoint.time['eval']:.2f}s eval")
     print(f"epoch {checkpoint.epochs}, step {checkpoint.steps}, {checkpoint.performance_details()}")
@@ -105,5 +99,5 @@ while(checkpoint.epochs < epochs):
     checkpoint.hyper_parameters.optimizer['momentum'] *= random.uniform(0.8, 1.2)
 # test
 print("testing...")
-checkpoint.loss['test'] = tester.eval(checkpoint.model_state)
+checkpoint.loss['test'] = tester(checkpoint.model_state, device)
 print(checkpoint.performance_details())

@@ -55,11 +55,9 @@ class ReadOnlyDatabase(object):
         for content in entry_directory.glob(f"*.{self.extension}"):
             yield self.read(content)
 
-    def latest(self):
+    def last(self):
         """ Iterate over all entry directories and yield the latest entry. """
-        for entry_dir in self.entry_directories():
-            newest_entry = max(entry_dir.glob(f"*.{self.extension}"), key=os.path.getctime)
-            yield self.read(newest_entry)
+        raise NotImplementedError
 
     def entry_directories(self):
         entries_path = Path(self.path, self.ENTRIES_TAG)

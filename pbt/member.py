@@ -31,6 +31,14 @@ def clear_member_states():
     # create folder
     MEMBER_STATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
+def prepare_score(value):
+    if hasattr(value, "score"):
+        return value.score() if not math.isnan(value.score()) and not math.isinf(value.score()) else None
+    elif isinstance(value, (float, int)):
+        return value if not math.isnan(value) and not math.isinf(value) else None
+    else:
+        raise NotImplementedError
+
 class MissingStateError(Exception):
     pass
 
@@ -43,7 +51,7 @@ class MemberState(object):
 
     @abstractmethod
     def score(self):
-        pass
+        raise NotImplementedError
 
     def __iter__(self):
         return self.hyper_parameters.parameters()
@@ -63,54 +71,58 @@ class MemberState(object):
         return f"Member {self.id:03d}"
 
     def __eq__(self, other) -> bool:
-        if other is None:
+        if other is None or not hasattr(other, id):
             return False
         return self.id == other.id
 
     def __ne__(self, other) -> bool:
-        if other is None:
+        if other is None or not hasattr(other, id):
             return True
         return self.id != other.id
 
     def __lt__(self, other) -> bool:
-        if other is None:
+        x = prepare_score(self)
+        y = prepare_score(other)
+        if x is None and y is None:
             return False
-        if isinstance(other, (float, int)):
-            return self.score() > other if self.minimize else self.score() < other
-        elif isinstance(other, MemberState):
-            return self.score() > other.score() if self.minimize else self.score() < other.score()
-        else:
-            raise NotImplementedError()
+        elif x is None:
+            return True
+        elif y is None:
+            return False
+        return x < y if not self.minimize else x > y
 
     def __le__(self, other) -> bool:
-        if other is None:
+        x = prepare_score(self)
+        y = prepare_score(other)
+        if x is None and y is None:
+            return True
+        elif x is None:
+            return True
+        elif y is None:
             return False
-        if isinstance(other, (float, int)):
-            return self.score() >= other if self.minimize else self.score() <= other
-        elif isinstance(other, MemberState):
-            return self.score() >= other.score() if self.minimize else self.score() <= other.score()
-        else:
-            raise NotImplementedError()
+        return x <= y if not self.minimize else x >= y
 
     def __gt__(self, other) -> bool:
-        if other is None:
+        x = prepare_score(self)
+        y = prepare_score(other)
+        if x is None and y is None:
+            return False
+        elif x is None:
+            return False
+        elif y is None:
             return True
-        if isinstance(other, (float, int)):
-            return self.score() < other if self.minimize else self.score() > other
-        elif isinstance(other, MemberState):
-            return self.score() < other.score() if self.minimize else self.score() > other.score()
-        else:
-            raise NotImplementedError()
+        return x > y if not self.minimize else x < y
 
     def __ge__(self, other) -> bool:
-        if other is None:
+        x = prepare_score(self)
+        y = prepare_score(other)
+        if x is None and y is None:
             return True
-        if isinstance(other, (float, int)):
-            return self.score() <= other if self.minimize else self.score() >= other
-        elif isinstance(other, MemberState):
-            return self.score() <= other.score() if self.minimize else self.score() >= other.score()
-        else:
-            raise NotImplementedError()
+        elif x is None:
+            return False
+        elif y is None:
+            return True
+        return x >= y if not self.minimize else x <= y
 
     def update(self, other):
         self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
@@ -145,77 +157,103 @@ class Checkpoint(MemberState):
         return self.id != other.id or self.steps != other.steps
 
     def score(self) -> float:
-        return self.loss['eval'][self.eval_metric]
+        return self.loss['eval'][self.eval_metric] if 'eval' in self.loss and self.eval_metric in self.loss['eval'] else None
 
     def train_score(self) -> float:
-        return self.loss['train'][self.eval_metric]
-
-    def eval_score(self) -> float:
-        return self.score()
+        return self.loss['train'][self.eval_metric] if 'train' in self.loss and self.eval_metric in self.loss['train'] else None
 
     def test_score(self) -> float:
-        return self.loss['test'][self.eval_metric]
+        return self.loss['test'][self.eval_metric] if 'test' in self.loss and self.eval_metric in self.loss['test'] else None
     
-    @property
     def __state_directory_path(self) -> Path:
         return Path(MEMBER_STATE_DIRECTORY, f"{self.steps}/{self.id}")
 
-    @property
     def __model_state_path(self) -> Path:
-        return Path(self.__state_directory_path, "model_state.pth")
+        return Path(self.__state_directory_path(), "model_state.pth")
 
-    @property 
     def __optimizer_state_path(self) -> Path:
-        return Path(self.__state_directory_path, "optimizer_state.pth")
+        return Path(self.__state_directory_path(), "optimizer_state.pth")
 
     def has_model_state(self) -> bool:
-        return self.__model_state_path.is_file()
+        """Returns true if the checkpoint has a model state file."""
+        return self.__model_state_path().is_file()
 
     def has_optimizer_state(self) -> bool:
-        return self.__optimizer_state_path.is_file()
+        """Returns true if the checkpoint has a optimizer state file."""
+        return self.__optimizer_state_path().is_file()
 
     def has_state(self) -> bool:
-        return self.has_model_state() and self.has_optimizer_state() 
+        """Returns true if the checkpoint has any state files."""
+        return self.has_model_state() or self.has_optimizer_state() 
 
-    def load_state(self, missing_ok=False):
+    def load_state(self, device='cpu', missing_ok=False):
+        """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
         if not self.has_model_state():
             if missing_ok:
                 self.model_state = None
             else:
-                raise MissingStateError(f"Model state file is missing at {self.__model_state_path}")
+                raise MissingStateError(f"Model state file is missing at {self.__model_state_path()}")
         else:
-            self.model_state = torch.load(self.__model_state_path)
+            self.model_state = torch.load(self.__model_state_path(), map_location=device)
         if not self.has_optimizer_state():
             if missing_ok:
                 self.optimizer_state = None
             else:
-                raise MissingStateError(f"Optimizer state file is missing at {self.__model_state_path}")
+                raise MissingStateError(f"Optimizer state file is missing at {self.__model_state_path()}")
         else:
-            self.optimizer_state = torch.load(self.__optimizer_state_path)
+            self.optimizer_state = torch.load(self.__optimizer_state_path(), map_location=device)
 
     def unload_state(self):
+        """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""
         if self.model_state is None:
             raise AttributeError("Can't unload when model state is None. Nothing to unload.")
         if self.optimizer_state is None:
             raise AttributeError("Can't unload when optimizer state is None. Nothing to unload.")
         # ensure state directory created
-        self.__state_directory_path.mkdir(parents=True, exist_ok=True)
+        self.__state_directory_path().mkdir(parents=True, exist_ok=True)
         # save state objects to file
-        torch.save(self.model_state, self.__model_state_path)
-        torch.save(self.optimizer_state, self.__optimizer_state_path)
-        # unload state objects
+        torch.save(self.model_state, self.__model_state_path())
+        torch.save(self.optimizer_state, self.__optimizer_state_path())
+        # delete state objects
         del self.model_state
         del self.optimizer_state
         # clear GPU memory
         torch.cuda.empty_cache()
 
     def delete_state(self):
+        """Deletes the state, both in-memory and any existing local files."""
         # delete state in memory
         self.model_state = None
         self.optimizer_state = None
-        # delete state files
-        self.__model_state_path.unlink()
-        self.__optimizer_state_path.unlink()
+        # delete state files if they exist
+        if self.has_model_state():
+            self.__model_state_path().unlink()
+        if self.has_optimizer_state():
+            self.__optimizer_state_path().unlink()
+
+    def copy_state(self, other):
+        """Copy the state of the other checkpoint."""
+        if hasattr(other, 'model_state') and other.model_state is not None:
+            self.model_state = copy.deepcopy(other.model_state)
+        elif other.has_model_state():
+            other.__model_state_path().copy(self.__model_state_path())
+        if hasattr(other, 'optimizer_state') and other.optimizer_state is not None:
+            self.optimizer_state = copy.deepcopy(other.optimizer_state)
+        elif other.has_optimizer_state():
+            other.__optimizer_state_path().copy(self.__optimizer_state_path())
+
+    def update(self, other):
+        """
+        Replace own hyper-parameters, model state and optimizer state from the provided checkpoint.
+        The step and epoch counts are also copied. Resets loss and time.
+        """
+        self.epochs = other.epochs
+        self.steps = other.steps
+        self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
+        if self != other:
+            self.copy_state(other)
+        self.loss = dict()
+        self.time = dict()
 
     def performance_details(self) -> str:
         strings = list()
@@ -223,20 +261,6 @@ class Checkpoint(MemberState):
             for loss_name, loss_value in loss_values.items():
                 strings.append(f"{loss_group}_{loss_name} {loss_value:.5f}")
         return ", ".join(strings)
-
-    def update(self, other):
-        """
-        Replace own hyper-parameters, model state and optimizer state from the provided checkpoint.\n
-        Resets loss and time.
-        """
-        self.epochs = other.epochs
-        self.steps = other.steps
-        self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
-        if self != other:
-            other.__model_state_path.copy(self.__model_state_path)
-            other.__optimizer_state_path.copy(self.__optimizer_state_path)
-        self.loss = dict()
-        self.time = dict()
 
 class GenerationFullException(Exception):
     pass
@@ -277,6 +301,11 @@ class Population(Generation):
             warnings.warn("Current population is not full.")
         self.__history.append(self.__to_generation())
         self.clear()
+
+    def extend(self, generation : Generation):
+        if (self.size != generation.size):
+            raise ValueError("generation sizes do not match.")
+        self.extend(generation)
 
     def __to_generation(self) -> Generation:
         return Generation(self, size=self.size)

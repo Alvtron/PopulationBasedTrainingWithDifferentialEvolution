@@ -23,34 +23,39 @@ class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
     def __init__(
             self, model_class : HyperNet, optimizer_class : Optimizer, train_data : Dataset, batch_size : int,
-            loss_functions : dict, loss_metric : str, device : str, verbose : bool = False):
+            loss_functions : dict, loss_metric : str, verbose : bool = False):
         self.model_class = model_class
         self.optimizer_class = optimizer_class
         self.train_data = train_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_metric = loss_metric
-        self.device = device
         self.verbose = verbose
 
     def _print(self, message : str = None, end : str = '\n'):
         if not self.verbose:
             return
-        print(value=message, end=end)
+        print(message, end=end)
 
-    def create_model(self, hyper_parameters : Hyperparameters = None, model_state = None):
-        model = self.model_class().to(self.device)
+    def create_model(self, hyper_parameters : Hyperparameters = None, model_state = None, device : str = 'cpu'):
+        self._print("creating model...")
+        model = self.model_class().to(device)
         if model_state is not None:
+            self._print("loading model state...")
             model.load_state_dict(model_state)
         if isinstance(model, HyperNet) and hyper_parameters and hyper_parameters.model:
-            model.apply_hyper_parameters(hyper_parameters.model, self.device)
+            self._print("applying hyper-parameters...")
+            model.apply_hyper_parameters(hyper_parameters.model, device)
         model.train()
         return model
 
     def create_optimizer(self, model : HyperNet, hyper_parameters : Hyperparameters, optimizer_state : dict  = None):
+        self._print("creating optimizer...")
         optimizer = self.optimizer_class(model.parameters(), **hyper_parameters.get_optimizer_value_dict())
         if optimizer_state:
+            self._print("loading optimizer state...")
             optimizer.load_state_dict(optimizer_state)
+            self._print("applying hyper-parameters...")
             for param_name, param_value in hyper_parameters.optimizer.items():
                 for param_group in optimizer.param_groups:
                     param_group[param_name] = param_value.value
@@ -68,60 +73,59 @@ class Trainer(object):
             shuffle = False,
             num_workers=0))
 
-    def train(
+    def __call__(
             self, hyper_parameters : Hyperparameters, model_state : dict, optimizer_state : dict,
-            epochs : int, steps : int, step_size : int = 1):
+            epochs : int, steps : int, step_size : int = 1, device : str = 'cpu'):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
-        with torch.cuda.device(0):
-            metric_values = dict.fromkeys(self.loss_functions, 0.0)
-            END_STEPS = steps + step_size
-            # preparing model and optimizer
-            self._print("Creating model...")
-            model = self.create_model(hyper_parameters, model_state)
-            self._print("Creating optimizer...")
-            optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
-            self._print("Creating batches...")
-            batches = self.create_subset(steps, END_STEPS)
-            self._print("Training...")
-            while steps != END_STEPS:
-                self._print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
-                try:
-                    x, y = next(batches)
-                    x = x.to(self.device, non_blocking=True)
-                    y = y.to(self.device, non_blocking=True)
-                    # 1. Forward pass: compute predicted y by passing x to the model.
-                    output = model(x)
-                    for metric_type, metric_function in self.loss_functions.items():
-                        if metric_type == self.loss_metric:
-                            # 2. Compute loss and save loss.
+        metric_values = dict.fromkeys(self.loss_functions, 0.0)
+        END_STEPS = steps + step_size
+        # preparing model and optimizer
+        self._print("Creating model...")
+        model = self.create_model(hyper_parameters, model_state, device)
+        self._print("Creating optimizer...")
+        optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
+        self._print("Creating batches...")
+        batches = self.create_subset(steps, END_STEPS)
+        self._print("Training...")
+        while steps != END_STEPS:
+            self._print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
+            try:
+                x, y = next(batches)
+                x = x.to(device, non_blocking=True)
+                y = y.to(device, non_blocking=True)
+                # 1. Forward pass: compute predicted y by passing x to the model.
+                output = model(x)
+                for metric_type, metric_function in self.loss_functions.items():
+                    if metric_type == self.loss_metric:
+                        # 2. Compute loss and save loss.
+                        loss = metric_function(output, y)
+                        metric_values[metric_type] += loss.item() / float(step_size)
+                        # 3. Before the backward pass, use the optimizer object to zero all of the gradients
+                        # for the variables it will update (which are the learnable weights of the model).
+                        optimizer.zero_grad()
+                        # 4. Backward pass: compute gradient of the loss with respect to model parameters
+                        loss.backward()
+                        # 5. Calling the step function on an Optimizer makes an update to its parameters
+                        optimizer.step()
+                    else:
+                        # 2. Compute loss and save loss
+                        with torch.no_grad():
                             loss = metric_function(output, y)
-                            metric_values[metric_type] += loss.item() / float(step_size)
-                            # 3. Before the backward pass, use the optimizer object to zero all of the gradients
-                            # for the variables it will update (which are the learnable weights of the model).
-                            optimizer.zero_grad()
-                            # 4. Backward pass: compute gradient of the loss with respect to model parameters
-                            loss.backward()
-                            # 5. Calling the step function on an Optimizer makes an update to its parameters
-                            optimizer.step()
-                        else:
-                            # 2. Compute loss and save loss
-                            with torch.no_grad():
-                                loss = metric_function(output, y)
-                            metric_values[metric_type] += loss.item() / float(step_size)
-                        self._print(f"{metric_type}: {loss.item():4f}", end=" ")
-                        del loss
-                    del output
-                    steps += 1
-                except StopIteration:
-                    batches = self.create_subset(steps, END_STEPS)
-                    epochs += 1
-                finally:
-                    self._print(end="\n")
-            model_state = model.state_dict()
-            optimizer_state = optimizer.state_dict()
-            del model
-            del optimizer
+                        metric_values[metric_type] += loss.item() / float(step_size)
+                    self._print(f"{metric_type}: {loss.item():4f}", end=" ")
+                    del loss
+                del output
+                steps += 1
+            except StopIteration:
+                batches = self.create_subset(steps, END_STEPS)
+                epochs += 1
+            finally:
+                self._print(end="\n")
+        model_state = model.state_dict()
+        optimizer_state = optimizer.state_dict()
+        del model
+        del optimizer
         torch.cuda.empty_cache()
         return model_state, optimizer_state, epochs, steps, metric_values
 

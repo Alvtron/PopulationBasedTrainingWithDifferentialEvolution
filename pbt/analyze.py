@@ -27,43 +27,52 @@ def ylim_outliers(data, minimum=None, maximum=None, strength = 1.5):
     # constrain
     lower = max(lower, minimum) if minimum else lower
     upper = min(upper, maximum) if maximum else upper
+    # replace NaN values with None
+    lower = None if math.isnan(lower) else lower
+    upper = None if math.isnan(upper) else upper
     # limit
     plt.ylim(bottom=lower, top=upper, auto=False)
 
-class Analyzer(object):
-    def __init__(self, database : ReadOnlyDatabase):
-        self.database : ReadOnlyDatabase = database
+def get_best_member(database : ReadOnlyDatabase):
+    best = None
+    for member in database:
+        best = member if best is None or member.steps > best.steps or (member.steps == best.steps and member >= best) else best
+    return best
 
-    def test(self, evaluator : Evaluator, save_directory, verbose = False):
-        latest_members = list(self.database.latest())
-        max_steps = max(member.steps for member in latest_members)
-        best = max(member for member in latest_members if member.steps == max_steps)
-        if verbose: print(f"Testing {best}...", end=" ")
-        best.loss['test'] = evaluator.eval(best.model_state)
+class Analyzer(object):
+    def __init__(self, database : ReadOnlyDatabase, verbose : bool = False):
+        self.database : ReadOnlyDatabase = database
+        self.verbose = verbose
+
+    def __print(self, message : str):
+        if self.verbose:
+            print(f"Analyzer: {message}")
+
+    def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu', verbose : bool = False):
+        self.__print(f"Finding best member in population...")
+        best = get_best_member(self.database)
+        self.__print(f"Testing {best}...")
+        best.loss['test'] = evaluator(model_state = best.model_state, device = device)
         # save top members to file
         result = f"Best checkpoint: {best}: {best.performance_details()}"
         with Path(save_directory).open('a+') as f:
             f.write(f"{result}\n\n")
-        if verbose:
-            print(result)
+        self.__print(result)
         return best
 
-    def test_generations(self, evaluator : Evaluator, save_directory, limit = None, verbose = False):
+    def test_generations(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu', limit : int = 10, verbose : bool = False):
         tested_subjects = list()
-        minimize = next(iter(self.database)).minimize
-        subjects = sorted(self.database, reverse=True)[:limit]
+        subjects = sorted((entry for entry in self.database if entry.model_state is not None), reverse=True, key=lambda e: e.steps)[:limit]
         for index, entry in enumerate(subjects, start=1):
-            if not entry.has_model_state():
-                if verbose: print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model state.")
+            if entry.model_state is None:
+                self.__print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model state.")
                 continue
-            if verbose: print(f"({index}/{len(subjects)}) Testing {entry}...", end=" ")
-            entry.loss['test'] = evaluator.eval(entry.model_state)
+            self.__print(f"({index}/{len(subjects)}) Testing {entry}...")
+            entry.loss['test'] = evaluator(model_state = entry.model_state, device = device)
             tested_subjects.append(entry)
-            if verbose:
-                for metric_type, metric_value in entry.loss['test'].items():
-                    print(f"{metric_type}: {metric_value:4f}", end=" ")
-                print(end="\n")
+            self.__print(entry.performance_details())
         # determine best checkpoint
+        minimize = next(iter(self.database)).minimize
         sort_method = min if minimize else max
         best_checkpoint = sort_method(tested_subjects, key=lambda c: c.test_score())
         result = f"Best checkpoint: {best_checkpoint}: {best_checkpoint.performance_details()}"
@@ -72,7 +81,7 @@ class Analyzer(object):
             f.write(f"{result}\n\n")
             for checkpoint in tested_subjects:
                 f.write(str(checkpoint) + "\n")
-        if verbose: print(result)
+        self.__print(result)
         return tested_subjects
 
     def create_statistics(self, save_directory):
@@ -195,7 +204,7 @@ class Analyzer(object):
                         best_score = entry.score()
                 if entry.steps not in worst_entries or entry < worst_entries[entry.steps]:
                     worst_entries[entry.steps] = entry
-                    if not worst_score or entry < worst_score:
+                    if not worst_score or (not math.isnan(entry.score()) and entry < worst_score):
                         worst_score = entry.score()
         # create data holders
         steps = defaultdict(list)

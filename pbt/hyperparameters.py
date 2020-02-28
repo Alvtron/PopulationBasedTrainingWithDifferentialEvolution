@@ -1,4 +1,5 @@
 import random
+import math
 import copy
 import warnings
 from functools import partial
@@ -57,8 +58,10 @@ class _Hyperparameter(object):
         return self._normalized
 
     @normalized.setter
-    def normalized(self, value) -> float:
+    def normalized(self, value : float) -> float:
         """Sets the normalized hyperparameter value."""
+        if not isinstance(value, float) or math.isnan(value) or math.isinf(value):
+            raise ValueError("value must be a real-value of type float.")
         self._normalized = self._constrain(value)
     
     @property

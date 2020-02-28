@@ -11,7 +11,7 @@ from pbt.analyze import Analyzer
 from pbt.database import ReadOnlyDatabase
 from pbt.loss import CategoricalCrossEntropy, Accuracy, F1
 from pbt.evaluator import Evaluator
-from pbt.task.mnist import Mnist
+from pbt.task.mnist import Mnist, FashionMnist
 
 # various settings for reproducibility
 # set random state 
@@ -31,15 +31,13 @@ loss_functions = {
     'acc': Accuracy()
 }
 
-task = Mnist()
+task = FashionMnist()
 
 tester = Evaluator(
     model_class=task.model_class,
     test_data=task.datasets.test,
     batch_size=batch_size,
-    loss_functions=task.loss_functions,
-    device=device
-)
+    loss_functions=task.loss_functions)
 
 result_folder = Path("test_output/analyzer")
 statistics_save_directory = Path(result_folder, "statistics")
@@ -47,16 +45,15 @@ plot_save_directory = Path(result_folder, "plots")
 shutil.rmtree(result_folder, ignore_errors=True)
 statistics_save_directory.mkdir(exist_ok=True, parents=True)
 plot_save_directory.mkdir(exist_ok=True, parents=True)
-database = ReadOnlyDatabase("checkpoints/mnist/30/shade/20200210114030", read_function=partial(torch.load, map_location=device))
-analyzer = Analyzer(database)
+database = ReadOnlyDatabase("checkpoints/fashionmnist/p60_steps250_batch64_nfe2400/lshade/20200220100311", read_function=partial(torch.load, map_location=device))
+analyzer = Analyzer(database, verbose = True)
 print(f"Database consists of {len(database)} entries.")
 print("Testing best member...")
-analyzer.test(tester, Path(result_folder, "best_member.txt"), True)
+analyzer.test_generations(evaluator=tester, save_directory = Path(result_folder, "best_member.txt"), device = device)
 print("Creating statistics...")
 analyzer.create_statistics(save_directory=statistics_save_directory)
-print("create_plot_files...", end =" ")
+print("create_plot_files...")
 analyzer.create_plot_files(save_directory=plot_save_directory)
-print("done!")
 print("create_hyper_parameter_multi_plot_files...")
 analyzer.create_hyper_parameter_plot_files(save_directory=plot_save_directory, sensitivity=20)
 print("Analyze completed.")
