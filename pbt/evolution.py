@@ -27,7 +27,7 @@ class EvolveEngine(ABC):
         """Called before each generation."""
         pass
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, ...]:
+    def on_evolve(self, generation : Generation, logger) -> Tuple[MemberState, ...]:
         """Called for each member in generation. Returns one candidate or multiple candidates."""
         pass
 
@@ -47,9 +47,10 @@ class RandomSearch(EvolveEngine):
         """Called for each new member."""
         [hp.sample_uniform() for hp in member]
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
+    def on_evolve(self, generation : Generation, logger) -> MemberState:
         """Simply returns the member. No mutation conducted."""
-        return member.copy()
+        for member in generation:
+            yield member.copy()
 
     def on_evaluation(self, candidate : MemberState, logger) -> MemberState:
         """Simply returns the candidate. No evaluation conducted."""
@@ -64,14 +65,15 @@ class RandomWalk(EvolveEngine):
         """Called for each new member."""
         [hp.sample_uniform() for hp in member]
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
+    def on_evolve(self, generation : Generation, logger) -> MemberState:
         """ Explore search space with random walk. """
-        logger("exploring...")
-        explorer = member.copy()
-        for hp in explorer:
-            walk_factor = random.uniform(-self.explore_factor, self.explore_factor)
-            hp += walk_factor
-        return explorer
+        for member in generation:
+            logger(f"exploring member {member.id}...")
+            explorer = member.copy()
+            for hp in explorer:
+                walk_factor = random.uniform(-self.explore_factor, self.explore_factor)
+                hp += walk_factor
+            yield explorer
 
     def on_evaluation(self, candidate : MemberState, logger) -> MemberState:
         """Simply returns the candidate. No evaluation conducted."""
@@ -92,12 +94,13 @@ class ExploitAndExplore(EvolveEngine):
         """Called for each new member."""
         [hp.sample_uniform() for hp in member]
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> MemberState:
+    def on_evolve(self, generation : Generation, logger) -> MemberState:
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
-        canidate, is_exploited = self.exploit(member, generation, logger)
-        if is_exploited:
-            canidate = self.explore(canidate, logger)
-        return canidate
+        for member in generation:
+            candidate, is_exploited = self.exploit(member, generation, logger)
+            if is_exploited:
+                candidate = self.explore(candidate, logger)
+            yield candidate
 
     def on_evaluation(self, candidate : MemberState, logger) -> MemberState:
         """Simply returns the candidate. No evaluation conducted."""
@@ -106,7 +109,7 @@ class ExploitAndExplore(EvolveEngine):
     def exploit(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, bool]:
         """A fraction of the bottom performing members exploit the top performing members."""
         exploiter = member.copy()
-        n_elitists = max(1, round(generation.size * self.exploit_factor))
+        n_elitists = max(1, round(len(generation) * self.exploit_factor))
         sorted_members = sorted(generation, reverse=True)
         elitists = sorted_members[:n_elitists]
         # exploit if member is not elitist
@@ -138,22 +141,23 @@ class ExploitAndExploreWithDifferentialEvolution(ExploitAndExplore):
         self.F = F
         self.Cr = Cr
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
+    def on_evolve(self, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
         """
         Exploit best members in generation.\n
         Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin' implementation of differential evolution.
         """
-        canidate, has_exploited = self.exploit(member, generation, logger)
-        if has_exploited:
-            canidate = self.explore(canidate, generation, logger)
-        return canidate
+        for member in generation:
+            candidate, has_exploited = self.exploit(member, generation, logger)
+            if has_exploited:
+                candidate = self.explore(candidate, generation, logger)
+            yield candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         return candidates
 
     def explore(self, member : MemberState, generation : Generation, logger) -> MemberState:
-        if generation.size < 3:
+        if len(generation) < 3:
             raise ValueError("generation size must be at least 3 or higher.")
         candidate = member.copy()
         hp_dimension_size = len(member)
@@ -190,33 +194,34 @@ class DifferentialEvolution(EvolveEngine):
         Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
         implementation of differential evolution.
         """
-        if generation.size < 3:
+        if len(generation) < 3:
             raise ValueError("generation size must be at least 3 or higher.")
-        candidate = member.copy()
-        hp_dimension_size = len(member)
-        x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
-        j_rand = random.randrange(0, hp_dimension_size)
-        for j in range(hp_dimension_size):
-            base = member[j].normalized
-            if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
-                mutant = de_rand_1(
-                    F = self.F,
-                    x_r0 = x_r0[j].normalized,
-                    x_r1 = x_r1[j].normalized,
-                    x_r2 = x_r2[j].normalized)
-                candidate[j].normalized = mutant
-            else:
-                candidate[j].normalized = base
-        return member, candidate
+        for member in generation:
+            candidate = member.copy()
+            hp_dimension_size = len(member)
+            x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
+            j_rand = random.randrange(0, hp_dimension_size)
+            for j in range(hp_dimension_size):
+                base = member[j].normalized
+                if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
+                    mutant = de_rand_1(
+                        F = self.F,
+                        x_r0 = x_r0[j].normalized,
+                        x_r1 = x_r1[j].normalized,
+                        x_r2 = x_r2[j].normalized)
+                    candidate[j].normalized = mutant
+                else:
+                    candidate[j].normalized = base
+            yield member, candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         member, candidate = candidates
         if member <= candidate :
-            logger(f"mutate member (x {member.score():.4f} <= u {candidate.score():.4f}).")
+            logger(f"mutate member {member.id} (x {member.score():.4f} <= u {candidate.score():.4f}).")
             return candidate
         else:
-            logger(f"maintain member (x {member.score():.4f} > u {candidate.score():.4f}).")
+            logger(f"maintain member {member.id} (x {member.score():.4f} > u {candidate.score():.4f}).")
             return member
 
 def mean_wl(S, weights):
@@ -299,8 +304,8 @@ class SHADE(EvolveEngine):
         self.archive = ExternalArchive(size=round(self.N_INIT * r_arc))
         self.memory = HistoricalMemory(size=memory_size)
         self.p = p
-        self.CR_i = None
-        self.F_i = None
+        self.CR = dict()
+        self.F = dict()
         
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
@@ -308,59 +313,61 @@ class SHADE(EvolveEngine):
 
     def on_generation_start(self, generation : Generation, logger):
         self.memory.reset()
+        self.CR = dict()
+        self.F = dict()
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
+    def on_evolve(self, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
         """
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
         implementation of differential evolution, with adapted CR and F parameters.
         """
-        if generation.size < 4:
+        if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher.")
-        # make a copy of the member
-        candidate = member.copy()
-        # hyper-parameter dimension size
-        dimension_size = len(member)
-        # control parameter assignment
-        self.CR_i, self.F_i = self.get_control_parameters()
-        # select random unique members from the union of the generation and archive
-        x_r1, x_r2 = random_from_list(self.archive + generation, k=2, exclude=member)
-        # select random best member
-        x_pbest = self.pbest_member(generation)
-        # choose random parameter dimension
-        j_rand = random.randrange(0, dimension_size)
-        for j in range(dimension_size):
-            base = member[j].normalized
-            if random.uniform(0.0, 1.0) <= self.CR_i or j == j_rand:
-                mutant = de_current_to_best_1(
-                    F = self.F_i,
-                    x_base = base,
-                    x_best = x_pbest[j].normalized,
-                    x_r1 = x_r1[j].normalized,
-                    x_r2 = x_r2[j].normalized)
-                mutant = halving(
-                    base = base,
-                    mutant = mutant,
-                    lower_bounds = 0.0,
-                    upper_bounds = 1.0
-                )
-                candidate[j].normalized = mutant
-            else:
-                candidate[j].normalized = base
-        return member, candidate
+        for member in generation:
+            # make a copy of the member
+            candidate = member.copy()
+            # hyper-parameter dimension size
+            dimension_size = len(member)
+            # control parameter assignment
+            self.CR[member.id], self.F[member.id] = self.get_control_parameters()
+            # select random unique members from the union of the generation and archive
+            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=member)
+            # select random best member
+            x_pbest = self.pbest_member(generation)
+            # choose random parameter dimension
+            j_rand = random.randrange(0, dimension_size)
+            for j in range(dimension_size):
+                base = member[j].normalized
+                if random.uniform(0.0, 1.0) <= self.CR[member.id] or j == j_rand:
+                    mutant = de_current_to_best_1(
+                        F = self.F[member.id],
+                        x_base = base,
+                        x_best = x_pbest[j].normalized,
+                        x_r1 = x_r1[j].normalized,
+                        x_r2 = x_r2[j].normalized)
+                    mutant = halving(
+                        base = base,
+                        mutant = mutant,
+                        lower_bounds = 0.0,
+                        upper_bounds = 1.0
+                    )
+                    candidate[j].normalized = mutant
+                else:
+                    candidate[j].normalized = base
+            yield member, candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger) -> MemberState:
         """Evaluates candidate, compares it to the original member and returns the best performer."""
         member, candidate = candidates
-        # eval on random subset of training set
-        if member < candidate:
-            logger(f"mutation is better. Add parent member to archive.")
-            self.archive.append(member.copy())
-            self.memory.record(self.CR_i, self.F_i, abs(candidate.score() - member.score()))
         if member <= candidate:
-            logger(f"mutate member (x {member.score():.4f} < u {candidate.score():.4f}).")
+            logger(f"mutate member {member.id} (x {member.score():.4f} < u {candidate.score():.4f}).")
+            if member < candidate:
+                logger(f"adding parent member {member.id} to archive.")
+                self.archive.append(member.copy())
+                self.memory.record(self.CR[member.id], self.F[member.id], abs(candidate.score() - member.score()))
             return candidate
         else:
-            logger(f"maintain member (x {member.score():.4f} > u {candidate.score():.4f}).")
+            logger(f"maintain member {member.id} (x {member.score():.4f} > u {candidate.score():.4f}).")
             return member
 
     def on_generation_end(self, generation : Generation, logger):
@@ -435,14 +442,13 @@ class LSHADE(SHADE):
 
     def adjust_generation_size(self, generation : Generation, logger):
         new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self.NFE + self.N_INIT)
-        if new_size != generation.size:
-            logger(f"adjusting generation size {generation.size} --> {new_size}")
-            if new_size < generation.size:
-                size_delta = generation.size - new_size
-                for worst in sorted(generation)[:size_delta]:
-                    generation.remove(worst)
-                    logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
-            generation.size = new_size
+        if new_size >= len(generation):
+            return
+        logger(f"adjusting generation size {len(generation)} --> {new_size}")
+        size_delta = len(generation) - new_size
+        for worst in sorted(generation)[:size_delta]:
+            generation.remove(worst)
+            logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
 
 class LSHADEWithWeightSharing(LSHADE):
     """
@@ -463,44 +469,45 @@ class LSHADEWithWeightSharing(LSHADE):
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
+    def on_evolve(self, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
         """
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
         implementation of differential evolution, with adapted CR and F parameters.
         """
-        if generation.size < 4:
+        if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher.")
-        # make a copy of the member
-        candidate = member.copy()
-        # hyper-parameter dimension size
-        dimension_size = len(member)
-        # control parameter assignment
-        self.CR_i, self.F_i = self.get_control_parameters()
-        # select random unique members from the union of the generation and archive
-        x_r1, x_r2 = random_from_list(self.archive + generation, k=2, exclude=member)
-        # select random best member
-        x_pbest = self.pbest_member(generation)
-        # choose random parameter dimension
-        j_rand = random.randrange(0, dimension_size)
-        for j in range(dimension_size):
-            base = member[j].normalized
-            if random.uniform(0.0, 1.0) <= self.CR_i or j == j_rand:
-                mutant = de_current_to_best_1(
-                    F = self.F_i,
-                    x_base = base,
-                    x_best = x_pbest[j].normalized,
-                    x_r1 = x_r1[j].normalized,
-                    x_r2 = x_r2[j].normalized)
-                mutant = halving(
-                    base = base,
-                    mutant = mutant,
-                    lower_bounds = 0.0,
-                    upper_bounds = 1.0
-                )
-                candidate[j].normalized = mutant
-            else:
-                candidate[j].normalized = base
-        # copy weights from pbest
-        if candidate != x_pbest:
-            candidate.copy_state(x_pbest)
-        return member, candidate
+        for member in generation:
+            # make a copy of the member
+            candidate = member.copy()
+            # hyper-parameter dimension size
+            dimension_size = len(member)
+            # control parameter assignment
+            self.CR[member.id], self.F[member.id] = self.get_control_parameters()
+            # select random unique members from the union of the generation and archive
+            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=member)
+            # select random best member
+            x_pbest = self.pbest_member(generation)
+            # choose random parameter dimension
+            j_rand = random.randrange(0, dimension_size)
+            for j in range(dimension_size):
+                base = member[j].normalized
+                if random.uniform(0.0, 1.0) <= self.CR[member.id] or j == j_rand:
+                    mutant = de_current_to_best_1(
+                        F = self.F[member.id],
+                        x_base = base,
+                        x_best = x_pbest[j].normalized,
+                        x_r1 = x_r1[j].normalized,
+                        x_r2 = x_r2[j].normalized)
+                    mutant = halving(
+                        base = base,
+                        mutant = mutant,
+                        lower_bounds = 0.0,
+                        upper_bounds = 1.0
+                    )
+                    candidate[j].normalized = mutant
+                else:
+                    candidate[j].normalized = base
+            # copy weights from pbest
+            if candidate != x_pbest:
+                candidate.copy_state(x_pbest)
+            yield member, candidate

@@ -8,7 +8,7 @@ from pathlib import Path
 from abc import abstractmethod 
 from collections import defaultdict, deque
 from itertools import islice, chain
-from typing import List, Iterable, Sequence, Generator
+from typing import List, Dict, Iterable, Sequence, Generator, Iterator
 
 from .utils.conversion import dict_to_binary, binary_to_dict
 from .utils.iterable import chunks, insert_sequence
@@ -71,12 +71,12 @@ class MemberState(object):
         return f"Member {self.id:03d}"
 
     def __eq__(self, other) -> bool:
-        if other is None or not hasattr(other, id):
+        if other is None or not hasattr(other, 'id'):
             return False
         return self.id == other.id
 
     def __ne__(self, other) -> bool:
-        if other is None or not hasattr(other, id):
+        if other is None or not hasattr(other, 'id'):
             return True
         return self.id != other.id
 
@@ -265,71 +265,82 @@ class Checkpoint(MemberState):
 class GenerationFullException(Exception):
     pass
 
-class Generation(list):
-    def __init__(self, *args, size):
-        list.__init__(self, *args)
-        self.size = size
+class MemberAlreadyExistsError(Exception):
+    pass
 
-    def full(self) -> bool:
-        return self.__len__() >= self.size
+class Generation(object):
+    def __init__(self, members : Iterator = None):
+        super().__init__()
+        self._members : Dict[MemberState] = dict()
+        if isinstance(members, Iterator):
+            for member in members:
+                if not isinstance(member, MemberState):
+                    raise TypeError("Members must be of type MemberState!")
+                if member.id in self._members:
+                    raise ValueError("Members must be unique!")
+                self._members[member.id] = member
 
-    def insert(self, index, value):
-        if not isinstance(value, MemberState):
+    def __len__(self):
+        return len(self._members)
+
+    def __iter__(self):
+        return iter(self._members.values())
+
+    def __getitem__(self, id):
+        return self._members[id]
+
+    def __setitem__(self, id, member):
+        self._members[id] = member
+
+    def append(self, member : MemberState):
+        if member.id in self._members:
+            raise MemberAlreadyExistsError()
+        if not isinstance(member, MemberState):
             raise TypeError()
-        if self.full():
-            raise GenerationFullException()
-        super().insert(index, value)
+        self._members[member.id] = member
+
+    def extend(self, iterable):
+        if not isinstance(iterable, Iterable):
+            raise TypeError()
+        [self.append(member) for member in iterable]
+
+    def update(self, member):
+        if member.id not in self._members:
+            raise IndexError
+        if member.id != self._members[member.id]:
+            raise ValueError(f"Member does not match existing member at id {member.id}.")
+        self._members[member.id] = member
     
-class Population(Generation):
-    def __init__(self, size):
-        super().__init__(self, size=size)
-        self.__history : List[Generation] = list()
+    def remove(self, member):
+        if member.id not in self._members:
+            raise IndexError
+        del self._members[member.id]
+
+    def clear(self):
+        self._members = dict()
+
+class Population(object):
+    def __init__(self, arg = None):
+        super().__init__()
+        if isinstance(arg, Generation):
+            self.generations : List[Generation] = [arg]
+        elif isinstance(arg, Iterable):
+            self.generations : List[Generation] = [Generation(arg)]
+        elif arg is None:
+            self.generations : List[Generation] = list()
+        else:
+            raise TypeError
 
     @property
-    def generations(self) -> List[Generation]:
-        """ Return all generations in the population."""
-        return self.__history + [self.__to_generation()]
+    def current(self) -> Generation:
+        return self.generations[-1]
 
     @property
     def members(self) -> List[MemberState]:
         """ Return all members across all generations in the population."""
         return list(chain.from_iterable(self.generations))
 
-    def new_generation(self):
-        """Create new generation. This saves the old generation"""
-        if not self.full():
-            warnings.warn("Current population is not full.")
-        self.__history.append(self.__to_generation())
-        self.clear()
-
-    def extend(self, generation : Generation):
-        if (self.size != generation.size):
-            raise ValueError("generation sizes do not match.")
-        self.extend(generation)
-
-    def __to_generation(self) -> Generation:
-        return Generation(self, size=self.size)
-
-class PopulationAsync(Generation):
-    def __init__(self, size):
-        super().__init__(self, size=size)
-        self.__history : List[MemberState] = list()
-        self.__ban = list()
-
-    @property
-    def generations(self) -> List[Generation]:
-        """ Return all generations in the population."""
-        return self.__history + [self.__to_generation()]
-
-    @property
-    def members(self) -> List[MemberState]:
-        """ Return all members across all generations in the population."""
-        return self.__history + self
-
-    def append(self, member : MemberState):
-        if self.full():
-            self.__history.append(self.pop())
-        self.append(member)
-
-    def __to_generation(self) -> Generation:
-        return Generation(self, size=self.size)
+    def append(self, generation : Generation):
+        if not isinstance(generation, Generation):
+            raise TypeError
+        self.generations.append(generation)

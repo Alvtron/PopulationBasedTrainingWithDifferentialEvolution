@@ -251,7 +251,8 @@ def test(task, population_size, evolver, step_size, nfe, n_jobs, threading, old_
 """
 
 if __name__ == "__main__":
-    test(task = 'fashionmnist', population_size = 30, evolver='pbt', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = True)
+    #test(task = 'fashionmnist', population_size = 30, evolver='pbt', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = True)
+    test(task = 'fashionmnist', population_size = 10, evolver='lshade', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = False)
     test(task = 'fashionmnist', population_size = 30, evolver='lshade', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = True)
     #test(task = 'fashionmnist', population_size = 30, evolver='pbt', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = False)
     #test(task = 'fashionmnist', population_size = 30, evolver='lshade', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = False)

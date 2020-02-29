@@ -7,7 +7,7 @@ import copy
 import pickle
 import shutil
 import warnings
-from typing import List, Dict, Sequence
+from typing import List, Dict, Sequence, Iterator
 from functools import partial 
 from collections import defaultdict
 from multiprocessing.context import BaseContext
@@ -41,7 +41,8 @@ class Controller(object):
             tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False, history_limit : int = None,
             devices : List[str] = ['cpu'], n_jobs : int = -1, threading : bool = False, verbose : int = 1, logging : bool = True):
         assert step_size and step_size > 0, f"Step size must be of type {int} and 1 or higher."
-        self.population = Population(population_size)
+        self.population_size = population_size
+        self.population = Population()
         self.database = database
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
@@ -56,66 +57,69 @@ class Controller(object):
         self.verbose = verbose
         self.logging = logging
         self.history_limit = history_limit if history_limit and history_limit > 2 else 2
-        self.__tensorboard_writer = tensorboard_writer
-        self.__nfe = 0
+        self.nfe = 0
+        self._tensorboard_writer = tensorboard_writer
 
-    def __str__(self):
-        controller = self.__class__.__name__
+    def __create_message(self, message : str, tag : str = None):
         time = get_datetime_string()
         generation = f"G{len(self.population.generations):03d}"
-        nfe = f"({self.__nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.__nfe
-        return f"{time} {nfe} {generation} {controller}"
+        nfe = f"({self.nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.nfe
+        return f"{time} {nfe} {generation}{f' {tag}' if tag else ''}: {message}"
 
-    def __print(self, message : str):
-        """Prints the provided controller message in the appropriate syntax."""
-        print(f"{self}: {message}")
-
-    def __say(self, message : str):
+    def _say(self, message : str, member : Checkpoint = None):
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 0."""
-        if self.verbose > 0: self.__print(message)
+        self.__register(message=message, verbosity=0, member=member)
 
-    def __whisper(self, message : str):
+    def _whisper(self, message : str, member = None):
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 1."""
-        if self.verbose > 1: self.__print(message)
+        self.__register(message=message, verbosity=1, member=member)
 
-    def __log(self, member : Checkpoint, message : str, verbose=True):
+    def __register(self, message : str, verbosity : int, member : Checkpoint = None):
         """Logs and prints the provided member message in the appropriate syntax."""
-        time = get_datetime_string()
-        nfe = f"({self.__nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.__nfe
-        full_message = f"{time} {nfe} G{len(self.population.generations):03d} {member}: {message}"
-        if self.logging:
-            with self.database.create_file(tag='logs', file_name=f"{member.id:03d}_log.txt").open('a+') as file:
-                file.write(full_message + '\n')
-        if verbose and self.verbose > 0:
-            print(full_message)
-        if self.__tensorboard_writer:
-            self.__tensorboard_writer.add_text(tag=f"member_{member.id:03d}", text_string=full_message, global_step=member.steps)
+        tag = member if member else self.__class__.__name__
+        full_message = self.__create_message(message, tag = tag)
+        self.__log_to_file(message=full_message, tag=tag)
+        self.__print(message=full_message, verbosity=verbosity)
+        self.__log_to_tensorboard(message=full_message, tag=tag, global_steps=member.steps if member else None)
+    
+    def __print(self, message : str, verbosity : int):
+        if self.verbose > verbosity:
+            print(message)
 
-    def __log_silent(self, member : Checkpoint, message : str):
-        self.__log(member, message, verbose=self.verbose > 1)
+    def __log_to_file(self, message : str, tag : str):
+        if not self.logging:
+            return
+        with self.database.create_file(tag='logs', file_name=f"{tag}_log.txt").open('a+') as file:
+            file.write(message + '\n')
+    
+    def __log_to_tensorboard(self, message : str, tag : str, global_steps : int = None):
+        if not self._tensorboard_writer:
+            return
+        self._tensorboard_writer.add_text(tag=tag, text_string=message, global_step=global_steps)
 
-    def __update_tensorboard(self):
+    def _update_tensorboard(self, member : Checkpoint):
         """Plots member data to tensorboard"""
-        for member in self.population:
-            # plot eval metrics
-            for eval_metric_group, eval_metrics in member.loss.items():
-                for metric_name, metric_value in eval_metrics.items():
-                    self.__tensorboard_writer.add_scalar(
-                        tag=f"metrics/{eval_metric_group}_{metric_name}/{member.id:03d}",
-                        scalar_value=metric_value,
-                        global_step=member.steps)
-            # plot time
-            for time_type, time_value in member.time.items():
-                self.__tensorboard_writer.add_scalar(
-                    tag=f"time/{time_type}/{member.id:03d}",
-                    scalar_value=time_value,
+        if not self._tensorboard_writer:
+            return       
+        # plot eval metrics
+        for eval_metric_group, eval_metrics in member.loss.items():
+            for metric_name, metric_value in eval_metrics.items():
+                self._tensorboard_writer.add_scalar(
+                    tag=f"metrics/{eval_metric_group}_{metric_name}/{member.id:03d}",
+                    scalar_value=metric_value,
                     global_step=member.steps)
-            # plot hyper-parameters
-            for hparam_name, hparam in member.hyper_parameters:
-                self.__tensorboard_writer.add_scalar(
-                    tag=f"hyperparameters/{hparam_name}/{member.id:03d}",
-                    scalar_value=hparam.normalized if isinstance(hparam, DiscreteHyperparameter) else hparam.value,
-                    global_step=member.steps)
+        # plot time
+        for time_type, time_value in member.time.items():
+            self._tensorboard_writer.add_scalar(
+                tag=f"time/{time_type}/{member.id:03d}",
+                scalar_value=time_value,
+                global_step=member.steps)
+        # plot hyper-parameters
+        for hparam_name, hparam in member.hyper_parameters:
+            self._tensorboard_writer.add_scalar(
+                tag=f"hyperparameters/{hparam_name}/{member.id:03d}",
+                scalar_value=hparam.normalized if isinstance(hparam, DiscreteHyperparameter) else hparam.value,
+                global_step=member.steps)
 
     def create_member(self, id):
         """Create a member object"""
@@ -127,7 +131,7 @@ class Controller(object):
             eval_metric=self.eval_metric,
             minimize=self.loss_functions[self.eval_metric].minimize)
         # let evolver process new member
-        self.evolver.on_member_spawn(member, self.__whisper)
+        self.evolver.on_member_spawn(member, self._whisper)
         return member
 
     def create_members(self, k : int):
@@ -145,7 +149,7 @@ class Controller(object):
             if not member.has_state():
                 # skipping the member as it has no state to delete
                 continue
-            self.__whisper(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.4f}...")
+            self._whisper(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.4f}...")
             member.delete_state()
             # updating database
             self.database.update(member.id, member.steps, member)
@@ -157,7 +161,7 @@ class Controller(object):
 
     def update_database(self, member : Checkpoint):
         """Updates the database stored in files."""
-        self.__whisper(f"updating member {member.id} in database...")
+        self._whisper(f"updating member {member.id} in database...")
         member.load_state(device='cpu')
         self.database.update(member.id, member.steps, member)
         member.unload_state()
@@ -174,82 +178,59 @@ class Controller(object):
         With the end_criteria, check if the entire population is finished
         by inspecting the provided member.
         """
-        if 'nfe' in self.end_criteria and self.end_criteria['nfe'] and self.__nfe >= self.end_criteria['nfe']:
+        if 'nfe' in self.end_criteria and self.end_criteria['nfe'] and self.nfe >= self.end_criteria['nfe']:
             return True
-        if 'score' in self.end_criteria and self.end_criteria['score'] and any(not self.has_NaN_value(member) and member >= self.end_criteria['score'] for member in self.population):
+        if 'score' in self.end_criteria and self.end_criteria['score'] and any(not self.has_NaN_value(member) and member >= self.end_criteria['score'] for member in self.population.current):
             return True
-        if all(self.is_member_finished(member) for member in self.population):
+        if all(self.is_member_finished(member) for member in self.population.current):
             return True
         return False
 
-    def has_NaN_value(self, member : Checkpoint):
-        """Returns True if the member has NaN values for its loss_metric or eval_metric."""
-        for loss_type, loss_value in member.loss['eval'].items():
-            if loss_type in (self.loss_metric, self.eval_metric) and math.isnan(loss_value):
-                return True
-        return False
-
-    def on_NaN_detect(self, member : Checkpoint):
-        """
-        Handle member with NaN loss. Depending on the active population size,
-        generate a new member start-object or sample one from the previous generation.
-        """
-        # create new member if population is not fully initialized yet
-        if len(self.population.generations) < 2:
-            self.replace_member_with_new(member)
-        else:
-            self.replace_member_with_best(member)
-
-    def replace_member_with_new(self, member : Checkpoint):
-        """Replace member with a new member."""
-        self.__log_silent(member, "creating new member...")
-        new_member = self.create_member(member.id)
-        member.delete_state()
-        member.update(new_member)
-        member.steps = new_member.steps
-        member.epochs = new_member.epochs
-
-    def replace_member_with_best(self, member : Checkpoint, p = 0.2):
-        """Replace member with one of the best performing members in a previous generation."""
-        previous_generation = self.population.generations[-2]
-        n_elitists = max(1, round(len(previous_generation) * p))
-        elitists = sorted((m for m in previous_generation if m != member), reverse=True)[:n_elitists]
-        elitist = random.choice(elitists)
-        self.__log_silent(member, f"replacing with member {elitist.id}...")
-        member.update(elitist)
-        # resample hyper parameters
-        [hp.sample_uniform() for hp in member]
-
-    def initialize_population(self):
-        new_members = self.create_members(k=self.population.size)
+    def create_initial_generation(self) -> Generation:
+        new_members = self.create_members(k=self.population_size)
+        generation = Generation()
         for member in self.training_service.train(new_members, self.step_size):
             # log performance
-            self.__log(member, member.performance_details())
-            # Add member to population.
-            self.__whisper(f"updating member {member.id} in population...")
-            self.population.append(member)
+            self._say(member.performance_details(), member)
             # Save member to database directory.
             self.update_database(member)
+            generation.append(member)
+        return generation
 
     def start(self, use_old = False):
         """
         Start global training procedure. Ends when end_criteria is met.
         """
-        # reset member state folder
-        clear_member_states()
         try:
+            self.on_start()
             # start controller loop
-            self.__say("Starting training procedure...")
+            self._say("Starting training procedure...")
             if not use_old:
                 self.train_synchronously()
             else:
                 self.train_synchronously_old()
             # terminate worker processes
-            self.__say("controller is finished.")
+            self._say("finished.")
         except KeyboardInterrupt:
-            self.__say("controller was interupted.")
-            # close pool
-            self.training_service.stop()
+            self._say("interupted.")
+        finally:
+            self.on_end()
+
+    def on_start(self):
+        """Resets class properties, starts training service and cleans up temporary files."""
+        # reset member state folder
+        clear_member_states()
+        # reset class properties
+        self.nfe = 0
+        self.generations = 0
+        self.population = Population()
+        # start training service
+        self.training_service.start()
+
+    def on_end(self):
+        """Stops training service and cleans up temporary files."""
+        # close training service
+        self.training_service.stop()
         # reset member state folder
         clear_member_states()
 
@@ -259,34 +240,36 @@ class Controller(object):
         Each member is trained individually and asynchronously,
         but they are waiting for each other between each generation cycle.
         """
-        self.training_service.start()
-        self.initialize_population()
+        self._say("Training initial generation...")
+        self.population.append(self.create_initial_generation())
         while not self.is_population_finished():
-            self.__whisper("on generation start")
-            self.evolver.on_generation_start(self.population, self.__whisper)
+            self._whisper("on generation start")
+            self.evolver.on_generation_start(self.population.current, self._whisper)
+            # create new generation
+            new_generation = Generation()
             # generate new candidates
-            new_candidates = [self.evolver.on_evolve(member, self.population, partial(self.__log_silent, member)) for member in self.population]
-            self.population.new_generation()
+            new_candidates = self.evolver.on_evolve(self.population.current, self._whisper)
+            # 1. evolve, 2. train, 3. evaluate, 4. save
             for candidates in self.training_service.train(new_candidates, self.step_size):
-                member = self.evolver.on_evaluation(candidates, self.__whisper)
-                self.__nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
+                member = self.evolver.on_evaluation(candidates, self._whisper)
+                self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
-                self.__log(member, member.performance_details())
-                # Add member to population.
-                self.__whisper(f"updating member {member.id} in population...")
-                self.population.append(member)
+                self._say(member.performance_details(), member)
                 # Save member to database directory.
                 self.update_database(member)
-            self.__whisper("on generation end")
-            self.evolver.on_generation_end(self.population, self.__whisper)
-            # write to tensorboard if enabled
-            if self.__tensorboard_writer:
-                self.__update_tensorboard()
+                # write to tensorboard if enabled
+                self._update_tensorboard(member)
+                # Add member to generation.
+                new_generation.append(member)
+                self._whisper("awaiting next trained member...")
+            self._whisper("on generation end")
+            self.evolver.on_generation_end(new_generation, self._whisper)
+            # add new generation
+            self.population.append(new_generation)
             # perform garbage collection
-            self.__whisper("performing garbage collection...")
+            self._whisper("performing garbage collection...")
             self.remove_bad_member_states()
-        self.__say(f"end criteria has been reached.")
-        self.training_service.stop()
+        self._say(f"end criteria has been reached.")
 
     def train_synchronously_old(self, eval_steps=1):
         """
@@ -294,49 +277,51 @@ class Controller(object):
         Each member is trained individually and asynchronously,
         but they are waiting for each other between each generation cycle.
         """
-        self.training_service.start()
-        self.initialize_population()
+        self._say("Training initial generation...")
+        self.population.append(self.create_initial_generation())
         while not self.is_population_finished():
-            self.__whisper("on generation start")
-            self.evolver.on_generation_start(self.population, self.__whisper)
+            self._whisper("on generation start")
+            self.evolver.on_generation_start(self.population, self._whisper)
+            # create new generation
+            new_generation = Generation()
             # generate new candidates
-            new_candidates = [self.evolver.on_evolve(member, self.population, partial(self.__log_silent, member)) for member in self.population]
-            self.population.new_generation()
+            new_candidates = self.evolver.on_evolve(self.population.current, self._whisper)
             if isinstance(next(iter(new_candidates)), Checkpoint):
                 for candidates in self.training_service.train(new_candidates, self.step_size):
-                    member = self.evolver.on_evaluation(candidates, self.__whisper)
-                    self.__nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
+                    member = self.evolver.on_evaluation(candidates, self._whisper)
+                    self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                     # log performance
-                    self.__log(member, member.performance_details())
-                    # Add member to population.
-                    self.__whisper(f"updating member {member.id} in population...")
-                    self.population.append(member)
+                    self._say(member.performance_details(), member)
                     # Save member to database directory.
                     self.update_database(member)
+                    # write to tensorboard if enabled
+                    self._update_tensorboard(member)
+                    # Add member to generation.
+                    new_generation.append(member)
+                    self._whisper("awaiting next trained member...")
             else:
                 # eval candidates
                 best_candidates = list()
                 for candidates in self.training_service.train(new_candidates, eval_steps):
-                    member = self.evolver.on_evaluation(candidates, self.__whisper)
+                    member = self.evolver.on_evaluation(candidates, self._whisper)
                     best_candidates.append(member)
-                    self.__nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
+                    self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # train best
                 for member in self.training_service.train(best_candidates, self.step_size - eval_steps):
                     # log performance
-                    self.__log(member, member.performance_details())
-                    # Add member to population.
-                    self.__whisper(f"updating member {member.id} in population...")
-                    self.population.append(member)
+                    self._say(member.performance_details(), member)
                     # Save member to database directory.
                     self.update_database(member)
-            self.__whisper("on generation end")
-            self.evolver.on_generation_end(self.population, self.__whisper)
-            # write to tensorboard if enabled
-            if self.__tensorboard_writer:
-                self.__update_tensorboard()
+                    # write to tensorboard if enabled
+                    self._update_tensorboard(member)
+                    # Add member to generation.
+                    new_generation.append(member)
+                    self._whisper("awaiting next trained member...")
+            self._whisper("on generation end")
+            self.evolver.on_generation_end(new_generation, self._whisper)
+            # add new generation
+            self.population.append(new_generation)
             # perform garbage collection
-            self.__whisper("performing garbage collection...")
+            self._whisper("performing garbage collection...")
             self.remove_bad_member_states()
-        self.__say(f"end criteria has been reached.")
-        # close pool
-        self.training_service.stop()
+        self._say(f"end criteria has been reached.")
