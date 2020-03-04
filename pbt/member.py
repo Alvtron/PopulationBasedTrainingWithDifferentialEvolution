@@ -174,28 +174,28 @@ class Checkpoint(MemberState):
     def __optimizer_state_path(self) -> Path:
         return Path(self.__state_directory_path(), "optimizer_state.pth")
 
-    def has_model_state(self) -> bool:
+    def has_model_state_files(self) -> bool:
         """Returns true if the checkpoint has a model state file."""
         return self.__model_state_path().is_file()
 
-    def has_optimizer_state(self) -> bool:
+    def has_optimizer_state_files(self) -> bool:
         """Returns true if the checkpoint has a optimizer state file."""
         return self.__optimizer_state_path().is_file()
 
-    def has_state(self) -> bool:
+    def has_state_files(self) -> bool:
         """Returns true if the checkpoint has any state files."""
-        return self.has_model_state() or self.has_optimizer_state() 
+        return self.has_model_state_files() or self.has_optimizer_state_files() 
 
     def load_state(self, device='cpu', missing_ok=False):
         """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
-        if not self.has_model_state():
+        if not self.has_model_state_files():
             if missing_ok:
                 self.model_state = None
             else:
                 raise MissingStateError(f"Model state file is missing at {self.__model_state_path()}")
         else:
             self.model_state = torch.load(self.__model_state_path(), map_location=device)
-        if not self.has_optimizer_state():
+        if not self.has_optimizer_state_files():
             if missing_ok:
                 self.optimizer_state = None
             else:
@@ -223,23 +223,29 @@ class Checkpoint(MemberState):
     def delete_state(self):
         """Deletes the state, both in-memory and any existing local files."""
         # delete state in memory
-        self.model_state = None
-        self.optimizer_state = None
+        if hasattr(self, 'model_state'):
+            del self.model_state
+        if hasattr(self, 'optimizer_state'):
+            del self.optimizer_state
         # delete state files if they exist
-        if self.has_model_state():
+        if self.has_model_state_files():
             self.__model_state_path().unlink()
-        if self.has_optimizer_state():
+        if self.has_optimizer_state_files():
             self.__optimizer_state_path().unlink()
 
     def copy_state(self, other):
         """Copy the state of the other checkpoint."""
+        if self == other:
+            return
+        # copy model state
         if hasattr(other, 'model_state') and other.model_state is not None:
             self.model_state = copy.deepcopy(other.model_state)
-        elif other.has_model_state():
+        elif other.has_model_state_files():
             other.__model_state_path().copy(self.__model_state_path())
+        # copy optimizer state
         if hasattr(other, 'optimizer_state') and other.optimizer_state is not None:
             self.optimizer_state = copy.deepcopy(other.optimizer_state)
-        elif other.has_optimizer_state():
+        elif other.has_optimizer_state_files():
             other.__optimizer_state_path().copy(self.__optimizer_state_path())
 
     def update(self, other):
@@ -247,11 +253,13 @@ class Checkpoint(MemberState):
         Replace own hyper-parameters, model state and optimizer state from the provided checkpoint.
         The step and epoch counts are also copied. Resets loss and time.
         """
+        if self is other:
+            warnings.warn("Attempting to update self with self.")
+            return
         self.epochs = other.epochs
         self.steps = other.steps
         self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
-        if self != other:
-            self.copy_state(other)
+        self.copy_state(other)
         self.loss = dict()
         self.time = dict()
 
@@ -277,7 +285,7 @@ class Generation(object):
                 if not isinstance(member, MemberState):
                     raise TypeError("Members must be of type MemberState!")
                 if member.id in self._members:
-                    raise ValueError("Members must be unique!")
+                    raise MemberAlreadyExistsError("Members must be unique!")
                 self._members[member.id] = member
 
     def __len__(self):
@@ -294,7 +302,9 @@ class Generation(object):
 
     def append(self, member : MemberState):
         if member.id in self._members:
-            raise MemberAlreadyExistsError()
+            raise MemberAlreadyExistsError("Member id already exists.")
+        if any(member is gen_member for gen_member in self._members.values()):
+            raise MemberAlreadyExistsError("Member object already exists!")
         if not isinstance(member, MemberState):
             raise TypeError()
         self._members[member.id] = member
@@ -307,7 +317,7 @@ class Generation(object):
     def update(self, member):
         if member.id not in self._members:
             raise IndexError
-        if member.id != self._members[member.id]:
+        if member != self._members[member.id]:
             raise ValueError(f"Member does not match existing member at id {member.id}.")
         self._members[member.id] = member
     
@@ -343,4 +353,6 @@ class Population(object):
     def append(self, generation : Generation):
         if not isinstance(generation, Generation):
             raise TypeError
+        if any(generation is existing for existing in self.generations):
+            raise ValueError("Attempting to add the same generation twice!")
         self.generations.append(generation)

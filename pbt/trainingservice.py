@@ -73,8 +73,8 @@ class TrainingService(object):
         self.__pool = None
 
     def create_jobs(self, candidates : Sequence, step_size : int) -> Sequence[Job]:
-        for candidate, device in zip(candidates, itertools.cycle(self.devices)):
-            yield Job(candidate, step_size, device)
+        for checkpoints, device in zip(candidates, itertools.cycle(self.devices)):
+            yield Job(checkpoints, step_size, device)
 
     def train(self, candidates : Sequence, step_size : int):
         jobs = self.create_jobs(candidates, step_size)

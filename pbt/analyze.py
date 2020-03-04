@@ -48,7 +48,7 @@ class Analyzer(object):
         if self.verbose:
             print(f"Analyzer: {message}")
 
-    def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu', verbose : bool = False):
+    def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu'):
         self.__print(f"Finding best member in population...")
         best = get_best_member(self.database)
         self.__print(f"Testing {best}...")
@@ -60,7 +60,7 @@ class Analyzer(object):
         self.__print(result)
         return best
 
-    def test_generations(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu', limit : int = 10, verbose : bool = False):
+    def test_generations(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu', limit : int = 10):
         tested_subjects = list()
         subjects = sorted((entry for entry in self.database if entry.model_state is not None), reverse=True, key=lambda e: e.steps)[:limit]
         for index, entry in enumerate(subjects, start=1):

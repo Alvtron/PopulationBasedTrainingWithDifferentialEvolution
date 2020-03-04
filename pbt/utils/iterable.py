@@ -26,6 +26,14 @@ def grid(span, n_grids):
     step = span / (n_grids + 1)
     return tuple(step * (i + 1) for i in range(n_grids))
 
+def average(iterable : Iterable):
+    sum = 0
+    n_values = 0
+    for value in iterable:
+        sum += value
+        n_values += 1
+    return sum / n_values
+
 def split_number(x, n):
     """Split the number into N parts such that difference between the smallest and the largest part is minimum."""
     # If we cannot split the number into exactly 'N' parts 

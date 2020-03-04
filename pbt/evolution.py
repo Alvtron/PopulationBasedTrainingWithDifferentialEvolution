@@ -244,25 +244,26 @@ class HistoricalMemory(object):
         self.s_f = list()
         self.weights = list()
         self.k = 0
+
+    def record(self, cr_i, f_i, delta_score):
+        self.s_cr.append(cr_i)
+        self.s_f.append(f_i)
+        self.weights.append(delta_score)
     
     def reset(self):
         self.s_cr = list()
         self.s_f = list()
         self.weights = list()
 
-    def record(self, cr_i, f_i, delta_score):
-        self.s_cr.append(cr_i)
-        self.s_f.append(f_i)
-        self.weights.append(delta_score)
-
     def update(self):
-        if self.s_cr and self.s_f:
-            if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
-                self.m_cr[self.k] = None
-            else:
-                self.m_cr[self.k] = mean_wl(self.s_cr, self.weights)
-            self.m_f[self.k] = mean_wl(self.s_f, self.weights)
-            self.k = 0 if self.k >= self.size - 1 else self.k + 1
+        if not self.s_cr or not self.s_f or not self.weights:
+            return
+        if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
+            self.m_cr[self.k] = None
+        else:
+            self.m_cr[self.k] = mean_wl(self.s_cr, self.weights)
+        self.m_f[self.k] = mean_wl(self.s_f, self.weights)
+        self.k = 0 if self.k >= self.size - 1 else self.k + 1
 
 class ExternalArchive(list):
     def __init__(self, size):
@@ -372,6 +373,13 @@ class SHADE(EvolveEngine):
 
     def on_generation_end(self, generation : Generation, logger):
         self.memory.update()
+        # log/print F and Cr values
+        logger("SHADE F-values:")
+        for f in self.F.values():
+            logger(f)
+        logger("SHADE Cr-values:")
+        for cr in self.CR.values():
+            logger(cr)
 
     def get_control_parameters(self):
         """
@@ -450,22 +458,15 @@ class LSHADE(SHADE):
             generation.remove(worst)
             logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
 
+class DecayingLSHADE(LSHADE):
+    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
+        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
+        
+    def get_control_parameters(self):
+        cr, f = super().get_control_parameters()
+        return cr, f * (1.0 - self.NFE/self.MAX_NFE)
+    
 class LSHADEWithWeightSharing(LSHADE):
-    """
-    A general, modifiable implementation of Success-History based Adaptive Differential Evolution (SHADE)
-    with linear population size reduction.
-
-    References:
-        SHADE: https://ieeexplore.ieee.org/document/6557555
-        L-SHADE: https://ieeexplore.ieee.org/document/6900380
-
-    Parameters:
-        N_INIT: The number of members in the population {15, 16, ..., 25}.
-        r_arc: adjusts archive size with round(N_INIT * rarc) {1.0, 1.1, ..., 3.0}.
-        MAX_NFE: the maximum number of fitness evaluations (N * (end_steps / step_size))
-        p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
-        memory_size: historical memory size (H) {2, 3, ..., 10}.
-    """
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
 
@@ -508,6 +509,6 @@ class LSHADEWithWeightSharing(LSHADE):
                 else:
                     candidate[j].normalized = base
             # copy weights from pbest
-            if candidate != x_pbest:
-                candidate.copy_state(x_pbest)
+            member.copy_state(x_pbest)
+            candidate.copy_state(x_pbest)
             yield member, candidate

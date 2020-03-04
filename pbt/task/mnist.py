@@ -31,9 +31,9 @@ class Mnist(Task):
             augment_params=None,
             model_params= lenet5.MnistNetLarger.create_hyper_parameters(),
             optimizer_params={
-                'lr': ContiniousHyperparameter(0.0, 1e-1),
+                'lr': ContiniousHyperparameter(1e-9, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),
-                'weight_decay': ContiniousHyperparameter(1e-9, 1e-5),
+                'weight_decay': ContiniousHyperparameter(1e-9, 1e-1),
                 'nesterov': DiscreteHyperparameter(False, True)
             })
 
@@ -147,7 +147,7 @@ class MnistKnowledgeSharing(Mnist):
 class FashionMnist(Mnist):
     def __init__(self):
         pass
-    
+
     @property
     def datasets(self) -> Datasets:
         train_data_path = test_data_path = './data'

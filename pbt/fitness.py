@@ -27,7 +27,6 @@ def log(message : str, force_print : bool = False):
     if VERBOSE: print(full_message)
 
 def train(checkpoint : Checkpoint, trainer : Trainer, step_size : int, device : str):
-    checkpoint = checkpoint.copy()
     log("training...")
     start_train_time_ns = time.time_ns()
     checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = trainer(
@@ -42,7 +41,6 @@ def train(checkpoint : Checkpoint, trainer : Trainer, step_size : int, device : 
     return checkpoint
 
 def evaluate(checkpoint : Checkpoint, evaluator : Evaluator, device : str):
-    checkpoint = checkpoint.copy()
     start_eval_time_ns = time.time_ns()
     log("evaluating...")
     checkpoint.loss['eval'] = evaluator(checkpoint.model_state, device)
@@ -50,7 +48,6 @@ def evaluate(checkpoint : Checkpoint, evaluator : Evaluator, device : str):
     return checkpoint
 
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str):
-        checkpoint = checkpoint.copy()
         # load checkpoint state
         log("loading checkpoint state...")
         try:

@@ -13,12 +13,12 @@ import numpy as np
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 
+import pbt.evolution
 from pbt.controller import Controller
 from pbt.task import mnist, creditfraud
 from pbt.analyze import Analyzer
 from pbt.database import Database
 from pbt.evaluator import Evaluator
-from pbt.evolution import RandomWalk, ExploitAndExplore, ExploitAndExploreWithDifferentialEvolution, DifferentialEvolution, SHADE, LSHADE, LSHADEWithWeightSharing
 from pbt.trainer import Trainer
 
 # various settings for reproducibility
@@ -33,27 +33,6 @@ torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
-@dataclass
-class Arguments:
-    task : str
-    evolver : str
-    directory : str
-    devices : list
-    population_size : int = 10
-    batch_size : int = 32
-    step_size : int = 100
-    end_nfe : int = None
-    end_steps : int = 1000
-    end_score : float = None
-    history_limit : int = 2
-    n_jobs : int = 1
-    threading : bool = False
-    tensorboard : bool = False
-    detect_NaN : bool = False
-    verbose : int = 1
-    logging : bool = False
-    old_controller : bool = False
-
 def validate_arguments(args):
     if (args.population_size < 0):
         raise ValueError("Population size must be at least 1.")
@@ -61,10 +40,36 @@ def validate_arguments(args):
         raise ValueError("Batch size must be at least 1.")
     if (args.step_size < 0):
         raise ValueError("Step size must be at least 1.")
-    #if (args.devices == 'cuda' and not torch.cuda.is_available()):
-    #    raise ValueError("CUDA is not available on your machine.")
-    #if (args.devices == 'cuda' and os.name == 'nt'):
-    #    raise NotImplementedError("PyTorch multiprocessing with CUDA is not supported on Windows.")
+    if any(device.startswith('cuda') for device in args.devices):
+        if not torch.cuda.is_available():
+            raise ValueError("CUDA is not available on your machine.")
+        if os.name == 'nt':
+            raise NotImplementedError("PyTorch multiprocessing with CUDA is not supported on Windows.")
+    return args
+
+def import_user_arguments():
+    # import user arguments
+    parser = argparse.ArgumentParser(description="Population Based Training")
+    parser.add_argument("--task", type=str, required=True, help="The name of the task, e.g. 'mnist' or 'creditfraud'.")
+    parser.add_argument("--evolver", type=str, required=True, help="Select which evolve algorithm to use.")
+    parser.add_argument("--directory", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
+    parser.add_argument("--population_size", type=int, required=True, help="The number of members in the initial generation.")
+    parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--step_size", type=int, default=100, help="Number of steps to train each generation.")
+    parser.add_argument("--end_nfe", type=int, default=None, help="Set end fitness evaluations criterium for early stopping.")
+    parser.add_argument("--end_steps", type=int, default=100*100, help="Set end steps criterium for early stopping.")
+    parser.add_argument("--end_score", type=float, default=None, help="Set end score criterium for early stopping.")
+    parser.add_argument("--history", type=int, default=2, help="Number of generation states to save. Older generation states will be deleted.")
+    parser.add_argument("--devices", type=list, default=['cpu'], help="Set processor device ('cpu' or 'cuda:0'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
+    parser.add_argument("--n_jobs", type=int, default=1, help="Number of training processes to perform at once.")
+    parser.add_argument("--threading", type=bool, default=False, help="Wether to use threads instead of processes.")
+    parser.add_argument("--tensorboard", type=bool, default=False, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
+    parser.add_argument("--detect_NaN", type=bool, default=False, help="Wether to enable NaN detection.")
+    parser.add_argument("--old_controller", type=bool, default=False, help="Wether to use the old controller.")
+    parser.add_argument("--verbose", type=int, default=1, help="Verbosity level.")
+    parser.add_argument("--logging", type=bool, default=False, help="Wether to enable logging.")
+    args = parser.parse_args()
+    validate_arguments(args)
     return args
 
 def import_task(task_name : str):
@@ -95,19 +100,21 @@ def import_task(task_name : str):
 
 def create_evolver(evolver_name, population_size, end_nfe):
     if evolver_name == 'rw':
-        return RandomWalk(explore_factor = 0.2)
+        return pbt.evolution.RandomWalk(explore_factor = 0.2)
     if evolver_name == 'pbt':
-        return ExploitAndExplore( exploit_factor = 0.2, explore_factors = (0.9, 1.1))
+        return pbt.evolution.ExploitAndExplore( exploit_factor = 0.2, explore_factors = (0.9, 1.1))
     if evolver_name == 'pbt_de':
-        return ExploitAndExploreWithDifferentialEvolution( exploit_factor = 0.2, F = 0.2, Cr = 0.8)
+        return pbt.evolution.ExploitAndExploreWithDifferentialEvolution( exploit_factor = 0.2, F = 0.2, Cr = 0.8)
     if evolver_name == 'de':
-        return DifferentialEvolution(F = 0.2, Cr = 0.8)
+        return pbt.evolution.DifferentialEvolution(F = 0.2, Cr = 0.8)
     if evolver_name == 'shade':
-        return SHADE( N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
-        return LSHADE( N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+    if evolver_name == 'decaying_lshade':
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshadewithweightsharing':
-        return LSHADEWithWeightSharing( N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.LSHADEWithWeightSharing(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     else:
         raise NotImplementedError(f"Your evolver request '{evolver_name}'' is not available.")
 
@@ -118,49 +125,51 @@ def create_tensorboard(log_directory):
     url = tb.launch()
     return SummaryWriter(tensorboard_log_path), url
 
-def run_task(args : Arguments):
-    # validate arguments
-    validate_arguments(args)
+def run(task : str, evolver : str, population_size : int, batch_size : int, step_size : int,
+        end_nfe : int = None, end_steps : int = None, end_score : float = None, history : int = 2,
+        directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
+        threading : bool = False, tensorboard : bool = False, detect_NaN : bool = False,
+        old_controller : bool = False, verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
-    task = import_task(args.task)
+    _task = import_task(task)
     # prepare database
     print(f"Preparing database...")
     database = Database(
-        directory_path=f"{args.directory}/{'old' if args.old_controller else 'new'}/{args.task}/p{args.population_size}_steps{args.step_size}_batch{args.batch_size}_nfe{args.end_nfe}/{args.evolver}",
+        directory_path=f"{directory}/{'old' if old_controller else 'new'}/{task}/p{population_size}_steps{step_size}_batch{batch_size}_nfe{end_nfe}/{evolver}",
         read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
-    if args.tensorboard:
+    if tensorboard:
         print(f"Launching tensorboard...")
         tensorboard_writer, tensorboard_url = create_tensorboard(database.path)
         print(f"Tensoboard is launched and accessible at: {tensorboard_url}")
     # print and save objective info
     obj_info = [
-        f"Task: {args.task}",
-        f"Evolver: {args.evolver}",
+        f"Task: {task}",
+        f"Evolver: {evolver}",
         f"Database path: {database.path}",
-        f"Population size: {args.population_size}",
-        f"Hyper-parameters: {len(task.hyper_parameters)} {task.hyper_parameters.keys()}",
-        f"Batch size: {args.batch_size}",
-        f"Step size: {args.step_size}",
-        f"End criterium - fitness evaluations: {args.end_nfe}",        
-        f"End criterium - steps: {args.end_steps}",
-        f"End criterium - score: {args.end_score}",
-        f"Loss-metric: {task.loss_metric}",
-        f"Eval-metric: {task.eval_metric}",
-        f"Loss functions: {[loss.name for loss in task.loss_functions.values()]}",
-        f"History limit: {args.history_limit}",
-        f"Detect NaN: {args.detect_NaN}",
-        f"Training set length: {len(task.datasets.train)}",
-        f"Evaluation set length: {len(task.datasets.eval)}",
-        f"Testing set length: {len(task.datasets.test)}",
-        f"Total dataset length: {len(task.datasets.train) + len(task.datasets.eval) + len(task.datasets.test)}",
-        f"Verbosity: {args.verbose}",
-        f"Logging: {args.logging}",
-        f"Devices: {args.devices}",
-        f"Number of processes: {args.n_jobs}"]
-    #if args.devices == "cuda":
+        f"Population size: {population_size}",
+        f"Hyper-parameters: {len(_task.hyper_parameters)} {_task.hyper_parameters.keys()}",
+        f"Batch size: {batch_size}",
+        f"Step size: {step_size}",
+        f"End criterium - fitness evaluations: {end_nfe}",        
+        f"End criterium - steps: {end_steps}",
+        f"End criterium - score: {end_score}",
+        f"Loss-metric: {_task.loss_metric}",
+        f"Eval-metric: {_task.eval_metric}",
+        f"Loss functions: {[loss.name for loss in _task.loss_functions.values()]}",
+        f"History limit: {history}",
+        f"Detect NaN: {detect_NaN}",
+        f"Training set length: {len(_task.datasets.train)}",
+        f"Evaluation set length: {len(_task.datasets.eval)}",
+        f"Testing set length: {len(_task.datasets.test)}",
+        f"Total dataset length: {len(_task.datasets.train) + len(_task.datasets.eval) + len(_task.datasets.test)}",
+        f"Verbosity: {verbose}",
+        f"Logging: {logging}",
+        f"Devices: {devices}",
+        f"Number of processes: {n_jobs}"]
+    #if devices == "cuda":
     #    obj_info.append(f"Number of GPUs: {torch.cuda.device_count()}")
     obj_info = "\n".join(obj_info)
     print("\n", obj_info, "\n")
@@ -168,64 +177,63 @@ def run_task(args : Arguments):
     # create trainer, evaluator and tester
     print(f"Creating trainer...")
     TRAINER = Trainer(
-        model_class = task.model_class,
-        optimizer_class = task.optimizer_class,
-        train_data = task.datasets.train,
-        loss_functions = task.loss_functions,
-        loss_metric = task.loss_metric,
-        batch_size = args.batch_size,
+        model_class = _task.model_class,
+        optimizer_class = _task.optimizer_class,
+        train_data = _task.datasets.train,
+        loss_functions = _task.loss_functions,
+        loss_metric = _task.loss_metric,
+        batch_size = batch_size,
         verbose=False)
     print(f"Creating evaluator...")
     EVALUATOR = Evaluator(
-        model_class = task.model_class,
-        test_data = task.datasets.eval,
-        loss_functions=task.loss_functions,
-        batch_size = args.batch_size,
+        model_class = _task.model_class,
+        test_data = _task.datasets.eval,
+        loss_functions=_task.loss_functions,
+        batch_size = batch_size,
         verbose=False)
     print(f"Creating tester...")
     TESTER = Evaluator(
-        model_class = task.model_class,
-        test_data = task.datasets.test,
-        loss_functions=task.loss_functions,
-        batch_size = args.batch_size,
+        model_class = _task.model_class,
+        test_data = _task.datasets.test,
+        loss_functions=_task.loss_functions,
+        batch_size = batch_size,
         verbose=False)
     # define controller
     print(f"Creating evolver...")
-    EVOLVER = create_evolver(args.evolver, args.population_size, args.end_nfe)
+    EVOLVER = create_evolver(evolver, population_size, end_nfe)
     # create controller
     print(f"Creating controller...")
     controller = Controller(
         context = torch.multiprocessing.get_context('spawn'),
-        population_size=args.population_size,
-        hyper_parameters=task.hyper_parameters,
+        population_size=population_size,
+        hyper_parameters=_task.hyper_parameters,
         trainer=TRAINER,
         evaluator=EVALUATOR,
         evolver=EVOLVER,
-        loss_metric=task.loss_metric,
-        eval_metric=task.eval_metric,
-        loss_functions=task.loss_functions,
+        loss_metric=_task.loss_metric,
+        eval_metric=_task.eval_metric,
+        loss_functions=_task.loss_functions,
         database=database,
-        step_size=args.step_size,
-        end_criteria={'nfe': args.end_nfe, 'steps': args.end_steps, 'score': args.end_score},
-        detect_NaN=args.detect_NaN,
-        devices=args.devices,
-        n_jobs=args.n_jobs,
-        threading=args.threading,
-        history_limit=args.history_limit,
+        step_size=step_size,
+        end_criteria={'nfe': end_nfe, 'steps': end_steps, 'score': end_score},
+        detect_NaN=detect_NaN,
+        devices=devices,
+        n_jobs=n_jobs,
+        threading=threading,
+        history_limit=history,
         tensorboard_writer=tensorboard_writer,
-        verbose=args.verbose,
-        logging=args.logging)
+        verbose=verbose,
+        logging=logging)
     # run controller
     print(f"Starting controller...")
-    controller.start(use_old = args.old_controller) 
+    controller.start(use_old = old_controller) 
     # analyze results stored in database
     print("Analyzing population...")
-    analyzer = Analyzer(database)
+    analyzer = Analyzer(database, verbose=True)
     checkpoint = analyzer.test(
         evaluator=TESTER,
         save_directory=database.create_file("results", "top_members.txt"),
-        device='cpu',
-        verbose=True)
+        device='cpu')
     print("Updating database with results...")
     database.update(checkpoint.id, checkpoint.steps, checkpoint)
     print("Creating statistics...")
@@ -236,28 +244,17 @@ def run_task(args : Arguments):
     print("Program completed! You can now exit if needed.")
 
 """
-        CONFIGURATIONS
-"""
-
-def test(task, population_size, evolver, step_size, nfe, n_jobs, threading, old_controller):
-    args = Arguments(task = task, evolver = evolver, population_size = population_size, batch_size = 64,
-        step_size = step_size, end_nfe = nfe, end_steps = None, end_score = None,
-        history_limit = 2, directory = 'checkpoints', devices = ['cuda:0'], n_jobs = n_jobs, threading = threading,
-        tensorboard = False, detect_NaN = True, verbose = 3, logging = True, old_controller = old_controller)
-    run_task(args)
-
-"""
         PROGRAM STARTS HERE
 """
 
 if __name__ == "__main__":
-    #test(task = 'fashionmnist', population_size = 30, evolver='pbt', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = True)
-    test(task = 'fashionmnist', population_size = 10, evolver='lshade', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = False)
-    test(task = 'fashionmnist', population_size = 30, evolver='lshade', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = True)
-    #test(task = 'fashionmnist', population_size = 30, evolver='pbt', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = False)
-    #test(task = 'fashionmnist', population_size = 30, evolver='lshade', step_size=250, nfe = 30 * 40, n_jobs=7, threading=False, old_controller = False)
+    #args = import_user_arguments()
+    #run(**vars(args))
+    run(task='fashionmnist', evolver='decaying_lshade', population_size = 30, batch_size=64,
+        step_size=250, end_nfe = 30 * 60, n_jobs=7, devices=['cuda:0'], threading=False,
+        old_controller=False, tensorboard=True, verbose=2, logging=True)
 
-    # prioriter stort steg tidlig
-    # gjør learning rate kompleks
-    # lr=a+ib
-    # lr~normal(a,b)
+# prioriter stort steg tidlig (kan gjørs med SHADE's F parameter)
+# gjør learning rate kompleks
+# lr=a+ib
+# lr~normal(a,b)
