@@ -20,16 +20,6 @@ from pbt.hyperparameters import Hyperparameters, ContiniousHyperparameter, Discr
 from pbt.member import Checkpoint
 from pbt.task.mnist import MnistKnowledgeSharing
 
-# various settings for reproducibility
-# set random state 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
-# set torch settings
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.enabled = True
-
 epochs = 100
 batch_size = 64
 device = "cuda"
@@ -82,7 +72,7 @@ print("training...")
 while(checkpoint.epochs < epochs):
     start_train_time_ns = time.time_ns()
     checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = trainer(
-        hyper_parameters=checkpoint.hyper_parameters,
+        hyper_parameters=checkpoint.parameters,
         model_state=checkpoint.model_state,
         optimizer_state=checkpoint.optimizer_state,
         epochs=checkpoint.epochs,
@@ -95,8 +85,8 @@ while(checkpoint.epochs < epochs):
     checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
     print(f"Time: {checkpoint.time['train']:.2f}s train, {checkpoint.time['eval']:.2f}s eval")
     print(f"epoch {checkpoint.epochs}, step {checkpoint.steps}, {checkpoint.performance_details()}")
-    checkpoint.hyper_parameters.optimizer['lr'] *= random.uniform(0.8, 1.2)
-    checkpoint.hyper_parameters.optimizer['momentum'] *= random.uniform(0.8, 1.2)
+    checkpoint.parameters.optimizer['lr'] *= random.uniform(0.8, 1.2)
+    checkpoint.parameters.optimizer['momentum'] *= random.uniform(0.8, 1.2)
 # test
 print("testing...")
 checkpoint.loss['test'] = tester(checkpoint.model_state, device)

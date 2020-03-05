@@ -44,28 +44,14 @@ class MissingStateError(Exception):
 
 class MemberState(object):
     '''Base class for member states.'''
-    def __init__(self, id, hyper_parameters : Hyperparameters, minimize : bool):
+    def __init__(self, id, parameters : Hyperparameters, minimize : bool):
         self.id = id
-        self.hyper_parameters = hyper_parameters
+        self.parameters = parameters
         self.minimize = minimize
 
     @abstractmethod
     def score(self):
         raise NotImplementedError
-
-    def __iter__(self):
-        return self.hyper_parameters.parameters()
-
-    def __len__(self) -> int:
-        return len(self.hyper_parameters)
-
-    def __getitem__(self, index) -> _Hyperparameter:
-        return self.hyper_parameters[index]
-
-    def __setitem__(self, index, value : _Hyperparameter):
-        if not isinstance(value, _Hyperparameter):
-            raise TypeError()
-        self.hyper_parameters[index] = value
 
     def __str__(self) -> str:
         return f"Member {self.id:03d}"
@@ -124,28 +110,43 @@ class MemberState(object):
             return True
         return x >= y if not self.minimize else x <= y
 
-    def update(self, other):
-        self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
+    def copy_parameters(self, other):
+        """Replace own hyper-parameters with the ones from the other checkpoint."""
+        self.parameters = copy.deepcopy(other.parameters)
 
     def copy(self):
         return copy.deepcopy(self)
 
 class Checkpoint(MemberState):
     '''Class for keeping track of a checkpoint, where the model- and optimizer state are stored in system memory.'''
-    def __init__(self, id, hyper_parameters : Hyperparameters, loss_metric : str, eval_metric : str, minimize : bool):
-        super().__init__(id, hyper_parameters, minimize)
+    def __init__(self, id, parameters : Hyperparameters, loss_metric : str, eval_metric : str, minimize : bool):
+        super().__init__(id, parameters, minimize)
         self.epochs : int = 0
         self.steps : int = 0
         self.model_state : dict = None
         self.optimizer_state : dict = None
         self.loss_metric : str = loss_metric
         self.eval_metric : str = eval_metric
-        self.loss : dict = dict()
-        self.time : dict = dict()
+        self.loss : Dict[object, dict] = dict()
+        self.time : Dict[object, dict] = dict()
 
     def __str__(self) -> str:
         return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
     
+    def __iter__(self):
+        return (parameter.normalized for parameter in self.parameters.values())
+
+    def __len__(self) -> int:
+        return len(self.parameters)
+
+    def __getitem__(self, index : int) -> float:
+        return self.parameters[index].normalized
+
+    def __setitem__(self, index : int, value : float):
+        if not isinstance(value, float):
+            raise TypeError()
+        self.parameters[index].normalized = value
+
     def __eq__(self, other) -> bool:
         if other is None:
             return False
@@ -234,7 +235,7 @@ class Checkpoint(MemberState):
             self.__optimizer_state_path().unlink()
 
     def copy_state(self, other):
-        """Copy the state of the other checkpoint."""
+        """Replace own model state and optimizer state with the ones from the other checkpoint."""
         if self == other:
             return
         # copy model state
@@ -247,21 +248,6 @@ class Checkpoint(MemberState):
             self.optimizer_state = copy.deepcopy(other.optimizer_state)
         elif other.has_optimizer_state_files():
             other.__optimizer_state_path().copy(self.__optimizer_state_path())
-
-    def update(self, other):
-        """
-        Replace own hyper-parameters, model state and optimizer state from the provided checkpoint.
-        The step and epoch counts are also copied. Resets loss and time.
-        """
-        if self is other:
-            warnings.warn("Attempting to update self with self.")
-            return
-        self.epochs = other.epochs
-        self.steps = other.steps
-        self.hyper_parameters = copy.deepcopy(other.hyper_parameters)
-        self.copy_state(other)
-        self.loss = dict()
-        self.time = dict()
 
     def performance_details(self) -> str:
         strings = list()
@@ -280,13 +266,16 @@ class Generation(object):
     def __init__(self, members : Iterator = None):
         super().__init__()
         self._members : Dict[MemberState] = dict()
-        if isinstance(members, Iterator):
-            for member in members:
-                if not isinstance(member, MemberState):
-                    raise TypeError("Members must be of type MemberState!")
-                if member.id in self._members:
-                    raise MemberAlreadyExistsError("Members must be unique!")
-                self._members[member.id] = member
+        if members is None:
+            return
+        if not isinstance(members, Iterator):
+            raise TypeError
+        for member in members:
+            if not isinstance(member, MemberState):
+                raise TypeError("Members must be of type MemberState!")
+            if member.id in self._members:
+                raise MemberAlreadyExistsError("Members must be unique!")
+            self._members[member.id] = member
 
     def __len__(self):
         return len(self._members)

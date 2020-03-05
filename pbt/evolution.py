@@ -45,7 +45,7 @@ class RandomSearch(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member]
+        [hp.sample_uniform() for hp in member.parameters.values()]
 
     def on_evolve(self, generation : Generation, logger) -> MemberState:
         """Simply returns the member. No mutation conducted."""
@@ -63,7 +63,7 @@ class RandomWalk(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member]
+        [hp.sample_uniform() for hp in member.parameters.values()]
 
     def on_evolve(self, generation : Generation, logger) -> MemberState:
         """ Explore search space with random walk. """
@@ -92,7 +92,7 @@ class ExploitAndExplore(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member]
+        [hp.sample_uniform() for hp in member.parameters.values()]
 
     def on_evolve(self, generation : Generation, logger) -> MemberState:
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -116,13 +116,14 @@ class ExploitAndExplore(EvolveEngine):
         if member not in elitists:
             elitist = random.choice(elitists)
             logger(f"exploiting member {elitist.id}...")
-            exploiter.update(elitist)
+            exploiter.copy_parameters(elitist)
+            exploiter.copy_state(elitist)
             return exploiter, True
         else:
             logger(f"exploitation not needed.")
             return exploiter, False
 
-    def explore(self, member, logger) -> MemberState:
+    def explore(self, member : MemberState, logger) -> MemberState:
         """Perturb all parameters by the defined explore_factors."""
         logger("exploring...")
         explorer = member.copy()
@@ -164,16 +165,10 @@ class ExploitAndExploreWithDifferentialEvolution(ExploitAndExplore):
         x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
         j_rand = random.randrange(0, hp_dimension_size)
         for j in range(hp_dimension_size):
-            base = member[j].normalized
             if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
-                mutant = de_rand_1(
-                    F = self.F,
-                    x_r0 = x_r0[j].normalized,
-                    x_r1 = x_r1[j].normalized,
-                    x_r2 = x_r2[j].normalized)
-                candidate[j].normalized = mutant
+                candidate[j] = de_rand_1(F = self.F, x_r0 = x_r0[j], x_r1 = x_r1[j], x_r2 = x_r2[j])
             else:
-                candidate[j].normalized = base
+                candidate[j] = member[j]
         return candidate
 
 class DifferentialEvolution(EvolveEngine):
@@ -187,7 +182,7 @@ class DifferentialEvolution(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member]
+        [hp.sample_uniform() for hp in member.parameters.values()]
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
         """
@@ -202,16 +197,10 @@ class DifferentialEvolution(EvolveEngine):
             x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
             j_rand = random.randrange(0, hp_dimension_size)
             for j in range(hp_dimension_size):
-                base = member[j].normalized
                 if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
-                    mutant = de_rand_1(
-                        F = self.F,
-                        x_r0 = x_r0[j].normalized,
-                        x_r1 = x_r1[j].normalized,
-                        x_r2 = x_r2[j].normalized)
-                    candidate[j].normalized = mutant
+                    candidate[j] = de_rand_1(F = self.F, x_r0 = x_r0[j], x_r1 = x_r1[j], x_r2 = x_r2[j])
                 else:
-                    candidate[j].normalized = base
+                    candidate[j] = member[j]
             yield member, candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger) -> MemberState:
@@ -310,7 +299,7 @@ class SHADE(EvolveEngine):
         
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member]
+        [hp.sample_uniform() for hp in member.parameters.values()]
 
     def on_generation_start(self, generation : Generation, logger):
         self.memory.reset()
@@ -338,23 +327,14 @@ class SHADE(EvolveEngine):
             # choose random parameter dimension
             j_rand = random.randrange(0, dimension_size)
             for j in range(dimension_size):
-                base = member[j].normalized
                 if random.uniform(0.0, 1.0) <= self.CR[member.id] or j == j_rand:
-                    mutant = de_current_to_best_1(
-                        F = self.F[member.id],
-                        x_base = base,
-                        x_best = x_pbest[j].normalized,
-                        x_r1 = x_r1[j].normalized,
-                        x_r2 = x_r2[j].normalized)
-                    mutant = halving(
-                        base = base,
-                        mutant = mutant,
-                        lower_bounds = 0.0,
-                        upper_bounds = 1.0
-                    )
-                    candidate[j].normalized = mutant
+                    mutant = de_current_to_best_1(F = self.F[member.id], x_base = member[j],
+                        x_best = x_pbest[j], x_r1 = x_r1[j], x_r2 = x_r2[j])
+                    constrained = halving(base = member[j], mutant = mutant,
+                        lower_bounds = 0.0, upper_bounds = 1.0)
+                    candidate[j] = constrained
                 else:
-                    candidate[j].normalized = base
+                    candidate[j] = member[j]
             yield member, candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger) -> MemberState:
@@ -458,13 +438,32 @@ class LSHADE(SHADE):
             generation.remove(worst)
             logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
 
+def logistic(x, k=20):
+    return 1 / (1 + math.exp(-k * (x - 0.5)))
+
+def curve(x, k=5):
+    return x**k
+
 class DecayingLSHADE(LSHADE):
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
+    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, type='linear'):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
-        
+        self.type = type
+        self.n_generations
+    
+    def on_generation_end(self, generation, logger):
+        self.n_generations += 1
+        return super().on_generation_end(generation, logger)
+
     def get_control_parameters(self):
         cr, f = super().get_control_parameters()
-        return cr, f * (1.0 - self.NFE/self.MAX_NFE)
+        if self.type == 'linear':
+            return cr, f * (1.0 - self.NFE/self.MAX_NFE)
+        elif self.type == 'curve':
+            return cr, f * (1.0 - curve(self.NFE/self.MAX_NFE))
+        elif self.type == 'logistic':
+            return cr, f * (1.0 - logistic(self.NFE/self.MAX_NFE))
+        else:
+            raise NotImplementedError
     
 class LSHADEWithWeightSharing(LSHADE):
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
@@ -491,23 +490,14 @@ class LSHADEWithWeightSharing(LSHADE):
             # choose random parameter dimension
             j_rand = random.randrange(0, dimension_size)
             for j in range(dimension_size):
-                base = member[j].normalized
                 if random.uniform(0.0, 1.0) <= self.CR[member.id] or j == j_rand:
-                    mutant = de_current_to_best_1(
-                        F = self.F[member.id],
-                        x_base = base,
-                        x_best = x_pbest[j].normalized,
-                        x_r1 = x_r1[j].normalized,
-                        x_r2 = x_r2[j].normalized)
-                    mutant = halving(
-                        base = base,
-                        mutant = mutant,
-                        lower_bounds = 0.0,
-                        upper_bounds = 1.0
-                    )
-                    candidate[j].normalized = mutant
+                    mutant = de_current_to_best_1(F = self.F[member.id], x_base = member[j], x_best = x_pbest[j],
+                        x_r1 = x_r1[j], x_r2 = x_r2[j])
+                    mutant = halving(base = member[j], mutant = mutant,
+                        lower_bounds = 0.0, upper_bounds = 1.0)
+                    candidate[j] = mutant
                 else:
-                    candidate[j].normalized = base
+                    candidate[j] = member[j]
             # copy weights from pbest
             member.copy_state(x_pbest)
             candidate.copy_state(x_pbest)

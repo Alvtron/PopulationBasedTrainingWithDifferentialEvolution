@@ -10,16 +10,16 @@ class Comparable(metaclass=ABCMeta):
 
 CT = TypeVar('CT', bound=Comparable)
 
-def random_from_dict(members : Dict[object, CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
+def random_from_dict(values : Dict[object, CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
     if not isinstance(exclude, collections.Sequence):
         exclude = [exclude]
-    filtered = members.values() if not exclude else [m for id, m in members.values() if m not in exclude]
+    filtered = values.values() if not exclude else [v for id, v in values.values() if v not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
-def random_from_list(members : Iterable[CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
+def random_from_list(values : Iterable[CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
     if not isinstance(exclude, collections.Sequence):
         exclude = [exclude]
-    filtered = members if not exclude else [m for m in members if m not in exclude]
+    filtered = values if not exclude else [v for v in values if v not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
 def grid(span, n_grids):

@@ -47,7 +47,7 @@ class Controller(object):
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
         self.training_service = TrainingService(context=context, trainer=trainer, evaluator=evaluator,
-            devices=devices, n_jobs=n_jobs, threading=threading, verbose=verbose)
+            devices=devices, n_jobs=n_jobs, threading=threading, verbose=verbose>2)
         self.step_size = step_size
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
@@ -116,7 +116,7 @@ class Controller(object):
                 scalar_value=time_value,
                 global_step=member.steps)
         # plot hyper-parameters
-        for hparam_name, hparam in member.hyper_parameters:
+        for hparam_name, hparam in member.parameters:
             self._tensorboard_writer.add_scalar(
                 tag=f"hyperparameters/{hparam_name}/{member.id:03d}",
                 scalar_value=hparam.normalized if isinstance(hparam, DiscreteHyperparameter) else hparam.value,
@@ -127,7 +127,7 @@ class Controller(object):
         # create new member object
         member = Checkpoint(
             id=id,
-            hyper_parameters=copy.deepcopy(self.hyper_parameters),
+            parameters=copy.deepcopy(self.hyper_parameters),
             loss_metric=self.loss_metric,
             eval_metric=self.eval_metric,
             minimize=self.loss_functions[self.eval_metric].minimize)
@@ -249,7 +249,7 @@ class Controller(object):
             # create new generation
             new_generation = Generation()
             # generate new candidates
-            new_candidates = self.evolver.on_evolve(copy.deepcopy(self.population.current), self._whisper)
+            new_candidates = list(self.evolver.on_evolve(copy.deepcopy(self.population.current), self._whisper))
             # 1. evolve, 2. train, 3. evaluate, 4. save
             for candidates in self.training_service.train(new_candidates, self.step_size):
                 member = self.evolver.on_evaluation(candidates, self._whisper)

@@ -1,3 +1,4 @@
+import time
 from copy import deepcopy
 
 import torch
@@ -6,12 +7,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
 
 from .hyperparameters import Hyperparameters
-
-torch.manual_seed(0)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.enabled = True
-torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
@@ -40,11 +35,12 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, model_state : dict, device : str = 'cpu'):
+    def __call__(self, checkpoint : dict, device : str = 'cpu'):
         """Evaluate model on the provided validation or test set."""
+        start_eval_time_ns = time.time_ns()
         dataset_length = len(self.test_data)
-        metric_values = dict.fromkeys(self.loss_functions, 0.0)
-        model = self.create_model(model_state, device)
+        checkpoint.loss['eval'] = dict.fromkeys(self.loss_functions, 0.0)
+        model = self.create_model(checkpoint.model_state, device)
         for batch_index, (x, y) in enumerate(self.test_data, start=1):
             if self.verbose: print(f"({batch_index}/{dataset_length})", end=" ")
             x = x.to(device, non_blocking=True)
@@ -54,11 +50,13 @@ class Evaluator(object):
             for metric_type, metric_function in self.loss_functions.items():
                 with torch.no_grad():
                     loss = metric_function(output, y)
-                metric_values[metric_type] += loss.item() / float(dataset_length)
+                checkpoint.loss['eval'][metric_type] += loss.item() / float(dataset_length)
                 if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
                 del loss
             if self.verbose: print(end="\n")
             del output
+        # clean GPU memory
         del model
         torch.cuda.empty_cache()
-        return metric_values
+        # update checkpoint
+        checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))

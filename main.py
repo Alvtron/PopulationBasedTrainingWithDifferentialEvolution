@@ -111,8 +111,12 @@ def create_evolver(evolver_name, population_size, end_nfe):
         return pbt.evolution.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
         return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
-    if evolver_name == 'decaying_lshade':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+    if evolver_name == 'decaying_lshade_linear':
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear')
+    if evolver_name == 'decaying_lshade_curve':
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve')
+    if evolver_name == 'decaying_lshade_logistic':
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic')
     if evolver_name == 'lshadewithweightsharing':
         return pbt.evolution.LSHADEWithWeightSharing(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     else:
@@ -250,9 +254,12 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
 if __name__ == "__main__":
     #args = import_user_arguments()
     #run(**vars(args))
-    run(task='fashionmnist', evolver='decaying_lshade', population_size = 30, batch_size=64,
-        step_size=250, end_nfe = 30 * 60, n_jobs=7, devices=['cuda:0'], threading=False,
-        old_controller=False, tensorboard=True, verbose=2, logging=True)
+    run(task='fashionmnist', evolver='pbt', population_size = 30, batch_size=64,
+        step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], threading=False,
+        old_controller=False, tensorboard=False, verbose=1, logging=True)
+    run(task='fashionmnist', evolver='lshade', population_size = 30, batch_size=64,
+        step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], threading=False,
+        old_controller=False, tensorboard=False, verbose=1, logging=True)
 
 # prioriter stort steg tidlig (kan gjørs med SHADE's F parameter)
 # gjør learning rate kompleks

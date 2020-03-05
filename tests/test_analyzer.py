@@ -13,16 +13,6 @@ from pbt.loss import CategoricalCrossEntropy, Accuracy, F1
 from pbt.evaluator import Evaluator
 from pbt.task.mnist import Mnist, FashionMnist
 
-# various settings for reproducibility
-# set random state 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
-# set torch settings
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.enabled = True
-
 batch_size = 64
 device = 'cuda'
 

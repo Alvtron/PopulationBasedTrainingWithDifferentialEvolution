@@ -52,7 +52,7 @@ class Analyzer(object):
         self.__print(f"Finding best member in population...")
         best = get_best_member(self.database)
         self.__print(f"Testing {best}...")
-        best.loss['test'] = evaluator(model_state = best.model_state, device = device)
+        evaluator(best, device)
         # save top members to file
         result = f"Best checkpoint: {best}: {best.performance_details()}"
         with Path(save_directory).open('a+') as f:
@@ -68,7 +68,7 @@ class Analyzer(object):
                 self.__print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model state.")
                 continue
             self.__print(f"({index}/{len(subjects)}) Testing {entry}...")
-            entry.loss['test'] = evaluator(model_state = entry.model_state, device = device)
+            evaluator(entry, device)
             tested_subjects.append(entry)
             self.__print(entry.performance_details())
         # determine best checkpoint
@@ -197,7 +197,7 @@ class Analyzer(object):
         # determine best and worst entries
         for entries in population_entries.values():
             for entry in entries.values():
-                hyper_parameters.update(entry.hyper_parameters.keys())
+                hyper_parameters.update(entry.parameters.keys())
                 if entry.steps not in best_entries or entry > best_entries[entry.steps]:
                     best_entries[entry.steps] = entry
                     if not best_score or entry > best_score:
@@ -217,7 +217,7 @@ class Analyzer(object):
                 color = score_decimal ** sensitivity
                 for param_name in hyper_parameters:
                     steps[param_name].append(entry.steps)
-                    scores[param_name].append(entry.hyper_parameters[param_name].normalized)
+                    scores[param_name].append(entry.parameters[param_name].normalized)
                     colors[param_name].append(color)
         # plot data
         for param_name in hyper_parameters:
@@ -236,11 +236,11 @@ class Analyzer(object):
                 cmap=tab_map)
             # plot worst score
             x, y = zip(*sorted(worst_entries.items()))
-            y = [e.hyper_parameters[param_name].normalized for e in y]
+            y = [e.parameters[param_name].normalized for e in y]
             plt.scatter(x, y, label="worst score", color=worst_color, marker="o", s=6)
             # plot best score
             x, y = zip(*sorted(best_entries.items()))
-            y = [e.hyper_parameters[param_name].normalized for e in y]
+            y = [e.parameters[param_name].normalized for e in y]
             plt.scatter(x, y, label="best score", color=best_color, marker="o", s=6)
             # legend
             plt.legend()

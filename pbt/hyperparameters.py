@@ -462,8 +462,8 @@ class Hyperparameters(object):
         else:
             param_name = list(self.optimizer)[key - len(self.augment) - len(self.model)]
             self.optimizer[param_name] = value
-
-    def parameters(self):
+        
+    def values(self):
         return (i[1] for i in self)
 
     def names(self):
@@ -474,12 +474,6 @@ class Hyperparameters(object):
         model_paths = [f"model/{parameter}" for parameter in self.model]
         optimizer_paths = [f"optimizer/{parameter}" for parameter in self.optimizer]
         return general_paths + model_paths + optimizer_paths
-
-    def values(self):
-        return (hp_object.value for _, hp_object in self)
-    
-    def normalized(self):
-        return (hp_object.normalized for _, hp_object in self)
 
     def categorical(self):
         return {hp_name: hp_object for hp_name, hp_object in self if isinstance(hp_object, DiscreteHyperparameter)}

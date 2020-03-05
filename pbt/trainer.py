@@ -1,23 +1,19 @@
-import torch
-import torchvision
+import time
 import itertools
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
+import torch
+import torchvision
 from torch.utils.data import Dataset, Subset, DataLoader
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
 from torch.optim import Optimizer
 
+from .member import Checkpoint
 from .hyperparameters import Hyperparameters
 from .models.hypernet import HyperNet
 from .utils.data import create_subset
-
-torch.manual_seed(0)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.enabled = True
-torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
@@ -73,23 +69,22 @@ class Trainer(object):
             shuffle = False,
             num_workers=0))
 
-    def __call__(
-            self, hyper_parameters : Hyperparameters, model_state : dict, optimizer_state : dict,
-            epochs : int, steps : int, step_size : int = 1, device : str = 'cpu'):
+    def __call__(self, checkpoint : Checkpoint, step_size : int = 1, device : str = 'cpu'):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
-        metric_values = dict.fromkeys(self.loss_functions, 0.0)
-        END_STEPS = steps + step_size
+        start_train_time_ns = time.time_ns()
+        checkpoint.loss['train'] = dict.fromkeys(self.loss_functions, 0.0)
+        END_STEPS = checkpoint.steps + step_size
         # preparing model and optimizer
         self._print("Creating model...")
-        model = self.create_model(hyper_parameters, model_state, device)
+        model = self.create_model(checkpoint.parameters, checkpoint.model_state, device)
         self._print("Creating optimizer...")
-        optimizer = self.create_optimizer(model, hyper_parameters, optimizer_state)
+        optimizer = self.create_optimizer(model, checkpoint.parameters, checkpoint.optimizer_state)
         self._print("Creating batches...")
-        batches = self.create_subset(steps, END_STEPS)
+        batches = self.create_subset(checkpoint.steps, END_STEPS)
         self._print("Training...")
-        while steps != END_STEPS:
-            self._print(f"({1 + step_size - (END_STEPS - steps)}/{step_size})", end=" ")
+        while checkpoint.steps != END_STEPS:
+            self._print(f"({1 + step_size - (END_STEPS - checkpoint.steps)}/{step_size})", end=" ")
             try:
                 x, y = next(batches)
                 x = x.to(device, non_blocking=True)
@@ -100,7 +95,7 @@ class Trainer(object):
                     if metric_type == self.loss_metric:
                         # 2. Compute loss and save loss.
                         loss = metric_function(output, y)
-                        metric_values[metric_type] += loss.item() / float(step_size)
+                        checkpoint.loss['train'][metric_type] += loss.item() / float(step_size)
                         # 3. Before the backward pass, use the optimizer object to zero all of the gradients
                         # for the variables it will update (which are the learnable weights of the model).
                         optimizer.zero_grad()
@@ -112,24 +107,21 @@ class Trainer(object):
                         # 2. Compute loss and save loss
                         with torch.no_grad():
                             loss = metric_function(output, y)
-                        metric_values[metric_type] += loss.item() / float(step_size)
+                        checkpoint.loss['train'][metric_type] += loss.item() / float(step_size)
                     self._print(f"{metric_type}: {loss.item():4f}", end=" ")
                     del loss
                 del output
-                steps += 1
+                checkpoint.steps += 1
             except StopIteration:
-                batches = self.create_subset(steps, END_STEPS)
-                epochs += 1
+                batches = self.create_subset(checkpoint.steps, END_STEPS)
+                checkpoint.epochs += 1
             finally:
                 self._print(end="\n")
-        model_state = model.state_dict()
-        optimizer_state = optimizer.state_dict()
+        # set new state
+        checkpoint.model_state = model.state_dict()
+        checkpoint.optimizer_state = optimizer.state_dict()
+        # clean GPU memory
         del model
         del optimizer
         torch.cuda.empty_cache()
-        return model_state, optimizer_state, epochs, steps, metric_values
-
-    def grid_plot(self, x):
-        grid_img = torchvision.utils.make_grid(x, nrow=8)
-        plt.imshow(grid_img.permute(1, 2, 0))
-        plt.show()
+        checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))

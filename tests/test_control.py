@@ -14,16 +14,6 @@ from pbt.database import ReadOnlyDatabase
 from pbt.analyze import Analyzer 
 from pbt.loss import CategoricalCrossEntropy, Accuracy, F1
 
-# various settings for reproducibility
-# set random state 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
-# set torch settings
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.enabled = True
-
 def train(train_data, model, optimizer, loss_functions, device):
     train_loss = defaultdict(float)
     model.train()

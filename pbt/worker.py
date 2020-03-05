@@ -2,7 +2,7 @@ import os
 import torch
 import time
 import random
-import numpy
+import numpy as np
 from dataclasses import dataclass
 
 from .member import Checkpoint, MissingStateError
@@ -11,7 +11,12 @@ from .evaluator import Evaluator
 
 STOP_FLAG = None
 
-# reproducibility
+# various settings for reproducibility
+# set random state 
+random.seed(0)
+np.random.seed(0)
+torch.manual_seed(0)
+# set torch settings
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
@@ -73,7 +78,7 @@ class Worker(mp.Process):
                 start_train_time_ns = time.time_ns()
                 self.__log("training...")
                 checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = task.trainer.train(
-                    hyper_parameters=checkpoint.hyper_parameters,
+                    hyper_parameters=checkpoint.parameters,
                     model_state=checkpoint.model_state,
                     optimizer_state=checkpoint.optimizer_state,
                     epochs=checkpoint.epochs,
