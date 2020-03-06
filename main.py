@@ -54,13 +54,13 @@ def import_user_arguments():
     parser.add_argument("--evolver", type=str, required=True, help="Select which evolve algorithm to use.")
     parser.add_argument("--directory", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--population_size", type=int, required=True, help="The number of members in the initial generation.")
-    parser.add_argument("--batch_size", type=int, default=64, help="The number of batches in which the training set will be divided into.")
-    parser.add_argument("--step_size", type=int, default=100, help="Number of steps to train each generation.")
+    parser.add_argument("--batch_size", type=int, help="The number of batches in which the training set will be divided into.")
+    parser.add_argument("--step_size", type=int, help="Number of steps to train each generation.")
     parser.add_argument("--end_nfe", type=int, default=None, help="Set end fitness evaluations criterium for early stopping.")
-    parser.add_argument("--end_steps", type=int, default=100*100, help="Set end steps criterium for early stopping.")
+    parser.add_argument("--end_steps", type=int, default=None, help="Set end steps criterium for early stopping.")
     parser.add_argument("--end_score", type=float, default=None, help="Set end score criterium for early stopping.")
     parser.add_argument("--history", type=int, default=2, help="Number of generation states to save. Older generation states will be deleted.")
-    parser.add_argument("--devices", type=list, default=['cpu'], help="Set processor device ('cpu' or 'cuda:0'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
+    parser.add_argument("--devices", type=str, default=['cpu'], nargs='*', help="Set processor device ('cpu' or 'cuda:0'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--n_jobs", type=int, default=1, help="Number of training processes to perform at once.")
     parser.add_argument("--threading", type=bool, default=False, help="Wether to use threads instead of processes.")
     parser.add_argument("--tensorboard", type=bool, default=False, help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
@@ -172,7 +172,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         f"Verbosity: {verbose}",
         f"Logging: {logging}",
         f"Devices: {devices}",
-        f"Number of processes: {n_jobs}"]
+        f"Number of processes: {n_jobs}",
+        f"Threading: {threading}"]
     #if devices == "cuda":
     #    obj_info.append(f"Number of GPUs: {torch.cuda.device_count()}")
     obj_info = "\n".join(obj_info)
@@ -252,16 +253,6 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
 """
 
 if __name__ == "__main__":
-    #args = import_user_arguments()
-    #run(**vars(args))
-    run(task='fashionmnist', evolver='pbt', population_size = 30, batch_size=64,
-        step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], threading=False,
-        old_controller=False, tensorboard=False, verbose=1, logging=True)
-    run(task='fashionmnist', evolver='lshade', population_size = 30, batch_size=64,
-        step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], threading=False,
-        old_controller=False, tensorboard=False, verbose=1, logging=True)
-
-# prioriter stort steg tidlig (kan gjørs med SHADE's F parameter)
-# gjør learning rate kompleks
-# lr=a+ib
-# lr~normal(a,b)
+    args = import_user_arguments()
+    validate_arguments(args)
+    run(**vars(args))
