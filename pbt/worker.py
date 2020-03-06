@@ -2,14 +2,16 @@ import os
 import torch
 import time
 import random
-import numpy as np
+import warnings
 from dataclasses import dataclass
+from typing import Tuple, Sequence, Callable
+from functools import partial
+
+import numpy as np
 
 from .member import Checkpoint, MissingStateError
 from .trainer import Trainer
 from .evaluator import Evaluator
-
-STOP_FLAG = None
 
 # various settings for reproducibility
 # set random state 
@@ -24,89 +26,74 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 mp = torch.multiprocessing.get_context('spawn')
 
-@dataclass
-class WorkerTask:
-    checkpoint : Checkpoint
-    trainer : Trainer
-    evaluator : Evaluator
-    step_size : int
+def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
+    # load checkpoint state
+    logger("loading checkpoint state...")
+    try:
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
+    except MissingStateError:
+        warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
+    # train checkpoint model
+    logger("training...")
+    trainer(checkpoint, step_size, device)
+    # evaluate checkpoint model
+    logger("evaluating...")
+    evaluator(checkpoint, device)
+    # unload checkpoint state
+    logger("unloading checkpoint state...")
+    checkpoint.unload_state()
+    return checkpoint
 
-@dataclass
-class WorkerResponse:
-    checkpoint : Checkpoint
-    model_state : dict
-    optimizer_state : dict
+class Job:
+    def __init__(self, checkpoints : Tuple[Checkpoint], step_size : int):
+        if isinstance(checkpoints, Sequence) and all(isinstance(checkpoint, Checkpoint) for checkpoint in checkpoints):
+            self.checkpoints = checkpoints
+        elif isinstance(checkpoints, Checkpoint):
+            self.checkpoints = tuple([checkpoints])
+        else:
+            raise TypeError
+        if not isinstance(step_size, int):
+            raise TypeError
+        self.step_size = step_size
 
 class Worker(mp.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, id, end_event_global, evolve_queue, train_queue, random_seed : int = 0, verbose : bool = False):
+    def __init__(self, id, end_event, receive_queue, return_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
         super().__init__()
-        self.id = id
-        self.end_event_global = end_event_global
-        self.evolve_queue = evolve_queue
-        self.train_queue = train_queue
+        self._id = id
+        self.end_event = end_event
+        self.receive_queue = receive_queue
+        self.return_queue = return_queue
+        self.trainer = trainer
+        self.evaluator = evaluator
+        self.device = device
         self.verbose = verbose
         # set random state for reproducibility
         random.seed(random_seed)
-        numpy.random.seed(random_seed)
+        np.random.seed(random_seed)
         torch.manual_seed(random_seed)
 
-    def __log(self, message : str, force_print : bool = False):
-        prefix = f"Worker {self.id}, PID {os.getpid()}"
+    def __log(self, message : str):
+        if not self.verbose:
+            return
+        prefix = f"PBT Worker {self._id} (PID {os.getpid()})"
         full_message = f"{prefix}: {message}"
-        if self.verbose or force_print:
-            print(full_message)
+        print(full_message)
+
+    def process_job(self, job : Job):
+        if not job.checkpoints:
+            raise ValueError("No checkpoints available in job-object.")
+        elif len(job.checkpoints) == 1:
+            return train_and_evaluate(job.checkpoints[0], self.trainer, self.evaluator, job.step_size, self.device, self.__log, self.verbose)
+        else:
+            return tuple(train_and_evaluate(checkpoint, self.trainer, self.evaluator, job.step_size, self.device, self.__log, self.verbose) for checkpoint in job.checkpoints)
 
     def run(self):
         self.__log("running...")
-        while not self.end_event_global.is_set():
-            self.__log("awaiting checkpoint...")
+        while not self.end_event.is_set():
             # get next checkpoint from train queue
-            task : WorkerTask = self.train_queue.get()
-            # stop training loop if stop flag is received
-            if task is STOP_FLAG:
-                break
-            checkpoint : Checkpoint = task.checkpoint
-            # load checkpoint state
-            self.__log("loading checkpoint state...")
-            try:
-                checkpoint.load_state(missing_ok=checkpoint.steps < task.step_size)
-            except MissingStateError:
-                self.__log(f"WARNING: received trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.", True)
-            try:
-                # train checkpoint model
-                start_train_time_ns = time.time_ns()
-                self.__log("training...")
-                checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = task.trainer.train(
-                    hyper_parameters=checkpoint.parameters,
-                    model_state=checkpoint.model_state,
-                    optimizer_state=checkpoint.optimizer_state,
-                    epochs=checkpoint.epochs,
-                    steps=checkpoint.steps,
-                    step_size=task.step_size)
-                checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
-                # evaluate checkpoint model
-                start_eval_time_ns = time.time_ns()
-                self.__log("evaluating...")
-                checkpoint.loss['eval'] = task.evaluator.eval(checkpoint.model_state)
-                checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
-                self.__log(f"Time: {checkpoint.time['train']:.2f}s train, {checkpoint.time['eval']:.2f}s eval")
-                # unload checkpoint state
-                self.__log("unloading checkpoint state...")
-                checkpoint.unload_state()
-                # send checkpoint back to controller
-                self.evolve_queue.put(checkpoint)
-                self.__log("checkpoint returned.")
-            except Exception as e:
-                self.__log(e)
-                if task is not None:
-                    self.__log(f"returning task with member {task.checkpoint.id} back to train queue...")
-                    self.train_queue.put(task)
-                break
-            finally:
-                self.__log("cleaning up GPU memory...")
-                # ensure task deleted
-                del task
-                # release any unused GPU memory
-                torch.cuda.empty_cache()
+            self.__log("awaiting job...")
+            job = self.receive_queue.get()
+            result = self.process_job(job)
+            self.return_queue.put(result)
         self.__log("stopped.")
