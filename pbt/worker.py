@@ -23,7 +23,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
-mp = torch.multiprocessing.get_context("spawn")
+mp = torch.multiprocessing.get_context('spawn')
 
 STOP_FLAG = None
 
