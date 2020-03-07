@@ -95,20 +95,22 @@ class Worker(mp.Process):
             # get next checkpoint from train queue
             self.__log("awaiting job...")
             job = self.receive_queue.get()
-            if job is STOP_FLAG:
+            job_clone = copy.deepcopy(job)
+            del job
+            if job_clone is STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
             try:
-                result = self.process_job(job)
+                result = self.process_job(job_clone)
                 self.return_queue.put(result)
-                if self.device.startswith('cuda'):
-                    del job
-                    del result
+                del job_clone
+                del result
+                if toch.cuda.is_available():
                     torch.cuda.empty_cache()
             except Exception as exception:
                 self.__log("job excecution failed...")
                 self.__log(str(exception))
                 self.__log("returning task to send queue...")
-                self.receive_queue.put(job)
+                self.receive_queue.put(job_clone)
                 break
         self.__log("stopped.")
