@@ -52,7 +52,7 @@ class TrainingService(object):
         for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(self.devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
-            print(worker.id, worker.send_queue, worker.device)
+            print(id, send_queue, device)
             worker.start()
             yield worker
 
