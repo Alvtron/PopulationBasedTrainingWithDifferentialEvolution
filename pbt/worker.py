@@ -105,7 +105,7 @@ class Worker(mp.Process):
                 self.return_queue.put(result)
                 del job_clone
                 del result
-                if toch.cuda.is_available():
+                if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except Exception as exception:
                 self.__log("job excecution failed...")
