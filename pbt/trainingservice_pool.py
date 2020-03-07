@@ -88,7 +88,7 @@ class TrainingService(object):
     def __init__(self, trainer : Trainer, evaluator : Evaluator,
             devices : List[str] = ['cpu'], n_jobs : int = 1, threading : bool = False, verbose : bool = False):
         super().__init__()
-        self.context = self.context = torch.multiprocessing.get_context('spawn')
+        self.context = self.context = torch.multiprocessing.get_context()
         self.fitness_function = FitnessFunction(trainer=trainer, evaluator=evaluator)
         self.n_jobs = n_jobs
         self.threading = threading
