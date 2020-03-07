@@ -18,8 +18,6 @@ from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
 
-VERBOSE = True
-
 # various settings for reproducibility
 # set random state 
 random.seed(0)
@@ -37,22 +35,22 @@ def log(message : str):
     print(f"{prefix}: {message}")
 
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, verbose : bool = False):
-        # load checkpoint state
-        if verbose: log("loading checkpoint state...")
-        try:
-            checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
-        except MissingStateError:
-            warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
-        # train checkpoint model
-        if verbose: log("training...")
-        trainer(checkpoint, step_size, device)
-        # evaluate checkpoint model
-        if verbose: log("evaluating...")
-        evaluator(checkpoint, device)
-        # unload checkpoint state
-        if verbose: log("unloading checkpoint state...")
-        checkpoint.unload_state()
-        return checkpoint
+    # load checkpoint state
+    if verbose: log("loading checkpoint state...")
+    try:
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
+    except MissingStateError:
+        warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
+    # train checkpoint model
+    if verbose: log("training...")
+    trainer(checkpoint, step_size, device)
+    # evaluate checkpoint model
+    if verbose: log("evaluating...")
+    evaluator(checkpoint, device)
+    # unload checkpoint state
+    if verbose: log("unloading checkpoint state...")
+    checkpoint.unload_state()
+    return checkpoint
 
 class Job:
     def __init__(self, checkpoints : Tuple[Checkpoint], step_size : int, device : str, verbose : bool = False):

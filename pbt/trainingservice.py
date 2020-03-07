@@ -47,22 +47,19 @@ class TrainingService(object):
         self.threading = threading
         self.verbose = verbose
         self._workers : List[Worker] = list()
-        self._send_queue = context.Queue()
+        self._send_queues = dict()
+        for device in devices:
+            self._send_queues[device] = context.Queue()
         self._return_queue = context.Queue()
         self.__seed = 0
-    
-    def _create_worker(self, id, device) -> Worker:
-        worker = Worker(id=id, end_event=self._end_event, receive_queue=self._send_queue, return_queue=self._return_queue,
-            trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = self.__seed, verbose = self.verbose)
-        self.__seed += 1
-        return worker
 
     def start(self):
         if any(worker.is_alive() for worker in self._workers):
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
         self._end_event = self.context.Event()
-        for id, device in zip(range(self.n_jobs), itertools.cycle(self.devices)):
-            worker = self._create_worker(id, device)
+        for id, (device, send_queue) in zip(range(self.n_jobs), itertools.cycle(self._send_queues.items())):
+            worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
+                trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
             worker.start()
             self._workers.append(worker)
 
@@ -85,8 +82,8 @@ class TrainingService(object):
         self._end_event.set()
 
     def train(self, candidates : Sequence, step_size : int):
-        for checkpoints in candidates:
+        for checkpoints, send_queue in zip(candidates, itertools.cycle(self._send_queues.values())):
             job = Job(checkpoints, step_size)
-            self._send_queue.put(job)
+            send_queue.put(job)
         for _ in candidates:
             yield self._return_queue.get()
