@@ -28,8 +28,6 @@ torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
-# multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
 class TrainingService(object):
     def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),
@@ -37,7 +35,7 @@ class TrainingService(object):
         super().__init__()
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")
-        self.context = torch.multiprocessing.get_context('file_descriptor')
+        self.context = torch.multiprocessing.get_context('spawn')
         self.trainer = trainer
         self.evaluator = evaluator
         self.devices = tuple(devices)
@@ -52,14 +50,13 @@ class TrainingService(object):
         for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(self.devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
-            print(id, send_queue, device)
-            worker.start()
             yield worker
 
     def start(self):
         if self._workers is not None:
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
         self._workers = tuple(self._create_processes())
+        [worker.start() for worker in self._workers]
 
     def stop(self):
         if not self._workers:
