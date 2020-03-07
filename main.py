@@ -241,7 +241,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
 
 if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy("file_descriptor")
-    
+    torch.multiprocessing.set_start_method("spawn")
+
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)
