@@ -3,6 +3,7 @@ import torch
 import time
 import random
 import warnings
+import copy
 from dataclasses import dataclass
 from typing import Tuple, Sequence, Callable
 from functools import partial
