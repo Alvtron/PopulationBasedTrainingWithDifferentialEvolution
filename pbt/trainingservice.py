@@ -37,7 +37,7 @@ class TrainingService(object):
         super().__init__()
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")
-        self.context = torch.multiprocessing.get_context('spawn')
+        self.context = torch.multiprocessing.get_context('file_descriptor')
         self.trainer = trainer
         self.evaluator = evaluator
         self.devices = tuple(devices)
