@@ -26,6 +26,8 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 mp = torch.multiprocessing.get_context('spawn')
 
+STOP_FLAG = None
+
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
     # load checkpoint state
     logger("loading checkpoint state...")
@@ -94,6 +96,9 @@ class Worker(mp.Process):
             # get next checkpoint from train queue
             self.__log("awaiting job...")
             job = self.receive_queue.get()
+            if job is STOP_FLAG:
+                self.__log("STOP FLAG received. Stopping...")
+                break
             result = self.process_job(job)
             self.return_queue.put(result)
         self.__log("stopped.")

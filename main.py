@@ -252,10 +252,10 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
 """
 
 if __name__ == "__main__":
-    args = import_user_arguments()
-    validate_arguments(args)
-    run(**vars(args))
+    #args = import_user_arguments()
+    #validate_arguments(args)
+    #run(**vars(args))
 
-    #run(task='fashionmnist', evolver='pbt', population_size = 30, batch_size=64,
-    #    step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], threading=False,
-    #    old_controller=False, tensorboard=False, verbose=3, logging=True)
+    run(task='fashionmnist', evolver='pbt', population_size = 30, batch_size=64,
+        step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], threading=False,
+        old_controller=False, tensorboard=False, verbose=2, logging=True)
