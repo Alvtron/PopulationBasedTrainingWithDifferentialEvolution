@@ -32,7 +32,7 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
 class TrainingService(object):
-    def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : List[str] = ['cpu'],
+    def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),
             n_jobs : int = 1, threading : bool = False, verbose : bool = False):
         super().__init__()
         if n_jobs < len(devices):
@@ -40,25 +40,26 @@ class TrainingService(object):
         self.context = torch.multiprocessing.get_context('spawn')
         self.trainer = trainer
         self.evaluator = evaluator
-        self.devices = devices
+        self.devices = tuple(devices)
         self.n_jobs = n_jobs
         self.verbose = verbose
-        self._workers : List[Worker] = list()
+        self._workers : Tuple[Worker] = None
         self._return_queue = self.context.Queue()
 
-    def _spawn_processes(self):
+    def _create_processes(self):
         self._end_event = self.context.Event()
         send_queues = [self.context.Queue() for _ in self.devices]
         for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(self.devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
+            print(worker.id, worker.send_queue, worker.device)
             worker.start()
-            self._workers.append(worker)
+            yield worker
 
     def start(self):
-        if self._workers:
+        if self._workers is not None:
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
-        self._spawn_processes()
+        self._workers = tuple(self._create_processes())
 
     def stop(self):
         if not self._workers:
@@ -68,7 +69,7 @@ class TrainingService(object):
         [worker.receive_queue.put(STOP_FLAG) for worker in self._workers]
         [worker.join() for worker in self._workers]
         [worker.close() for worker in self._workers]
-        self._workers = list()
+        self._workers = None
 
     def train(self, candidates : Sequence, step_size : int):
         n_sent = 0

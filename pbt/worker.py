@@ -99,6 +99,13 @@ class Worker(mp.Process):
             if job is STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
-            result = self.process_job(job)
-            self.return_queue.put(result)
+            try:
+                result = self.process_job(job)
+                self.return_queue.put(result)
+            except Exception as exception:
+                self.__log("job excecution failed...")
+                self.__log(str(exception))
+                self.__log("returning task to send queue...")
+                self.receive_queue.put(job)
+                break
         self.__log("stopped.")
