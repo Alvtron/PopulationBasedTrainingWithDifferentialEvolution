@@ -102,6 +102,10 @@ class Worker(mp.Process):
             try:
                 result = self.process_job(job)
                 self.return_queue.put(result)
+                if self.device.startswith('cuda'):
+                    del job
+                    del result
+                    torch.cuda.empty_cache()
             except Exception as exception:
                 self.__log("job excecution failed...")
                 self.__log(str(exception))
