@@ -34,7 +34,7 @@ from .database import Database
 
 class Controller(object):
     def __init__(
-            self, context : BaseContext, population_size : int, hyper_parameters : Hyperparameters,
+            self, population_size : int, hyper_parameters : Hyperparameters,
             trainer : Trainer, evaluator : Evaluator, evolver : EvolveEngine,
             loss_metric : str, eval_metric : str, loss_functions : dict, database : Database,
             step_size = 1, end_criteria : dict = {'score': 100.0},
@@ -46,7 +46,7 @@ class Controller(object):
         self.database = database
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
-        self.training_service = TrainingService(context=context, trainer=trainer, evaluator=evaluator,
+        self.training_service = TrainingService(trainer=trainer, evaluator=evaluator,
             devices=devices, n_jobs=n_jobs, threading=threading, verbose=verbose>2)
         self.step_size = step_size
         self.loss_metric = loss_metric

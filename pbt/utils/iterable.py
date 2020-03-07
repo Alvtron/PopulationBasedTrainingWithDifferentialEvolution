@@ -34,25 +34,10 @@ def average(iterable : Iterable):
         n_values += 1
     return sum / n_values
 
-def split_number(x, n):
-    """Split the number into N parts such that difference between the smallest and the largest part is minimum."""
-    # If we cannot split the number into exactly 'N' parts 
-    if(x < n):
-        raise ValueError
-    # If x % n == 0 then the minimum difference is 0 and all numbers are x / n 
-    elif (x % n == 0):
-        for i in range(n):
-            yield x / n 
-    else:
-        # upto n-(x % n) the values will be x / n  
-        # after that the values will be x / n + 1 
-        zp = n - (x % n)
-        pp = x / n
-        for i in range(n):
-            if(i >= zp):
-                yield pp + 1
-            else:
-                yield pp
+def split_number_evenly(number, n) -> list:
+    parts = int(number / n)
+    rest = number % n
+    return [parts] * (n-rest) + [parts+1] * rest
 
 def flatten_dict(dictionary, exclude = [], delimiter ='_'):
     flat_dict = dict()
