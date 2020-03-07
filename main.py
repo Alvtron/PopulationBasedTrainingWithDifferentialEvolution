@@ -252,6 +252,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
 """
 
 if __name__ == "__main__":
+    torch.multiprocessing.set_sharing_strategy("forkserver")
     args = import_user_arguments()
     validate_arguments(args)
     run(**vars(args))
