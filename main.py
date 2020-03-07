@@ -21,18 +21,6 @@ from pbt.database import Database
 from pbt.evaluator import Evaluator
 from pbt.trainer import Trainer
 
-# various settings for reproducibility
-# set random state 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
-# set torch settings
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.enabled = True
-# multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_descriptor')
-
 def validate_arguments(args):
     if (args.population_size < 0):
         raise ValueError("Population size must be at least 1.")
@@ -252,7 +240,16 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
 """
 
 if __name__ == "__main__":
-    torch.multiprocessing.set_sharing_strategy("forkserver")
+    torch.multiprocessing.set_sharing_strategy("file_descriptor")
+    
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    # set torch settings
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.enabled = True
+
     args = import_user_arguments()
     validate_arguments(args)
     run(**vars(args))
