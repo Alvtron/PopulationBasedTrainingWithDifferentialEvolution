@@ -165,7 +165,7 @@ class Controller(object):
         self._whisper(f"updating member {member.id} in database...")
         member.load_state(device='cpu')
         self.database.update(member.id, member.steps, member)
-        member.unload_state()
+        member.unload_state(device='cpu')
 
     def is_member_finished(self, member : Checkpoint):
         """With the end_criteria, check if the provided member is finished training."""

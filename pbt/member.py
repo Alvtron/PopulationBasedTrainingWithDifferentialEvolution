@@ -217,8 +217,7 @@ class Checkpoint(MemberState):
         else:
             raise NotImplementedError(f"Device '{device}' is not supported.")
 
-    def unload_state(self):
-        """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""
+    def _unload_state(self, device : str):
         if self.model_state is None:
             raise AttributeError("Can't unload when model state is None. Nothing to unload.")
         if self.optimizer_state is None:
@@ -231,10 +230,19 @@ class Checkpoint(MemberState):
         # delete state objects
         del self.model_state
         del self.optimizer_state
-        # clear GPU memory
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
+
+    def _unload_state_on_gpu(self, device : str):
+        with torch.cuda.device(device):
+            self._unload_state(device)
+
+    def unload_state(self, device : str = 'cpu'):
+        """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""
+        if device == 'cpu':
+            self._unload_state(device)
+        elif device.startswith('cuda'):
+            self._unload_state_on_gpu(device)
+        else:
+            raise NotImplementedError(f"Device '{device}' is not supported.")
 
     def delete_state(self):
         """Deletes the state, both in-memory and any existing local files."""
