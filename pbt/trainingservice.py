@@ -70,8 +70,9 @@ class TrainingService(object):
         n_sent = 0
         n_returned = 0
         for checkpoints, worker in zip(candidates, itertools.cycle(self._workers)):
-            job = Job(checkpoints, step_size)
+            job = Job(copy.deepcopy(checkpoints), step_size)
             worker.receive_queue.put(job)
+            del job
             n_sent += 1
         while n_returned != n_sent:
             yield self._return_queue.get()
