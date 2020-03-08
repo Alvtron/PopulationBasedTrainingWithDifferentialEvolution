@@ -153,5 +153,5 @@ class TrainingService(object):
             result = task.get()
             gpu_memory_usage = get_gpu_memory_map()
             print(gpu_memory_usage)
-            print(result.__dict__())
+            print(result.__dict__)
             yield result
