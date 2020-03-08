@@ -1,17 +1,18 @@
 import os
+import gc
 import sys
 import time
 import math
 import random
 import itertools
 import warnings
-import gc
-import numpy as np
+import subprocess
 from typing import List, Dict, Tuple, Sequence, Callable
 from functools import partial
 from multiprocessing.context import BaseContext
 from multiprocessing.pool import ThreadPool
 
+import numpy as np
 import torch
 
 import pbt.member
@@ -32,6 +33,26 @@ torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 CONTEXT = torch.multiprocessing.get_context("spawn")
+
+
+def get_gpu_memory_map():
+    """Get the current gpu usage.
+
+    Returns
+    -------
+    usage: dict
+        Keys are device ids as integers.
+        Values are memory usage as integers in MB.
+    """
+    result = subprocess.check_output(
+        [
+            'nvidia-smi', '--query-gpu=memory.used',
+            '--format=csv,nounits,noheader'
+        ], encoding='utf-8')
+    # Convert lines into a dictionary
+    gpu_memory = [int(x) for x in result.strip().split('\n')]
+    gpu_memory_map = dict(zip(range(len(gpu_memory)), gpu_memory))
+    return gpu_memory_map
 
 def log(message : str):
     prefix = f"PID {os.getpid()}"
@@ -128,4 +149,8 @@ class TrainingService(object):
     def train(self, candidates : Sequence, step_size : int):
         jobs = self.create_jobs(candidates, step_size)
         tasks = [pool.apply_async(self.fitness_function, (job,)) for job, pool in zip(jobs, itertools.cycle(self.__pools))]
-        yield from (result.get() for result in tasks)
+        for task in tasks):
+            result = task.get()
+            gpu_memory_usage = get_gpu_memory_map()
+            print(gpu_memory_usage)
+            yield result
