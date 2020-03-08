@@ -135,7 +135,7 @@ class TrainingService(object):
         self.verbose = verbose
         self._end_event = self.context.Event()
         self._return_queue = self.context.Queue()
-        send_queues = [self.context.Queue() for _ in self.devices]
+        send_queues = [self.context.Queue() for _ in devices]
         workers = list()
         for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
