@@ -37,7 +37,7 @@ def log(message : str):
     prefix = f"PID {os.getpid()}"
     print(f"{prefix}: {message}")
 
-def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, verbose : bool = False):
+def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device, verbose : bool = False):
     # load checkpoint state
     if verbose: log("loading checkpoint state...")
     try:
@@ -68,7 +68,7 @@ class Job:
         if not isinstance(device, str):
             raise TypeError
         self.step_size = step_size
-        self.device = device
+        self.device = torch.device(device)
         self.verbose = verbose
 
 class FitnessFunction(object):

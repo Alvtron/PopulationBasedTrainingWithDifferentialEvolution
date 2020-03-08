@@ -1,4 +1,5 @@
 import copy
+import gc
 import torch
 import math
 import warnings
@@ -187,7 +188,7 @@ class Checkpoint(MemberState):
         """Returns true if the checkpoint has any state files."""
         return self.has_model_state_files() or self.has_optimizer_state_files() 
 
-    def load_state(self, device='cpu', missing_ok=False):
+    def load_state(self, device = 'cpu', missing_ok : bool = False):
         """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
         if not self.has_model_state_files():
             if missing_ok:
@@ -221,6 +222,7 @@ class Checkpoint(MemberState):
         # clear GPU memory
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+        gc.collect()
 
     def delete_state(self):
         """Deletes the state, both in-memory and any existing local files."""
