@@ -38,7 +38,6 @@ CONTEXT = torch.multiprocessing.get_context("spawn")
 STOP_FLAG = None
 
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
-    torch.cuda.device(torch.device(device))
     # load checkpoint state
     logger(f"loading state of checkpoint {checkpoint.id}...")
     try:
@@ -78,12 +77,9 @@ class Worker(CONTEXT.Process):
         self.return_queue = return_queue
         self.trainer = trainer
         self.evaluator = evaluator
-        self.device = device
+        self.cuda = device.startswith('cuda')
+        self.device = torch.device(device)
         self.verbose = verbose
-        # set random state for reproducibility
-        random.seed(random_seed)
-        np.random.seed(random_seed)
-        torch.manual_seed(random_seed)
 
     def __log(self, message : str):
         if not self.verbose:
@@ -102,6 +98,12 @@ class Worker(CONTEXT.Process):
 
     def run(self):
         self.__log("running...")
+        if self.cuda:
+            torch.cuda.device(self.device)
+        # set random state for reproducibility
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
         while not self.end_event.is_set():
             # get next checkpoint from train queue
             self.__log("awaiting job...")
