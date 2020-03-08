@@ -48,11 +48,13 @@ class TrainingService(object):
     def _create_processes(self):
         self._end_event = self.context.Event()
         send_queues = [self.context.Queue() for _ in self.devices]
+        workers = list()
         for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(self.devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
-            yield worker
+            workers.append(worker)
         del send_queues
+        return workers
 
     def start(self):
         if self._workers is not None:
