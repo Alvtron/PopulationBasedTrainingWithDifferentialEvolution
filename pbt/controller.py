@@ -39,7 +39,7 @@ class Controller(object):
             loss_metric : str, eval_metric : str, loss_functions : dict, database : Database,
             step_size = 1, end_criteria : dict = {'score': 100.0},
             tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False, history_limit : int = None,
-            devices : List[str] = ['cpu'], n_jobs : int = -1, threading : bool = False, verbose : int = 1, logging : bool = True):
+            devices : List[str] = ['cpu'], n_jobs : int = -1, verbose : int = 1, logging : bool = True):
         assert step_size and step_size > 0, f"Step size must be of type {int} and 1 or higher."
         self.population_size = population_size
         self.population = Population()
@@ -47,7 +47,7 @@ class Controller(object):
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
         self.training_service = TrainingService(trainer=trainer, evaluator=evaluator,
-            devices=devices, n_jobs=n_jobs, threading=threading, verbose=verbose>2)
+            devices=devices, n_jobs=n_jobs, verbose=verbose>2)
         self.step_size = step_size
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric

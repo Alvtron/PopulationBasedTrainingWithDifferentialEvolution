@@ -50,7 +50,6 @@ def import_user_arguments():
     parser.add_argument("--history", type=int, default=2, help="Number of generation states to save. Older generation states will be deleted.")
     parser.add_argument("--devices", type=str, default=['cpu'], nargs='*', help="Set processor device ('cpu' or 'cuda:0'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--n_jobs", type=int, default=1, help="Number of training processes to perform at once.")
-    parser.add_argument("--threading", action='store_true', help="Wether to use threads instead of processes.")
     parser.add_argument("--tensorboard", action='store_true', help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--detect_NaN", action='store_true', help="Wether to enable NaN detection.")
     parser.add_argument("--old_controller", action='store_true', help="Wether to use the old controller.")
@@ -120,8 +119,8 @@ def create_tensorboard(log_directory):
 def run(task : str, evolver : str, population_size : int, batch_size : int, step_size : int,
         end_nfe : int = None, end_steps : int = None, end_score : float = None, history : int = 2,
         directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
-        threading : bool = False, tensorboard : bool = False, detect_NaN : bool = False,
-        old_controller : bool = False, verbose : int = 1, logging : bool = True):
+        tensorboard : bool = False, detect_NaN : bool = False, old_controller : bool = False,
+        verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
     _task = import_task(task)
@@ -160,8 +159,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         f"Verbosity: {verbose}",
         f"Logging: {logging}",
         f"Devices: {devices}",
-        f"Number of processes: {n_jobs}",
-        f"Threading: {threading}"]
+        f"Number of processes: {n_jobs}"]
     #if devices == "cuda":
     #    obj_info.append(f"Number of GPUs: {torch.cuda.device_count()}")
     obj_info = "\n".join(obj_info)
@@ -211,7 +209,6 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         detect_NaN=detect_NaN,
         devices=devices,
         n_jobs=n_jobs,
-        threading=threading,
         history_limit=history,
         tensorboard_writer=tensorboard_writer,
         verbose=verbose,

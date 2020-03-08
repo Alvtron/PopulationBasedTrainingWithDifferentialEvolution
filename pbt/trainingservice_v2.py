@@ -130,7 +130,7 @@ class Worker(CONTEXT.Process):
 
 class TrainingService(object):
     def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),
-            n_jobs : int = 1, threading : bool = False, verbose : bool = False):
+            n_jobs : int = 1, verbose : bool = False):
         super().__init__()
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")

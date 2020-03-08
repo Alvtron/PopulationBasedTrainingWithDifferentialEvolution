@@ -92,9 +92,8 @@ class TrainingService(object):
         super().__init__()
         self.fitness_function = FitnessFunction(trainer=trainer, evaluator=evaluator)
         self.n_jobs = n_jobs
-        self.threading = threading
         self.verbose = verbose
-        self.devices = devices
+        self.devices = tuple(devices)
         self.__pools = None
     
     def is_alive(self):
@@ -103,10 +102,8 @@ class TrainingService(object):
     def start(self):
         if self.is_alive():
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
-        self.__pools = list()
         n_job_distribution = split_number_evenly(self.n_jobs, len(self.devices))
-        for device, n_jobs in zip(self.devices, n_job_distribution):
-            self.__pools.append(ThreadPool(processes=n_jobs) if self.threading else CONTEXT.Pool(processes=n_jobs))
+        self.__pools = tuple(CONTEXT.Pool(processes=n_jobs) for device, n_jobs in zip(self.devices, n_job_distribution))
 
     def stop(self):
         if not self.is_alive():
