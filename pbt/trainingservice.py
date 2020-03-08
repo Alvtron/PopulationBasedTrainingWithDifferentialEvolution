@@ -149,8 +149,9 @@ class TrainingService(object):
     def train(self, candidates : Sequence, step_size : int):
         jobs = self.create_jobs(candidates, step_size)
         tasks = [pool.apply_async(self.fitness_function, (job,)) for job, pool in zip(jobs, itertools.cycle(self.__pools))]
+        results = list()
         for task in tasks:
-            result = task.get()
+            results.append(task.get())
             gpu_memory_usage = get_gpu_memory_map()
             print(gpu_memory_usage)
-            yield result
+        yield from results
