@@ -103,7 +103,6 @@ class Worker(mp.Process):
             try:
                 result = self.process_job(job)
                 self.return_queue.put(result)
-                del result
             except Exception as exception:
                 self.__log("job excecution failed...")
                 self.__log(str(exception))
@@ -111,7 +110,6 @@ class Worker(mp.Process):
                 self.receive_queue.put(job)
                 break
             finally:
-                del job
                 # Regular multiprocessing workers don't fully clean up after themselves,
                 # so we have to explicitly trigger garbage collection to make sure that all
                 # destructors are called...

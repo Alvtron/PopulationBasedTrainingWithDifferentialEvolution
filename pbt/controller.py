@@ -194,7 +194,7 @@ class Controller(object):
             # log performance
             self._say(member.performance_details(), member)
             # Save member to database directory.
-            self.update_database(member)
+            #self.update_database(member)
             generation.append(member)
         return generation
 
@@ -257,7 +257,7 @@ class Controller(object):
                 # log performance
                 self._say(member.performance_details(), member)
                 # Save member to database directory.
-                self.update_database(member)
+                #self.update_database(member)
                 # write to tensorboard if enabled
                 self._update_tensorboard(member)
                 # Add member to generation.
