@@ -4,6 +4,7 @@ import time
 import random
 import warnings
 import copy
+import gc
 from dataclasses import dataclass
 from typing import Tuple, Sequence, Callable
 from functools import partial
@@ -108,4 +109,9 @@ class Worker(mp.Process):
                 self.__log("returning task to send queue...")
                 self.receive_queue.put(job)
                 break
+            finally:
+                # Regular multiprocessing workers don't fully clean up after themselves,
+                # so we have to explicitly trigger garbage collection to make sure that all
+                # destructors are called...
+                gc.collect()
         self.__log("stopped.")

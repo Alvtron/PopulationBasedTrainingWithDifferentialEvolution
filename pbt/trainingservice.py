@@ -52,6 +52,7 @@ class TrainingService(object):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
             yield worker
+        del send_queues
 
     def start(self):
         if self._workers is not None:
@@ -79,4 +80,3 @@ class TrainingService(object):
         while n_returned != n_sent:
             yield self._return_queue.get()
             n_returned += 1
-            gc.collect()
