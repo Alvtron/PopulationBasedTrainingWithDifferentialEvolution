@@ -51,7 +51,9 @@ class TrainingService(object):
         self._workers : Tuple[Worker] = tuple(workers)
 
     def start(self):
-        if self._workers is not None:
+        if self._workers is None:
+            raise Exception("No workers found.")
+        if any(worker.is_alive() for worker in self._workers):
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
         [worker.start() for worker in self._workers]
 
