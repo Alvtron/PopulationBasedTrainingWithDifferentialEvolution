@@ -38,6 +38,7 @@ CONTEXT = torch.multiprocessing.get_context("spawn")
 STOP_FLAG = None
 
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
+    torch.cuda.device(torch.device(device))
     # load checkpoint state
     logger(f"loading state of checkpoint {checkpoint.id}...")
     try:
@@ -169,4 +170,3 @@ class TrainingService(object):
         while n_returned != n_sent:
             yield self._return_queue.get()
             n_returned += 1
-            print(f"{n_returned} of {n_sent} returned.")
