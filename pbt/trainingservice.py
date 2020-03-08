@@ -46,7 +46,7 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
         checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
     except MissingStateError:
         warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
-    if verbose: log(f"Memory allocated on device {device}: {torch.cuda.memory_allocated(device)}")
+    if verbose: log(f"Memory allocated on device {device}: {torch.cuda.memory_summary(device)}")
     # train checkpoint model
     if verbose: log("training...")
     trainer(checkpoint, step_size, device)
