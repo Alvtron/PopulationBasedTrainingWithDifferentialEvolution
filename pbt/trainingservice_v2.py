@@ -21,6 +21,7 @@ import pbt.member
 from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
+from .utils.cuda import get_gpu_memory_map
 
 # various settings for reproducibility
 # set random state 

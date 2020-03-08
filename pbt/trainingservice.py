@@ -20,6 +20,7 @@ from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
 from .utils.iterable import split_number_evenly
+from .utils.cuda import get_gpu_memory_map
 
 # various settings for reproducibility
 # set random state 
@@ -34,26 +35,6 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
-
-def get_gpu_memory_map():
-    """Get the current gpu usage.
-
-    Returns
-    -------
-    usage: dict
-        Keys are device ids as integers.
-        Values are memory usage as integers in MB.
-    """
-    result = subprocess.check_output(
-        [
-            'nvidia-smi', '--query-gpu=memory.used',
-            '--format=csv,nounits,noheader'
-        ], encoding='utf-8')
-    # Convert lines into a dictionary
-    gpu_memory = [int(x) for x in result.strip().split('\n')]
-    gpu_memory_map = dict(zip(range(len(gpu_memory)), gpu_memory))
-    return gpu_memory_map
-
 def log(message : str):
     prefix = f"PID {os.getpid()}"
     print(f"{prefix}: {message}")
@@ -66,14 +47,22 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
     except MissingStateError:
         warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
     # train checkpoint model
+    gpu_map = get_gpu_memory_map
+    if verbose: log(gpu_map)
     if verbose: log("training...")
     trainer(checkpoint, step_size, device)
+    gpu_map = get_gpu_memory_map
+    if verbose: log(gpu_map)
     # evaluate checkpoint model
     if verbose: log("evaluating...")
     evaluator(checkpoint, device)
+    gpu_map = get_gpu_memory_map
+    if verbose: log(gpu_map)
     # unload checkpoint state
     if verbose: log("unloading checkpoint state...")
     checkpoint.unload_state()
+    gpu_map = get_gpu_memory_map
+    if verbose: log(gpu_map)
     return checkpoint
 
 class Job:
