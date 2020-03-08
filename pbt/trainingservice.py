@@ -3,6 +3,7 @@ import gc
 import sys
 import time
 import math
+import copy
 import random
 import itertools
 import warnings
