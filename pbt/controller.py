@@ -190,11 +190,12 @@ class Controller(object):
     def create_initial_generation(self) -> Generation:
         new_members = self.create_members(k=self.population_size)
         generation = Generation()
-        for member in self.training_service.train(new_members, self.step_size):
+        trained_members = list(self.training_service.train(new_members, self.step_size))
+        for member in trained_members:
             # log performance
             self._say(member.performance_details(), member)
             # Save member to database directory.
-            #self.update_database(member)
+            self.update_database(member)
             generation.append(member)
         return generation
 
@@ -257,7 +258,7 @@ class Controller(object):
                 # log performance
                 self._say(member.performance_details(), member)
                 # Save member to database directory.
-                #self.update_database(member)
+                self.update_database(member)
                 # write to tensorboard if enabled
                 self._update_tensorboard(member)
                 # Add member to generation.
