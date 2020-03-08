@@ -53,9 +53,6 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
     # unload checkpoint state
     logger(f"unloading state of checkpoint {checkpoint.id}...")
     checkpoint.unload_state()
-    # clean memory
-    torch.cuda.empty_cache()
-    gc.collect()
     return checkpoint
 
 class Job:
@@ -134,14 +131,13 @@ class TrainingService(object):
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")
         self.context = torch.multiprocessing.get_context('spawn')
-        self.devices = tuple(devices)
         self.n_jobs = n_jobs
         self.verbose = verbose
         self._end_event = self.context.Event()
         self._return_queue = self.context.Queue()
         send_queues = [self.context.Queue() for _ in self.devices]
         workers = list()
-        for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(self.devices)):
+        for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose)
             workers.append(worker)
@@ -173,3 +169,4 @@ class TrainingService(object):
         while n_returned != n_sent:
             yield self._return_queue.get()
             n_returned += 1
+            print(f"{n_returned} of {n_sent} returned.")
