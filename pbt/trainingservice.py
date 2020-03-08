@@ -79,6 +79,7 @@ class Worker(CONTEXT.Process):
         self.evaluator = evaluator
         self.cuda = device.startswith('cuda')
         self.device = torch.device(device)
+        self.random_seed = random_seed
         self.verbose = verbose
 
     def __log(self, message : str):
@@ -101,9 +102,9 @@ class Worker(CONTEXT.Process):
         if self.cuda:
             torch.cuda.device(self.device)
         # set random state for reproducibility
-        random.seed(random_seed)
-        np.random.seed(random_seed)
-        torch.manual_seed(random_seed)
+        random.seed(self.random_seed)
+        np.random.seed(self.random_seed)
+        torch.manual_seed(self.random_seed)
         while not self.end_event.is_set():
             # get next checkpoint from train queue
             self.__log("awaiting job...")
