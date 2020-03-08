@@ -190,8 +190,7 @@ class Controller(object):
     def create_initial_generation(self) -> Generation:
         new_members = self.create_members(k=self.population_size)
         generation = Generation()
-        trained_members = list(self.training_service.train(new_members, self.step_size))
-        for member in trained_members:
+        for member in self.training_service.train(new_members, self.step_size):
             # log performance
             self._say(member.performance_details(), member)
             # Save member to database directory.

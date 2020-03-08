@@ -31,7 +31,6 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
-
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
 def log(message : str):
