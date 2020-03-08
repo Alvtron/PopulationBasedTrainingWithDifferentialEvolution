@@ -24,7 +24,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
-mp = torch.multiprocessing.get_context('spawn')
+#mp = torch.multiprocessing.get_context('spawn')
 
 STOP_FLAG = None
 
@@ -58,7 +58,7 @@ class Job:
             raise TypeError
         self.step_size = step_size
 
-class Worker(mp.Process):
+class Worker(torch.multiprocessing.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
     def __init__(self, id, end_event, receive_queue, return_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
         super().__init__()
