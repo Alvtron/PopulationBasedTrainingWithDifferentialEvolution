@@ -188,8 +188,7 @@ class Checkpoint(MemberState):
         """Returns true if the checkpoint has any state files."""
         return self.has_model_state_files() or self.has_optimizer_state_files() 
 
-    def load_state(self, device = 'cpu', missing_ok : bool = False):
-        """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
+    def _load_state(self, device : str, missing_ok : bool):
         if not self.has_model_state_files():
             if missing_ok:
                 self.model_state = None
@@ -204,6 +203,19 @@ class Checkpoint(MemberState):
                 raise MissingStateError(f"Optimizer state file is missing at {self.__model_state_path()}")
         else:
             self.optimizer_state = torch.load(self.__optimizer_state_path(), map_location=device)
+
+    def _load_state_on_gpu(self, device : str, missing_ok : bool):
+        with torch.cuda.device(device):
+            self._load_state(device, missing_ok)
+
+    def load_state(self, device : str = 'cpu', missing_ok : bool = False):
+        """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
+        if device == 'cpu':
+            self._load_state(device, missing_ok)
+        elif device.startswith('cuda'):
+            self._load_state_on_gpu(device, missing_ok)
+        else:
+            raise NotImplementedError(f"Device '{device}' is not supported.")
 
     def unload_state(self):
         """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""

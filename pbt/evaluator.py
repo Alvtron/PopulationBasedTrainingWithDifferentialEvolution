@@ -35,7 +35,7 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, checkpoint : dict, device : str = 'cpu'):
+    def _evaluate(self, checkpoint : dict, device : str):
         """Evaluate model on the provided validation or test set."""
         start_eval_time_ns = time.time_ns()
         dataset_length = len(self.test_data)
@@ -60,3 +60,15 @@ class Evaluator(object):
         torch.cuda.empty_cache()
         # update checkpoint
         checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
+
+    def _evaluate_on_gpu(self, checkpoint : dict, device : str):
+        with torch.cuda.device(device):
+            self._evaluate(checkpoint, device)
+
+    def __call__(self, checkpoint : dict, device : str = 'cpu'):
+        if device == 'cpu':
+            self._evaluate(checkpoint, device)
+        elif device.startswith('cuda'):
+            self._evaluate_on_gpu(checkpoint, device)
+        else:
+            raise NotImplementedError(f"Device '{device}' is not supported.")
