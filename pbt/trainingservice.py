@@ -47,21 +47,21 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
     except MissingStateError:
         warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
     # train checkpoint model
-    gpu_map = get_gpu_memory_map
+    gpu_map = get_gpu_memory_map()
     if verbose: log(gpu_map)
     if verbose: log("training...")
     trainer(checkpoint, step_size, device)
-    gpu_map = get_gpu_memory_map
+    gpu_map = get_gpu_memory_map()
     if verbose: log(gpu_map)
     # evaluate checkpoint model
     if verbose: log("evaluating...")
     evaluator(checkpoint, device)
-    gpu_map = get_gpu_memory_map
+    gpu_map = get_gpu_memory_map()
     if verbose: log(gpu_map)
     # unload checkpoint state
     if verbose: log("unloading checkpoint state...")
     checkpoint.unload_state()
-    gpu_map = get_gpu_memory_map
+    gpu_map = get_gpu_memory_map()
     if verbose: log(gpu_map)
     return checkpoint
 
