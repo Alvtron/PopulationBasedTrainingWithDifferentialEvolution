@@ -41,22 +41,23 @@ def log(message : str):
 
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device, verbose : bool = False):
     # load checkpoint state
-    if verbose: log("loading checkpoint state...")
-    try:
-        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
-    except MissingStateError:
-        warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
-    if verbose: log(f"Memory allocated on device {device}: {torch.cuda.memory_summary(device)}")
-    # train checkpoint model
-    if verbose: log("training...")
-    trainer(checkpoint, step_size, device)
-    # evaluate checkpoint model
-    if verbose: log("evaluating...")
-    evaluator(checkpoint, device)
-    # unload checkpoint state
-    if verbose: log("unloading checkpoint state...")
-    checkpoint.unload_state()
-    return checkpoint
+    with torch.cuda.device(device):
+        if verbose: log("loading checkpoint state...")
+        try:
+            checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
+        except MissingStateError:
+            warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
+        if verbose: log(f"Memory allocated on device {device}: {get_gpu_memory_map()}")
+        # train checkpoint model
+        if verbose: log("training...")
+        trainer(checkpoint, step_size, device)
+        # evaluate checkpoint model
+        if verbose: log("evaluating...")
+        evaluator(checkpoint, device)
+        # unload checkpoint state
+        if verbose: log("unloading checkpoint state...")
+        checkpoint.unload_state()
+        return checkpoint
 
 class Job:
     def __init__(self, checkpoints : Tuple[Checkpoint], step_size : int, device : str, verbose : bool = False):
