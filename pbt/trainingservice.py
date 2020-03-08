@@ -37,40 +37,32 @@ class TrainingService(object):
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")
         self.context = torch.multiprocessing.get_context('spawn')
-        self.trainer = trainer
-        self.evaluator = evaluator
         self.devices = tuple(devices)
         self.n_jobs = n_jobs
         self.verbose = verbose
-        self._workers : Tuple[Worker] = None
-        self._return_queue = self.context.Queue()
-
-    def _create_processes(self):
         self._end_event = self.context.Event()
+        self._return_queue = self.context.Queue()
         send_queues = [self.context.Queue() for _ in self.devices]
         workers = list()
         for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(self.devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
-                trainer=self.trainer, evaluator=self.evaluator, device = device, random_seed = id, verbose = self.verbose)
+                trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose)
             workers.append(worker)
-        del send_queues
-        return workers
+        self._workers : Tuple[Worker] = tuple(self._create_processes())
 
     def start(self):
         if self._workers is not None:
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
-        self._workers = tuple(self._create_processes())
         [worker.start() for worker in self._workers]
 
     def stop(self):
-        if not self._workers:
+        if not any(worker.is_alive() for worker in self._workers):
             warnings.warn("Service is not running.")
             return
         self._end_event.set()
         [worker.receive_queue.put(STOP_FLAG) for worker in self._workers]
         [worker.join() for worker in self._workers]
         [worker.close() for worker in self._workers]
-        self._workers = None
 
     def train(self, candidates : Sequence, step_size : int):
         n_sent = 0
