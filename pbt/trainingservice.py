@@ -48,7 +48,7 @@ class TrainingService(object):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
                 trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose)
             workers.append(worker)
-        self._workers : Tuple[Worker] = tuple(self._create_processes())
+        self._workers : Tuple[Worker] = tuple(workers)
 
     def start(self):
         if self._workers is not None:
