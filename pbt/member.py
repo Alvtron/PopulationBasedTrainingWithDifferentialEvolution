@@ -219,7 +219,8 @@ class Checkpoint(MemberState):
         del self.model_state
         del self.optimizer_state
         # clear GPU memory
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def delete_state(self):
         """Deletes the state, both in-memory and any existing local files."""
