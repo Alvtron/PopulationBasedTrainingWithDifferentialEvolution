@@ -166,7 +166,7 @@ class TrainingService(object):
     def train(self, candidates : Sequence, step_size : int):
         n_sent = 0
         n_returned = 0
-        for checkpoints, worker in zip(candidates, self._workers)):
+        for checkpoints, worker in zip(candidates, itertools.cycle(self._workers)):
             job = Job(checkpoints, step_size)
             worker.receive_queue.put(job)
             n_sent += 1
