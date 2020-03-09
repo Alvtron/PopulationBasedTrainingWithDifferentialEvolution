@@ -59,8 +59,8 @@ class TrainingService(object):
         if not self.verbose or not self._cuda:
             return
         memory_map = get_gpu_memory_map()
-        memory_info = (f"TrainingService: CUDA device {id}: {memory}MB" for id, memory in memory_map.items())
-        output = ','.join(memory_info)
+        memory_info = (f"CUDA:{id} ({memory}MB)" for id, memory in memory_map.items())
+        output = ', '.join(memory_info)
         print(output)
 
     def start(self):

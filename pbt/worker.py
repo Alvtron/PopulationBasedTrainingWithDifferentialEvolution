@@ -86,7 +86,7 @@ class Worker(CONTEXT.Process):
     def __log(self, message : str):
         if not self.verbose:
             return
-        prefix = f"PBT Worker {self._id} (PID {os.getpid()})"
+        prefix = f"Worker {self._id} (PID {os.getpid()})"
         full_message = f"{prefix}: {message}"
         print(full_message)
 
