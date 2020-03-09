@@ -20,7 +20,6 @@ from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
 from .utils.iterable import split_number_evenly
-from .utils.cuda import get_gpu_memory_map
 
 # various settings for reproducibility
 # set random state 
@@ -46,7 +45,6 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
         checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
     except MissingStateError:
         warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
-    if verbose: log(f"Memory allocated on device {device}: {get_gpu_memory_map()}")
     # train checkpoint model
     if verbose: log("training...")
     trainer(checkpoint, step_size, device)

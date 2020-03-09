@@ -22,7 +22,7 @@ from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
 from .worker import STOP_FLAG, Job, Worker
-from .utils.cuda import get_gpu_memory_map
+from .utils.cuda import get_gpu_memory_stats
 
 # various settings for reproducibility
 # set random state 
@@ -58,9 +58,9 @@ class TrainingService(object):
     def _print_gpu_memory_stats(self):
         if not self.verbose or not self._cuda:
             return
-        memory_map = get_gpu_memory_map()
-        memory_info = (f"CUDA:{id} ({memory}MB)" for id, memory in memory_map.items())
-        output = ', '.join(memory_info)
+        memory_stats = get_gpu_memory_stats()
+        memory_stats_formatted = (f"CUDA:{id} ({memory[0]}/{memory[1]}MB)" for id, memory in memory_stats.items())
+        output = ', '.join(memory_stats_formatted)
         print(output)
 
     def start(self):
