@@ -160,7 +160,7 @@ class ExploitAndExploreWithDifferentialEvolution(ExploitAndExplore):
         if len(generation) < 3:
             raise ValueError("generation size must be at least 3 or higher.")
         candidate = member.copy()
-        hp_dimension_size = len(member)
+        hp_dimension_size = len(member.parameters)
         x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
         j_rand = random.randrange(0, hp_dimension_size)
         for j in range(hp_dimension_size):
@@ -192,7 +192,7 @@ class DifferentialEvolution(EvolveEngine):
             raise ValueError("generation size must be at least 3 or higher.")
         for member in generation:
             candidate = member.copy()
-            hp_dimension_size = len(member)
+            hp_dimension_size = len(member.parameters)
             x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
             j_rand = random.randrange(0, hp_dimension_size)
             for j in range(hp_dimension_size):
@@ -316,7 +316,7 @@ class SHADE(EvolveEngine):
             # make a copy of the member
             candidate = member.copy()
             # hyper-parameter dimension size
-            dimension_size = len(member)
+            dimension_size = len(member.parameters)
             # control parameter assignment
             self.CR[member.id], self.F[member.id] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
@@ -479,7 +479,7 @@ class LSHADEWithWeightSharing(LSHADE):
             # make a copy of the member
             candidate = member.copy()
             # hyper-parameter dimension size
-            dimension_size = len(member)
+            dimension_size = len(member.parameters)
             # control parameter assignment
             self.CR[member.id], self.F[member.id] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
