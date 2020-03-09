@@ -17,6 +17,8 @@ from .utils.constraint import clip
 from .utils.iterable import flatten_dict
 
 def ylim_outliers(data, minimum=None, maximum=None, strength = 1.5):
+    if len(data) < 2 or len(set(data)) == 1:
+        return
     # calculate summary statistics
     data_mean = mean(data)
     data_std = stdev(data)
