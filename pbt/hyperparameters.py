@@ -3,10 +3,12 @@ import math
 import copy
 import warnings
 from functools import partial
-from typing import Dict
+from typing import Dict, Union, Iterable, TypeVar
 from abc import abstractmethod
 
 from .utils.constraint import translate, clip, reflect
+
+HP_TYPE = TypeVar('X')
 
 class InvalidSearchSpaceException(Exception):
     def __init__(self, *args, **kwargs):
@@ -16,7 +18,7 @@ class _Hyperparameter(object):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.
     '''
-    def __init__(self, *args, value=None, constraint='clip'):
+    def __init__(self, *args : Iterable[HP_TYPE], value : HP_TYPE = None, constraint : str = 'clip'):
         ''' 
         Provide a set of [lower bound, upper bound] as float/int, or categorical elements [obj1, obj2, ..., objn].
         Sets the search space and samples a new candidate from an uniform distribution.
@@ -29,13 +31,13 @@ class _Hyperparameter(object):
         self.search_space = list(args)
         self._normalized = self.from_value(value) if value is not None else random.uniform(self.MIN_NORM, self.MAX_NORM)
 
-    def _translate_from_norm(self, normalized_value) -> float:
+    def _translate_from_norm(self, normalized_value : float) -> float:
         return translate(normalized_value, self.MIN_NORM, self.MAX_NORM, self.lower_bound, self.upper_bound)
     
     def _translate_from_value(self, value) -> float:
         return translate(value, self.lower_bound, self.upper_bound, self.MIN_NORM, self.MAX_NORM)
 
-    def set_constraint(self, constraint):
+    def set_constraint(self, constraint : str):
         if isinstance(constraint, str):
             if constraint == 'clip':
                 self._constrain = partial(clip, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
@@ -95,12 +97,10 @@ class _Hyperparameter(object):
     def sample_uniform(self):
         ''' Samples a new candidate from an uniform distribution bound by the lower and upper bounds. '''
         self._normalized = random.uniform(self.MIN_NORM, self.MAX_NORM)
-        return self.value
 
     def update(self, expression):
         ''' Changes the hyper-parameter value with the given expression. '''
         self._normalized = float(self._constrain(expression(self._normalized)))
-        return self.value
 
     def equal_search_space(self, other) -> bool:
         """Return true if the search space is equal."""
@@ -266,7 +266,7 @@ class ContiniousHyperparameter(_Hyperparameter):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.
     '''
-    def __init__(self, minimum, maximum, value=None, constraint='clip'):
+    def __init__(self, minimum : Union[int, float], maximum : Union[int, float], value : Union[int, float] = None, constraint : str = 'clip'):
         ''' 
         Provide a set of [lower bound, upper bound] as float/int.
         Sets the search space and samples a new candidate from an uniform distribution.
@@ -282,37 +282,37 @@ class ContiniousHyperparameter(_Hyperparameter):
         super().__init__(minimum, maximum, value=value, constraint=constraint)
 
     @property
-    def value(self):
+    def value(self) -> Union[int, float]:
         """Returns the representative hyperparameter value."""
         if self._normalized == None:
             raise ValueError("Developer error. '_normalized' is None.")
         return self.from_normalized(self._normalized)
 
     @value.setter
-    def value(self, value):
+    def value(self, value : Union[int, float]):
         """Sets the hyperparameter value."""
         if not(self.lower_bound <= value <= self.upper_bound):
             warnings.warn(f"The value {value} is outside the search space U({self.lower_bound}, {self.upper_bound}). The value will be constrained.")
         self._normalized = self._constrain(self.from_value(value))
 
     @property
-    def lower_bound(self):
+    def lower_bound(self) -> Union[int, float]:
         ''' Returns the lower bounds of the hyper-parameter search space. If categorical, return the first search space index. '''
         return self.search_space[0]
 
     @property 
-    def upper_bound(self):
+    def upper_bound(self) -> Union[int, float]:
         ''' Returns the upper bounds of the hyper-parameter search space. If categorical, return the last search space index. '''
         return self.search_space[-1]
 
-    def from_value(self, value):
+    def from_value(self, value : Union[int, float]) -> float:
         """Returns a normalized version of the provided value."""
         if isinstance(value, (int, float)):
             return self._translate_from_value(value)
         else:
             raise Exception(f"Non-categorical hyperparameters must be of type {float} or {int}.")
 
-    def from_normalized(self, normalized_value):
+    def from_normalized(self, normalized_value : float) -> Union[int, float]:
         """Returns a search space value from the provided normalized value."""
         constrained = self._constrain(normalized_value)
         trainslated = self._translate_from_norm(constrained)
@@ -324,7 +324,7 @@ class ContiniousHyperparameter(_Hyperparameter):
             raise Exception(f"Non-categorical hyperparameters must be of type {float} or {int}.")
 
 class DiscreteHyperparameter(_Hyperparameter):
-    def __init__(self, *search_space, value=None, constraint='clip'):
+    def __init__(self, *search_space : Iterable[HP_TYPE], value : HP_TYPE = None, constraint : str = 'clip'):
         ''' 
         Provide a set of categorical elements [obj1, obj2, ..., objn].
         Sets the search space and samples a new candidate from an uniform distribution.
@@ -336,357 +336,151 @@ class DiscreteHyperparameter(_Hyperparameter):
         super().__init__(*search_space, value=value, constraint=constraint)
     
     @property
-    def value(self):
+    def value(self) -> HP_TYPE:
         """Returns the representative hyperparameter value."""
         if self._normalized == None:
             raise ValueError("Developer error. '_normalized' is None.")
         return self.from_normalized(self._normalized)
 
     @value.setter
-    def value(self, value):
+    def value(self, value : HP_TYPE):
         """Sets the hyperparameter value."""
         if value not in self.search_space:
             raise ValueError("The provided value must be present in the categorical search space.")
         self._normalized = self._constrain(self.from_value(value))
 
     @property
-    def lower_bound(self):
+    def lower_bound(self) -> int:
         ''' Returns the lower bounds of the hyper-parameter search space. If categorical, return the first search space index. '''
         return 0
 
     @property 
-    def upper_bound(self):
+    def upper_bound(self) -> int:
         ''' Returns the upper bounds of the hyper-parameter search space. If categorical, return the last search space index. '''
         return len(self.search_space) - 1
 
-    def from_value(self, value):
+    def from_value(self, value : HP_TYPE) -> float:
         """Returns a normalized version of the provided value."""
         assert value in self.search_space, f"The provided value {value} does not exist within the categorical search space."
         index = self.search_space.index(value)
         return self._translate_from_value(index)
 
-    def from_normalized(self, normalized_value):
+    def from_normalized(self, normalized_value : float) -> HP_TYPE:
         """Returns a search space value from the provided normalized value."""
         constrained = self._constrain(normalized_value)
         trainslated = self._translate_from_norm(constrained)
         index = int(round(trainslated))
         return self.search_space[index]
 
-    def equal_search_space(self, other):
+    def equal_search_space(self, other) -> bool:
         return isinstance(other, DiscreteHyperparameter) and super().equal_search_space(other)
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         if not isinstance(other, DiscreteHyperparameter):
             raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
         return super().__lt__(other)
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> bool:
         if not isinstance(other, DiscreteHyperparameter):
             raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
         return super().__gt__(other)
 
-    def __le__(self, other):
+    def __le__(self, other) -> bool:
         if not isinstance(other, DiscreteHyperparameter):
             raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
         return super().__le__(other)
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> bool:
         if not isinstance(other, DiscreteHyperparameter):
             raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
         return super().__ge__(other)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, DiscreteHyperparameter):
             raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
         return super().__eq__(other)
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         if not isinstance(other, DiscreteHyperparameter):
             raise ValueError(f"Comparison operations are only supported for values of type {DiscreteHyperparameter}.")
         return super().__ne__(other)
 
 class Hyperparameters(object):
     ''' Class for storing and updating hyperparameters. '''
+    def __init__(self, **hp_groups : Dict[str, Dict[str, _Hyperparameter]]):
+        if not all(isinstance(group, str) and isinstance(hp_dict, dict)
+            and all(isinstance(hp_name, str) and isinstance(hp_value, _Hyperparameter)
+            for hp_name, hp_value in hp_dict.items())
+            for group, hp_dict in hp_groups.items()):
+                raise TypeError(f"Hyperparameters can only contain {_Hyperparameter} objects.")
+        for group, hp_dict in hp_groups.items():
+            setattr(self, group, hp_dict)
 
-    def __init__(self, augment_params : Dict[str, _Hyperparameter], model_params : Dict[str, _Hyperparameter], optimizer_params : Dict[str, _Hyperparameter]):
-        if augment_params and not all(isinstance(hyper_param, _Hyperparameter) for hyper_param in augment_params.values()):
-            raise TypeError(f"General hyperparameters can only contain {_Hyperparameter} objects.")
-        if model_params and not all(isinstance(hyper_param, _Hyperparameter) for hyper_param in model_params.values()):
-            raise TypeError(f"Model hyperparameters can only contain {_Hyperparameter} objects.")
-        if optimizer_params and not all(isinstance(hyper_param, _Hyperparameter) for hyper_param in optimizer_params.values()):
-            raise TypeError(f"Optimizer hyperparameters can only contain {_Hyperparameter} objects.")
-        self.augment : Dict[str, _Hyperparameter] = augment_params  if augment_params else {}
-        self.model : Dict[str, _Hyperparameter] = model_params if model_params else {}
-        self.optimizer : Dict[str, _Hyperparameter] = optimizer_params if optimizer_params else {}
-
-    def __str__(self):
+    def __str__(self) -> str:
         info = []
-        for name, value in self:
-            info.append(f"{name}: {value}\n")
+        for hp_name, hp_value in self.items():
+            info.append(f"{hp_name}: {hp_value}\n")
         return ''.join(info)
 
+    def __len__(self) -> int:
+        return sum(len(hp_name) for hp_name in self.__dict__.values())
+
     def __iter__(self):
-        for parameter in self.augment.items():
-            yield parameter
-        for parameter in self.model.items():
-            yield parameter
-        for parameter in self.optimizer.items():
-            yield parameter
+        for groups in self.__dict__.values():
+            yield from (groups.values())
 
-    def __len__(self):
-        return len(self.augment) + len(self.model) + len(self.optimizer)
-
-    def __getitem__(self, key):
+    def __getitem__(self, key : Union[str, int]) -> _Hyperparameter:
         if isinstance(key, int):
             if not 0 <= key < len(self):
                 raise IndexError("The provided key is out of bounds.")
-            return list(self)[key][1]
+            key = list(self.keys())[key]
         if isinstance(key, str):
-            split_key = key.split("/")
-            if len(split_key) != 2:
+            key_split = tuple(key.split("/"))
+            if len(key_split) != 2:
                 raise IndexError("Key string with bad syntax. Use 'param_group/param_name'.")
-            split_key[0] = "augment" if split_key[0] == "general" else split_key[0]
-            group = getattr(self, split_key[0])
-            return group[split_key[1]]
-        raise ValueError("Key types supported are int and str of syntax 'param_group/param_name'.")
+            group_name, hp_name = key_split
+            group = getattr(self, group_name)
+            return group[hp_name]
+        raise ValueError("Key types supported are integer or string of syntax 'param_group/param_name'.")
 
-    def __setitem__(self, key, value):
-        if not 0 <= key < len(self):
-            raise IndexError("The provided key is out of bounds.")
-        if key < len(self.augment):
-            param_name = list(self.augment)[key]
-            self.augment[param_name] = value
-        elif key < len(self.augment) + len(self.model):
-            param_name = list(self.model)[key - len(self.augment)]
-            self.model[param_name] = value
-        else:
-            param_name = list(self.optimizer)[key - len(self.augment) - len(self.model)]
-            self.optimizer[param_name] = value
-        
-    def values(self):
-        return (i[1] for i in self)
+    def __setitem__(self, key : Union[str, int], value : _Hyperparameter):
+        if isinstance(key, int):
+            if not 0 <= key < len(self):
+                raise IndexError("The provided key is out of bounds.")
+            key = list(self.keys())[key]
+        if isinstance(key, str):
+            key_split = tuple(key.split("/"))
+            if len(key_split) != 2:
+                raise IndexError("Key string with bad syntax. Use 'param_group/param_name'.")
+            group_name, hp_name = key_split
+            group = getattr(self, group_name)
+            group[hp_name] = value
+            return
+        raise ValueError("Key types supported are integer or string of syntax 'param_group/param_name'.")
 
-    def names(self):
-        return (i[0] for i in self)
+    def items(self):
+        for groups in self.__dict__.values():
+            yield from (groups.items())
+
+    def _key_to_index(self, key : str) -> int:
+        if not isinstance(key, str):
+            raise IndexError("Key must be of type string.")
+        key_split = tuple(key.split("/"))
+        if len(key_split) != 2:
+            raise IndexError("Key string with bad syntax. Use 'param_group/param_name'.")
+        group_name, hp_name = key_split
+        running_length = 0
+        for _group_name in self.__dict__:
+            group_dict = getattr(self, group_name)
+            if group_name != _group_name:
+                running_length += len(group_dict)
+                continue
+            if hp_name not in group_dict:
+                raise KeyError(f"hyperparameter '{hp_name}' does not exist in group '{group_name}'")
+            return running_length + list(group_dict.keys()).index(hp_name)
+        raise KeyError(f"group '{group_name}' does not exist.")
 
     def keys(self):
-        general_paths = [f"augment/{parameter}" for parameter in self.augment]
-        model_paths = [f"model/{parameter}" for parameter in self.model]
-        optimizer_paths = [f"optimizer/{parameter}" for parameter in self.optimizer]
-        return general_paths + model_paths + optimizer_paths
-
-    def categorical(self):
-        return {hp_name: hp_object for hp_name, hp_object in self if isinstance(hp_object, DiscreteHyperparameter)}
-
-    def non_categorical(self):
-        return {hp_name: hp_object for hp_name, hp_object in self if not isinstance(hp_object, DiscreteHyperparameter)}
-
-    def set(self, list):
-        length = len(self)
-        if len(list) != length:
-            raise ValueError("The provided hyperparameter list must be of same length as this configuration.")
-        for index in range(length):
-            self[index] += list[index]
-
-    def get_augment_value_dict(self):
-        return {name:param.value for name, param in self.augment.items()}
-
-    def get_model_value_dict(self):
-        return {name:param.value for name, param in self.model.items()}
-
-    def get_optimizer_value_dict(self):
-        return {name:param.value for name, param in self.optimizer.items()}
-
-    def equal_search_space(self, other):
-        # Check if each hyperparameter type is of same length
-        if len(self.augment) != len(other.augment):
-            return False
-        if len(self.model) != len(other.model):
-            return False
-        if len(self.optimizer) != len(other.optimizer):
-            return False
-        # Check if hyperparameter names are equal
-        if self.augment.keys() != other.augment.keys():
-            return False
-        if self.model.keys() != other.model.keys():
-            return False
-        if self.optimizer.keys() != other.optimizer.keys():
-            return False
-        # Check if every hyperparameter dimension is of equal search space.
-        for index in range(len(self)):
-            if not self[index].equal_search_space(other[index]):
-                return False
-        return True
-
-    def __add__(self, other):
-        new_hp = copy.deepcopy(self)
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Addition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                new_hp[index] = self[index] + other[index]
-            return new_hp
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                new_hp[index] = self[index] + other
-            return new_hp
-        else:
-            raise ValueError(f"Addition is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __sub__(self, other):
-        new_hp = copy.deepcopy(self)
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Subtraction is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                new_hp[index] = self[index] - other[index]
-            return new_hp
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                new_hp[index] = self[index] - other
-            return new_hp
-        else:
-            raise ValueError(f"Subtraction is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __mul__(self, other):
-        new_hp = copy.deepcopy(self)
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Multiplication is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                new_hp[index] = self[index] * other[index]
-            return new_hp
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                new_hp[index] = self[index] * other
-            return new_hp
-        else:
-            raise ValueError(f"Multiplication is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __truediv__(self, other):
-        new_hp = copy.deepcopy(self)
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Divition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                new_hp[index] = self[index] / other[index]
-            return new_hp
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                new_hp[index] = self[index] / other
-            return new_hp
-        else:
-            raise ValueError(f"Divition is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __pow__(self, other):
-        new_hp = copy.deepcopy(self)
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Exponentiation is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                new_hp[index] = self[index] ** other[index]
-            return new_hp
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                new_hp[index] = self[index] ** other
-            return new_hp
-        else:
-            raise ValueError(f"Exponentiation is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __iadd__(self, other):
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not self.equal_search_space(other):
-                raise ValueError("Addition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                self[index] += other[index]
-            return self
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                self[index] += other
-            return self
-        else:
-            raise ValueError(f"Addition is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __isub__(self, other):
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not self.equal_search_space(other):
-                raise ValueError("Subtraction is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                self[index] -= other[index]
-            return self
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                self[index] -= other
-            return self
-        else:
-            raise ValueError(f"Subtraction is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __imul__(self, other):
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not self.equal_search_space(other):
-                raise ValueError("Multiplication is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                self[index] *= other[index]
-            return self
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                self[index] *= other
-            return self
-        else:
-            raise ValueError(f"Multiplication is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __idiv__(self, other):
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not self.equal_search_space(other):
-                raise ValueError("Divition is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                self[index] /= other[index]
-            return self
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                self[index] /= other
-            return self
-        else:
-            raise ValueError(f"Divition is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __ipow__(self, other):
-        length = len(self)
-        if isinstance(other, Hyperparameters):
-            if not self.equal_search_space(other):
-                raise ValueError("Exponentiation is not supported for hyperparameter configurations of unequal search spaces.")
-            for index in range(length):
-                self[index] **= other[index]
-            return self
-        elif isinstance(other, (float, int)):
-            for index in range(length):
-                self[index] **= other
-            return self
-        else:
-            raise ValueError(f"Exponentiation is supported for values of type {Hyperparameters}, {float} or {int}.")
-
-    def __eq__(self, other):
-        if isinstance(other, Hyperparameters):
-            for (param_name_1, param_value_1), (param_name_2, param_value_2) in zip(self, other):
-                if param_value_1 != param_value_2 or param_name_1 != param_name_2:
-                    return False
-            return True
-        else:
-            raise ValueError(f"Comparison is supported for values of type {Hyperparameters}.")
-
-    def __ne__(self, other):
-        if isinstance(other, Hyperparameters):
-            for (param_name_1, param_value_1), (param_name_2, param_value_2) in zip(self, other):
-                if param_value_1 != param_value_2 or param_name_1 != param_name_2:
-                    return True
-            return False
-        else:
-            raise ValueError(f"Comparison is supported for values of type {Hyperparameters}.")
+        for group_name, group_dict in self.__dict__.items():
+            for hp_name in group_dict:
+                yield f"{group_name}/{hp_name}"

@@ -45,7 +45,7 @@ class RandomSearch(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member.parameters.values()]
+        [hp.sample_uniform() for hp in member.parameters]
 
     def on_evolve(self, generation : Generation, logger) -> MemberState:
         """Simply returns the member. No mutation conducted."""
@@ -63,16 +63,16 @@ class RandomWalk(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member.parameters.values()]
+        [hp.sample_uniform() for hp in member.parameters]
 
     def on_evolve(self, generation : Generation, logger) -> MemberState:
         """ Explore search space with random walk. """
         for member in generation:
             logger(f"exploring member {member.id}...")
             explorer = member.copy()
-            for hp in explorer:
-                walk_factor = random.uniform(-self.explore_factor, self.explore_factor)
-                hp += walk_factor
+            for index, _ in enumerate(explorer.parameters):
+                perturb_factor = random.uniform(-self.explore_factor, self.explore_factor)
+                explorer[index] = explorer[index] * perturb_factor
             yield explorer
 
     def on_evaluation(self, candidate : MemberState, logger) -> MemberState:
@@ -92,7 +92,7 @@ class ExploitAndExplore(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member.parameters.values()]
+        [hp.sample_uniform() for hp in member.parameters]
 
     def on_evolve(self, generation : Generation, logger) -> MemberState:
         """ Exploit best peforming members and explores all search spaces with random perturbation. """
@@ -126,9 +126,9 @@ class ExploitAndExplore(EvolveEngine):
         """Perturb all parameters by the defined explore_factors."""
         logger(f"exploring member {member.id}...")
         explorer = member.copy()
-        for hp in explorer:
+        for index, _ in enumerate(explorer.parameters):
             perturb_factor = random.choice(self.explore_factors)
-            hp *= perturb_factor
+            explorer[index] = explorer[index] * perturb_factor
         return explorer
 
 class ExploitAndExploreWithDifferentialEvolution(ExploitAndExplore):
@@ -181,7 +181,7 @@ class DifferentialEvolution(EvolveEngine):
 
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member.parameters.values()]
+        [hp.sample_uniform() for hp in member.parameters]
 
     def on_evolve(self, member : MemberState, generation : Generation, logger) -> Tuple[MemberState, MemberState]:
         """
@@ -298,7 +298,7 @@ class SHADE(EvolveEngine):
         
     def on_member_spawn(self, member : MemberState, logger):
         """Called for each new member."""
-        [hp.sample_uniform() for hp in member.parameters.values()]
+        [hp.sample_uniform() for hp in member.parameters]
 
     def on_generation_start(self, generation : Generation, logger):
         self.memory.reset()

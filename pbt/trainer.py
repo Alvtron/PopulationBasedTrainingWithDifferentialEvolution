@@ -48,7 +48,8 @@ class Trainer(object):
 
     def create_optimizer(self, model : HyperNet, hyper_parameters : Hyperparameters, optimizer_state : dict  = None):
         self._print("creating optimizer...")
-        optimizer = self.optimizer_class(model.parameters(), **hyper_parameters.get_optimizer_value_dict())
+        get_value_dict = {hp_name:hp_value.value for hp_name, hp_value in hyper_parameters.optimizer.items()}
+        optimizer = self.optimizer_class(model.parameters(), **get_value_dict)
         if optimizer_state:
             self._print("loading optimizer state...")
             optimizer.load_state_dict(optimizer_state)

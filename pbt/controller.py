@@ -116,7 +116,7 @@ class Controller(object):
                 scalar_value=time_value,
                 global_step=member.steps)
         # plot hyper-parameters
-        for hparam_name, hparam in member.parameters:
+        for hparam_name, hparam in member.parameters.items():
             self._tensorboard_writer.add_scalar(
                 tag=f"hyperparameters/{hparam_name}/{member.id:03d}",
                 scalar_value=hparam.normalized if isinstance(hparam, DiscreteHyperparameter) else hparam.value,

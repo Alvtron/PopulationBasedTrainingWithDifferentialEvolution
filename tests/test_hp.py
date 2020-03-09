@@ -67,82 +67,48 @@ def categorical_hyperparameter_test():
 def hyperparameter_configuration_test():
     print("Hyperparameter Configuration Test")
     hp1 = Hyperparameters(
-            augment_params = {
+            augment = {
                 'a': ContiniousHyperparameter(1, 256)},
-            model_params = {
+            model = {
                 'b': ContiniousHyperparameter(1e-6, 1e-0)},
-            optimizer_params = {
+            optimizer = {
                 'c': ContiniousHyperparameter(0.0, 1e-5),
                 'd': DiscreteHyperparameter(False, True)
                 })
     hp2 = Hyperparameters(
-            augment_params = {
+            augment = {
                 'a': ContiniousHyperparameter(1, 256)},
-            model_params = {
+            model = {
                 'b': ContiniousHyperparameter(1e-6, 1e-0)},
-            optimizer_params = {
+            optimizer = {
                 'c': ContiniousHyperparameter(0.0, 1e-5),
                 'd': DiscreteHyperparameter(False, True)
                 })
 
     print(len(hp1))
-    print(hp1 == hp2)
-    print(hp1 != hp2)
 
-    print(hp1.values())
-    print(hp1.normalized)
+    print("items")
+    print(list(hp1.items()))
+    print("hps")
+    print(list(hp1))
 
-    for param_name, param_value in hp1:
-        print(param_name, param_value)
-    for param_name, param_value in hp2:
+    for param_name, param_value in hp1.items():
         print(param_name, param_value)
 
-    print("hp1 + hp2:")
-    a = hp1 + hp2
+    print(hp1)
 
-    for param_name, param_value in a:
+    for param_name, param_value in hp1.items():
         print(param_name, param_value)
-
-    print("hp1 + 0.5:")
-    b = hp1 + 0.5
-
-    for param_name, param_value in b:
-        print(param_name, param_value)
-
-    print("hp1 - 0.5:")
-    c = hp1 - 0.5
-
-    for param_name, param_value in c:
-        print(param_name, param_value)
-
-    print("hp1 += hp2:")
-    hp1 += hp2
-
-    for param_name, param_value in hp1:
+    for param_name, param_value in hp2.items():
         print(param_name, param_value)
 
     print("--")
     print("Hyperparameter Alteration Test")
-    params = [
-        ContiniousHyperparameter(1, 256),
-        ContiniousHyperparameter(1e-6, 1e-0),
-        ContiniousHyperparameter(0.0, 1e-5),
-        DiscreteHyperparameter(False, True)]
-
-    hp1.set(params)
-    for param_name, param_value in hp1:
-        print(param_name, param_value)
-    
-    print("--")
 
     print("hp1[1] =", hp1[1])
     print("changing hp1[1]...")
-    hp1[1] = ContiniousHyperparameter(1e-6, 1e-0)
+    hp1[1] = ContiniousHyperparameter(1e-6, 1e-0, value=1.0)
     print("hp1[1] =", hp1[1])
-
-    print("--")
-    print("optimizer value dict:")
-    print(hp1.get_optimizer_value_dict())
 
     print("--")
     print("print with for loop with indices:")

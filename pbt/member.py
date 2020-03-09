@@ -54,6 +54,14 @@ class MemberState(object):
     def score(self):
         raise NotImplementedError
 
+    def __getitem__(self, index : int) -> float:
+        return self.parameters[index].normalized
+
+    def __setitem__(self, index : int, value : float):
+        if not isinstance(value, float):
+            raise TypeError()
+        self.parameters[index].normalized = value
+
     def __str__(self) -> str:
         return f"Member {self.id:03d}"
 
@@ -133,20 +141,6 @@ class Checkpoint(MemberState):
 
     def __str__(self) -> str:
         return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"
-    
-    def __iter__(self):
-        return (parameter.normalized for parameter in self.parameters.values())
-
-    def __len__(self) -> int:
-        return len(self.parameters)
-
-    def __getitem__(self, index : int) -> float:
-        return self.parameters[index].normalized
-
-    def __setitem__(self, index : int, value : float):
-        if not isinstance(value, float):
-            raise TypeError()
-        self.parameters[index].normalized = value
 
     def __eq__(self, other) -> bool:
         if other is None:

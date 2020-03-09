@@ -45,11 +45,13 @@ evaluator = Evaluator(
     model_class=task.model_class,
     test_data=task.datasets.eval,
     batch_size=batch_size,
+    loss_group='eval',
     loss_functions=task.loss_functions)
 tester = Evaluator(
     model_class=task.model_class,
     test_data=task.datasets.test,
     batch_size=batch_size,
+    loss_group='test',
     loss_functions=task.loss_functions)
 hp = Hyperparameters(
     augment_params=None,
@@ -62,7 +64,7 @@ hp = Hyperparameters(
 step_size = 100
 checkpoint = Checkpoint(
     id=0,
-    hyper_parameters=hp,
+    parameters=hp,
     loss_metric=loss_metric,
     eval_metric=eval_metric,
     minimize=loss_functions[eval_metric].minimize)
@@ -71,17 +73,10 @@ checkpoint = Checkpoint(
 print("training...")
 while(checkpoint.epochs < epochs):
     start_train_time_ns = time.time_ns()
-    checkpoint.model_state, checkpoint.optimizer_state, checkpoint.epochs, checkpoint.steps, checkpoint.loss['train'] = trainer(
-        hyper_parameters=checkpoint.parameters,
-        model_state=checkpoint.model_state,
-        optimizer_state=checkpoint.optimizer_state,
-        epochs=checkpoint.epochs,
-        steps=checkpoint.steps,
-        step_size=step_size,
-        device=device)
+    trainer(checkpoint, step_size, device)
     checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
     start_eval_time_ns = time.time_ns()
-    checkpoint.loss['eval'] = evaluator(checkpoint.model_state, device)
+    evaluator(checkpoint, device)
     checkpoint.time['eval'] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
     print(f"Time: {checkpoint.time['train']:.2f}s train, {checkpoint.time['eval']:.2f}s eval")
     print(f"epoch {checkpoint.epochs}, step {checkpoint.steps}, {checkpoint.performance_details()}")
@@ -89,5 +84,5 @@ while(checkpoint.epochs < epochs):
     checkpoint.parameters.optimizer['momentum'] *= random.uniform(0.8, 1.2)
 # test
 print("testing...")
-checkpoint.loss['test'] = tester(checkpoint.model_state, device)
+tester(checkpoint, device)
 print(checkpoint.performance_details())
