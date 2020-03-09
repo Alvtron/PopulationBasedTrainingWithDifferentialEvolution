@@ -97,7 +97,7 @@ class Worker(CONTEXT.Process):
             return train_and_evaluate(job.checkpoints[0], self.trainer, self.evaluator, job.step_size, self.device, self.__log, self.verbose)
         else:
             return tuple(train_and_evaluate(checkpoint, self.trainer, self.evaluator, job.step_size, self.device, self.__log, self.verbose) for checkpoint in job.checkpoints)
-    def _training_loop(self):
+    def run(self):
         self.__log("running...")
         # set random state for reproducibility
         random.seed(self.random_seed)
