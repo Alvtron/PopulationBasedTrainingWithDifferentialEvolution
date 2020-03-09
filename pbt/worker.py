@@ -124,8 +124,7 @@ class Worker(CONTEXT.Process):
                 self.receive_queue.put(job)
                 break
             finally:
-                # Regular multiprocessing workers don't fully clean up after themselves,
-                # so we have to explicitly trigger garbage collection to make sure that all
+                # Explicitly trigger garbage collection to make sure that all
                 # destructors are called...
                 gc.collect()
         self.__log("stopped.")

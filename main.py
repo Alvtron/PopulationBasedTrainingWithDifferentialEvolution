@@ -181,6 +181,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         test_data = _task.datasets.eval,
         loss_functions=_task.loss_functions,
         batch_size = batch_size,
+        loss_group = 'eval',
         verbose=False)
     print(f"Creating tester...")
     TESTER = Evaluator(
@@ -188,6 +189,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         test_data = _task.datasets.test,
         loss_functions=_task.loss_functions,
         batch_size = batch_size,
+        loss_group = 'test',
         verbose=False)
     # define controller
     print(f"Creating evolver...")

@@ -1,28 +1,26 @@
 import os
 import gc
 import sys
-import copy
 import time
 import math
 import random
-import warnings
 import itertools
-from functools import partial
+import warnings
+import subprocess
 from typing import List, Dict, Tuple, Sequence, Callable
 from functools import partial
-from dataclasses import dataclass
 from multiprocessing.context import BaseContext
 from multiprocessing.pool import ThreadPool
 
-import torch
 import numpy as np
+import torch
 
 import pbt.member
 from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
+from .utils.iterable import split_number_evenly
 from .utils.cuda import get_gpu_memory_map
-from .worker import STOP_FLAG, Job, Worker
 
 # various settings for reproducibility
 # set random state 
@@ -37,48 +35,108 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_descriptor')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
+def log(message : str):
+    prefix = f"PID {os.getpid()}"
+    print(f"{prefix}: {message}")
+
+def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, verbose : bool = False):
+    # load checkpoint state
+    if verbose: log("loading checkpoint state...")
+    try:
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
+    except MissingStateError:
+        warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
+    if verbose: log(f"Memory allocated on device {device}: {get_gpu_memory_map()}")
+    # train checkpoint model
+    if verbose: log("training...")
+    trainer(checkpoint, step_size, device)
+    # evaluate checkpoint model
+    if verbose: log("evaluating...")
+    evaluator(checkpoint, device)
+    # unload checkpoint state
+    if verbose: log("unloading checkpoint state...")
+    checkpoint.unload_state(device=device)
+    return checkpoint
+
+class Job:
+    def __init__(self, checkpoints : Tuple[Checkpoint], step_size : int, device : str, verbose : bool = False):
+        if isinstance(checkpoints, Sequence) and all(isinstance(checkpoint, Checkpoint) for checkpoint in checkpoints):
+            self.checkpoints = checkpoints
+        elif isinstance(checkpoints, Checkpoint):
+            self.checkpoints = tuple([checkpoints])
+        else:
+            raise TypeError
+        if not isinstance(step_size, int):
+            raise TypeError
+        if not isinstance(device, str):
+            raise TypeError
+        self.step_size = step_size
+        self.device = device
+        self.verbose = verbose
+
+class FitnessFunction(object):
+    def __init__(self, trainer : Trainer, evaluator : Evaluator):
+        self.trainer = trainer
+        self.evaluator = evaluator
+
+    def __call__(self, job : Job) -> Tuple[Checkpoint, ...]:
+        fit_function = partial(train_and_evaluate, trainer=self.trainer, evaluator=self.evaluator,
+            step_size=job.step_size, device=job.device, verbose=job.verbose)
+        if not job.checkpoints:
+            raise ValueError("No checkpoints available in job-object.")
+        if job.device.startswith('cuda'):
+            with torch.cuda.device(job.device):
+                if len(job.checkpoints) == 1:
+                    return fit_function(job.checkpoints[0])
+                else:
+                    return tuple(fit_function(candidate) for candidate in job.checkpoints)
+        else:
+            if len(job.checkpoints) == 1:
+                return fit_function(job.checkpoints[0])
+            else:
+                return tuple(fit_function(candidate) for candidate in job.checkpoints)
+        
+
 class TrainingService(object):
-    def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),
-            n_jobs : int = 1, verbose : bool = False):
+    def __init__(self, trainer : Trainer, evaluator : Evaluator,
+            devices : List[str] = ['cpu'], n_jobs : int = 1, threading : bool = False, verbose : bool = False):
         super().__init__()
-        if n_jobs < len(devices):
-            raise ValueError("n_jobs must be larger or equal the number of devices.")
-        self.context = torch.multiprocessing.get_context('spawn')
+        self.fitness_function = FitnessFunction(trainer=trainer, evaluator=evaluator)
         self.n_jobs = n_jobs
         self.verbose = verbose
-        self._end_event = self.context.Event()
-        self._return_queue = self.context.Queue()
-        send_queues = [self.context.Queue() for _ in devices]
-        workers = list()
-        for id, send_queue, device in zip(range(self.n_jobs), itertools.cycle(send_queues), itertools.cycle(devices)):
-            worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
-                trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose)
-            workers.append(worker)
-        self._workers : Tuple[Worker] = tuple(workers)
+        self.devices = tuple(devices)
+        self.__pools = None
+    
+    def is_alive(self):
+        return self.__pools is not None
 
     def start(self):
-        if self._workers is None:
-            raise Exception("No workers found.")
-        if any(worker.is_alive() for worker in self._workers):
+        if self.is_alive():
             raise Exception("Service is already running. Consider calling stop() when service is not in use.")
-        [worker.start() for worker in self._workers]
+        n_job_distribution = split_number_evenly(self.n_jobs, len(self.devices))
+        self.__pools = tuple(CONTEXT.Pool(processes=n_jobs) for device, n_jobs in zip(self.devices, n_job_distribution))
 
     def stop(self):
-        if not any(worker.is_alive() for worker in self._workers):
+        if not self.is_alive():
             warnings.warn("Service is not running.")
             return
-        self._end_event.set()
-        [worker.receive_queue.put(STOP_FLAG) for worker in self._workers]
-        [worker.join() for worker in self._workers]
-        [worker.close() for worker in self._workers]
+        [pool.close() for pool in self.__pools]
+        [pool.join() for pool in self.__pools]
+        self.__pools = None
+    
+    def terminate(self):
+        if not self.is_alive():
+            warnings.warn("Service is not running.")
+            return
+        [pool.terminate() for pool in self.__pools]
+        [pool.join() for pool in self.__pools]
+        self.__pools = None
+
+    def create_jobs(self, candidates : Sequence, step_size : int) -> Sequence[Job]:
+        for checkpoints, device in zip(candidates, itertools.cycle(self.devices)):
+            yield Job(checkpoints, step_size, device, self.verbose)
 
     def train(self, candidates : Sequence, step_size : int):
-        n_sent = 0
-        n_returned = 0
-        for checkpoints, worker in zip(candidates, itertools.cycle(self._workers)):
-            job = Job(checkpoints, step_size)
-            worker.receive_queue.put(job)
-            n_sent += 1
-        while n_returned != n_sent:
-            yield self._return_queue.get()
-            n_returned += 1
+        jobs = self.create_jobs(candidates, step_size)
+        tasks = [pool.apply_async(self.fitness_function, (job,)) for job, pool in zip(jobs, itertools.cycle(self.__pools))]
+        yield from (task.get() for task in tasks)

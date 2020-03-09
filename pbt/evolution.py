@@ -120,12 +120,11 @@ class ExploitAndExplore(EvolveEngine):
             exploiter.copy_state(elitist)
             return exploiter, True
         else:
-            logger(f"exploitation not needed.")
             return exploiter, False
 
     def explore(self, member : MemberState, logger) -> MemberState:
         """Perturb all parameters by the defined explore_factors."""
-        logger("exploring...")
+        logger(f"exploring member {member.id}...")
         explorer = member.copy()
         for hp in explorer:
             perturb_factor = random.choice(self.explore_factors)

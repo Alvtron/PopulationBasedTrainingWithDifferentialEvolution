@@ -20,6 +20,7 @@ class Trainer(object):
     def __init__(
             self, model_class : HyperNet, optimizer_class : Optimizer, train_data : Dataset, batch_size : int,
             loss_functions : dict, loss_metric : str, verbose : bool = False):
+        self.LOSS_GROUP = 'train'
         self.model_class = model_class
         self.optimizer_class = optimizer_class
         self.train_data = train_data
@@ -73,7 +74,7 @@ class Trainer(object):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
         start_train_time_ns = time.time_ns()
-        checkpoint.loss['train'] = dict.fromkeys(self.loss_functions, 0.0)
+        checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
         END_STEPS = checkpoint.steps + step_size
         # preparing model and optimizer
         self._print("Creating model...")
@@ -95,7 +96,7 @@ class Trainer(object):
                     if metric_type == self.loss_metric:
                         # 2. Compute loss and save loss.
                         loss = metric_function(output, y)
-                        checkpoint.loss['train'][metric_type] += loss.item() / float(step_size)
+                        checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(step_size)
                         # 3. Before the backward pass, use the optimizer object to zero all of the gradients
                         # for the variables it will update (which are the learnable weights of the model).
                         optimizer.zero_grad()
@@ -107,7 +108,7 @@ class Trainer(object):
                         # 2. Compute loss and save loss
                         with torch.no_grad():
                             loss = metric_function(output, y)
-                        checkpoint.loss['train'][metric_type] += loss.item() / float(step_size)
+                        checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(step_size)
                     self._print(f"{metric_type}: {loss.item():4f}", end=" ")
                     del loss
                 del output
@@ -124,4 +125,4 @@ class Trainer(object):
         del model
         del optimizer
         torch.cuda.empty_cache()
-        checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
+        checkpoint.time[self.LOSS_GROUP] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
