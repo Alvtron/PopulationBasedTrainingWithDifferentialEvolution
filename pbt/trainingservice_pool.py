@@ -84,10 +84,18 @@ class FitnessFunction(object):
             step_size=job.step_size, device=job.device, verbose=job.verbose)
         if not job.checkpoints:
             raise ValueError("No checkpoints available in job-object.")
-        elif len(job.checkpoints) == 1:
-            return fit_function(job.checkpoints[0])
+        if job.device.startswith('cuda'):
+            with torch.cuda.device(job.device):
+                if len(job.checkpoints) == 1:
+                    return fit_function(job.checkpoints[0])
+                else:
+                    return tuple(fit_function(candidate) for candidate in job.checkpoints)
         else:
-            return tuple(fit_function(candidate) for candidate in job.checkpoints)
+            if len(job.checkpoints) == 1:
+                return fit_function(job.checkpoints[0])
+            else:
+                return tuple(fit_function(candidate) for candidate in job.checkpoints)
+        
 
 class TrainingService(object):
     def __init__(self, trainer : Trainer, evaluator : Evaluator,

@@ -69,7 +69,9 @@ class Trainer(object):
             shuffle = False,
             num_workers=0))
 
-    def _train(self, checkpoint : Checkpoint, step_size : int, device : str):
+    def __call__(self, checkpoint : Checkpoint, step_size : int = 1, device : str = 'cpu'):
+        if step_size < 1:
+            raise ValueError("The number of steps must be at least one or higher.")
         start_train_time_ns = time.time_ns()
         checkpoint.loss['train'] = dict.fromkeys(self.loss_functions, 0.0)
         END_STEPS = checkpoint.steps + step_size
@@ -123,17 +125,3 @@ class Trainer(object):
         del optimizer
         torch.cuda.empty_cache()
         checkpoint.time['train'] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
-
-    def _train_on_gpu(self, checkpoint : Checkpoint, step_size : int, device : str):
-        with torch.cuda.device(device):
-            self._train(checkpoint, step_size, device)
-
-    def __call__(self, checkpoint : Checkpoint, step_size : int = 1, device : str = 'cpu'):
-        if step_size < 1:
-            raise ValueError("The number of steps must be at least one or higher.")
-        if device == 'cpu':
-            self._train(checkpoint, step_size, device)
-        elif device.startswith('cuda'):
-            self._train(checkpoint, step_size, device)
-        else:
-            raise NotImplementedError(f"Device '{device}' is not supported.")

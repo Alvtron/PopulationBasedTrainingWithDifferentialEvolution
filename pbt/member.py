@@ -188,36 +188,27 @@ class Checkpoint(MemberState):
         """Returns true if the checkpoint has any state files."""
         return self.has_model_state_files() or self.has_optimizer_state_files() 
 
-    def _load_state(self, device : str, missing_ok : bool):
-        if not self.has_model_state_files():
+    def load_state(self, device : str = 'cpu', missing_ok : bool = False):
+        """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
+        # load model state
+        if self.has_model_state_files():
+            self.model_state = torch.load(self.__model_state_path(), map_location=device)
+        else:
             if missing_ok:
                 self.model_state = None
             else:
                 raise MissingStateError(f"Model state file is missing at {self.__model_state_path()}")
+        # load optimizer state
+        if self.has_optimizer_state_files():
+            self.optimizer_state = torch.load(self.__optimizer_state_path(), map_location=device)
         else:
-            self.model_state = torch.load(self.__model_state_path(), map_location=device)
-        if not self.has_optimizer_state_files():
             if missing_ok:
                 self.optimizer_state = None
             else:
                 raise MissingStateError(f"Optimizer state file is missing at {self.__model_state_path()}")
-        else:
-            self.optimizer_state = torch.load(self.__optimizer_state_path(), map_location=device)
 
-    def _load_state_on_gpu(self, device : str, missing_ok : bool):
-        with torch.cuda.device(device):
-            self._load_state(device, missing_ok)
-
-    def load_state(self, device : str = 'cpu', missing_ok : bool = False):
-        """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
-        if device == 'cpu':
-            self._load_state(device, missing_ok)
-        elif device.startswith('cuda'):
-            self._load_state_on_gpu(device, missing_ok)
-        else:
-            raise NotImplementedError(f"Device '{device}' is not supported.")
-
-    def _unload_state(self, device : str):
+    def unload_state(self, device : str = 'cpu'):
+        """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""
         if self.model_state is None:
             raise AttributeError("Can't unload when model state is None. Nothing to unload.")
         if self.optimizer_state is None:
@@ -230,19 +221,6 @@ class Checkpoint(MemberState):
         # delete state objects
         del self.model_state
         del self.optimizer_state
-
-    def _unload_state_on_gpu(self, device : str):
-        with torch.cuda.device(device):
-            self._unload_state(device)
-
-    def unload_state(self, device : str = 'cpu'):
-        """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""
-        if device == 'cpu':
-            self._unload_state(device)
-        elif device.startswith('cuda'):
-            self._unload_state_on_gpu(device)
-        else:
-            raise NotImplementedError(f"Device '{device}' is not supported.")
 
     def delete_state(self):
         """Deletes the state, both in-memory and any existing local files."""
