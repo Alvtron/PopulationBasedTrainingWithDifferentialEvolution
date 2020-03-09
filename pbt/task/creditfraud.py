@@ -30,7 +30,6 @@ class CreditCardFraud(Task):
     @property
     def hyper_parameters(self) -> Hyperparameters:
         return Hyperparameters(
-            augment_params=None,
             model_params= self.model_class.create_hyper_parameters(),
             optimizer_params={
                 'lr': ContiniousHyperparameter(1e-6, 1e-1),
