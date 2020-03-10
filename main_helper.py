@@ -89,7 +89,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     # prepare database
     print(f"Preparing database...")
     database = Database(
-        directory_path=f"{directory}/{'old' if old_controller else 'new'}/{task}/p{population_size}_steps{step_size}_batch{batch_size}_nfe{end_nfe}/{evolver}",
+        directory_path=f"{directory}/{'old' if old_controller else 'new'}_{task}_p{population_size}_steps{step_size}_batch{batch_size}_nfe{end_nfe}_{evolver}",
         read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
