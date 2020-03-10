@@ -145,6 +145,9 @@ class Checkpoint(MemberState):
     def test_score(self) -> float:
         return self.loss['test'][self.eval_metric] if 'test' in self.loss and self.eval_metric in self.loss['test'] else None
 
+    def has_state(self) -> bool:
+        return self.model_state is not None and self.optimizer_state is not None
+
     def load_state(self, device : str = 'cpu', missing_ok : bool = False):
         """Move all tensors in state to specified device. Call unload_state to move state back to cpu. Raises error if states are not available."""
         # load model state

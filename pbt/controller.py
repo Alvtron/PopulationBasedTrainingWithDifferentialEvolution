@@ -147,7 +147,7 @@ class Controller(object):
         if len(self.population.generations) < self.history_limit + 1:
             return
         for member in self.population.generations[-(self.history_limit + 1)]:
-            if not member.has_state_files():
+            if not member.has_state():
                 # skipping the member as it has no state to delete
                 continue
             self._whisper(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.4f}...")
