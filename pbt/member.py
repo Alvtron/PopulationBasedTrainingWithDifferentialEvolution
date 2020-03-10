@@ -16,23 +16,6 @@ from .utils.iterable import chunks, insert_sequence
 from .hyperparameters import ContiniousHyperparameter, _Hyperparameter, Hyperparameters
 from .utils.iterable import modify_iterable
 
-# extend Path to include copy method
-def _copy(self, target):
-    assert self.is_file()
-    shutil.copy(self, target)
-Path.copy = _copy
-
-# global member state directory
-MEMBER_STATE_DIRECTORY = Path('.member_states')
-# ensure that the state directory is created
-MEMBER_STATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
-
-def clear_member_states():
-    # delete folder
-    shutil.rmtree(MEMBER_STATE_DIRECTORY)
-    # create folder
-    MEMBER_STATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
-
 def prepare_score(value):
     if hasattr(value, "score"):
         return value.score() if not math.isnan(value.score()) and not math.isinf(value.score()) else None
@@ -161,74 +144,41 @@ class Checkpoint(MemberState):
 
     def test_score(self) -> float:
         return self.loss['test'][self.eval_metric] if 'test' in self.loss and self.eval_metric in self.loss['test'] else None
-    
-    def __state_directory_path(self) -> Path:
-        return Path(MEMBER_STATE_DIRECTORY, f"{self.steps}/{self.id}")
-
-    def __model_state_path(self) -> Path:
-        return Path(self.__state_directory_path(), "model_state.pth")
-
-    def __optimizer_state_path(self) -> Path:
-        return Path(self.__state_directory_path(), "optimizer_state.pth")
-
-    def has_model_state_files(self) -> bool:
-        """Returns true if the checkpoint has a model state file."""
-        return self.__model_state_path().is_file()
-
-    def has_optimizer_state_files(self) -> bool:
-        """Returns true if the checkpoint has a optimizer state file."""
-        return self.__optimizer_state_path().is_file()
-
-    def has_state_files(self) -> bool:
-        """Returns true if the checkpoint has any state files."""
-        return self.has_model_state_files() or self.has_optimizer_state_files() 
 
     def load_state(self, device : str = 'cpu', missing_ok : bool = False):
-        """Load the state on the specified device from local files stored in the checkpoint directory. Raises error if the files are not available."""
+        """Move all tensors in state to specified device. Call unload_state to move state back to cpu. Raises error if states are not available."""
         # load model state
-        if self.has_model_state_files():
-            self.model_state = torch.load(self.__model_state_path(), map_location=device)
+        if self.model_state is not None:
+            modify_iterable(self.model_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
+        elif missing_ok:
+            self.model_state = None
         else:
-            if missing_ok:
-                self.model_state = None
-            else:
-                raise MissingStateError(f"Model state file is missing at {self.__model_state_path()}")
+            raise MissingStateError(f"Model state is missing.")
         # load optimizer state
-        if self.has_optimizer_state_files():
-            self.optimizer_state = torch.load(self.__optimizer_state_path(), map_location=device)
+        if self.optimizer_state is not None:
+            modify_iterable(self.optimizer_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
+        elif missing_ok:
+            self.optimizer_state = None
         else:
-            if missing_ok:
-                self.optimizer_state = None
-            else:
-                raise MissingStateError(f"Optimizer state file is missing at {self.__model_state_path()}")
+            raise MissingStateError(f"Optimizer state is missing.")
 
-    def unload_state(self, device : str = 'cpu'):
-        """Saves the state locally to file and deletes the in-memory state. Call load() to bring it back into memory."""
+    def unload_state(self):
+        """Move all tensors in state to cpu. Call load_state to load state on a specific device. Raises error if states are not available."""
+        device = 'cpu'
         if self.model_state is None:
             raise AttributeError("Can't unload when model state is None. Nothing to unload.")
         if self.optimizer_state is None:
             raise AttributeError("Can't unload when optimizer state is None. Nothing to unload.")
-        # ensure state directory created
-        self.__state_directory_path().mkdir(parents=True, exist_ok=True)
-        # save state objects to file
-        torch.save(self.model_state, self.__model_state_path())
-        torch.save(self.optimizer_state, self.__optimizer_state_path())
-        # delete state objects
-        del self.model_state
-        del self.optimizer_state
+        modify_iterable(self.model_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
+        modify_iterable(self.optimizer_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
 
     def delete_state(self):
-        """Deletes the state, both in-memory and any existing local files."""
+        """Deletes the states from memory."""
         # delete state in memory
         if hasattr(self, 'model_state'):
             del self.model_state
         if hasattr(self, 'optimizer_state'):
             del self.optimizer_state
-        # delete state files if they exist
-        if self.has_model_state_files():
-            self.__model_state_path().unlink()
-        if self.has_optimizer_state_files():
-            self.__optimizer_state_path().unlink()
 
     def copy_state(self, other):
         """Replace own model state and optimizer state with the ones from the other checkpoint."""
@@ -237,19 +187,9 @@ class Checkpoint(MemberState):
         # copy model state
         if hasattr(other, 'model_state') and other.model_state is not None:
             self.model_state = copy.deepcopy(other.model_state)
-        elif other.has_model_state_files():
-            other.__model_state_path().copy(self.__model_state_path())
         # copy optimizer state
         if hasattr(other, 'optimizer_state') and other.optimizer_state is not None:
             self.optimizer_state = copy.deepcopy(other.optimizer_state)
-        elif other.has_optimizer_state_files():
-            other.__optimizer_state_path().copy(self.__optimizer_state_path())
-
-    def move_state(self, device : str):
-        if hasattr(self, 'model_state') and self.model_state is not None:
-            modify_iterable(self.model_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
-        if hasattr(self, 'optimizer_state') and self.optimizer_state is not None:
-            modify_iterable(self.optimizer_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
 
     def performance_details(self) -> str:
         strings = list()

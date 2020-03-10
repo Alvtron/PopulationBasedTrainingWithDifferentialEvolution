@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 import pbt.member
 from .trainingservice import TrainingService
-from .member import Checkpoint, Population, Generation, clear_member_states
+from .member import Checkpoint, Population, Generation
 from .utils.date import get_datetime_string
 from .hyperparameters import DiscreteHyperparameter, Hyperparameters
 from .trainer import Trainer
@@ -154,18 +154,11 @@ class Controller(object):
             member.delete_state()
             # updating database
             self.database.update(member.id, member.steps, member)
-        # clean tmp states
-        for state_folder in pbt.member.MEMBER_STATE_DIRECTORY.glob("*"):
-            step = int(state_folder.name)
-            if step < len(self.population.generations) * self.step_size - self.history_limit * self.step_size: 
-                shutil.rmtree(state_folder)
 
     def update_database(self, member : Checkpoint):
         """Updates the database stored in files."""
         self._whisper(f"updating member {member.id} in database...")
-        member.load_state(device='cpu')
         self.database.update(member.id, member.steps, member)
-        member.unload_state(device='cpu')
 
     def is_member_finished(self, member : Checkpoint):
         """With the end_criteria, check if the provided member is finished training."""
@@ -219,8 +212,6 @@ class Controller(object):
 
     def on_start(self):
         """Resets class properties, starts training service and cleans up temporary files."""
-        # reset member state folder
-        clear_member_states()
         # reset class properties
         self.nfe = 0
         self.generations = 0
@@ -232,8 +223,6 @@ class Controller(object):
         """Stops training service and cleans up temporary files."""
         # close training service
         self.training_service.stop()
-        # reset member state folder
-        clear_member_states()
 
     def train_synchronously(self):
         """

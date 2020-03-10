@@ -40,11 +40,10 @@ STOP_FLAG = None
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
     # load checkpoint state
     logger(f"loading state of checkpoint {checkpoint.id}...")
-    #try:
-    #    checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
-    #except MissingStateError:
-    #    warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
-    checkpoint.move_state(device)
+    try:
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
+    except MissingStateError:
+        warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
     # train checkpoint model
     logger(f"training checkpoint {checkpoint.id}...")
     trainer(checkpoint, step_size, device)
@@ -53,8 +52,7 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
     evaluator(checkpoint, device)
     # unload checkpoint state
     logger(f"unloading state of checkpoint {checkpoint.id}...")
-    checkpoint.move_state('cpu')
-    #checkpoint.unload_state(device=device)
+    checkpoint.unload_state()
     return checkpoint
 
 class Job:
