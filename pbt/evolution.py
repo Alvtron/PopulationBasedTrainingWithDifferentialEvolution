@@ -12,7 +12,7 @@ from .de.mutation import de_rand_1, de_current_to_best_1
 from .de.constraint import halving
 from .utils.constraint import clip
 from .utils.distribution import randn, randc
-from .utils.iterable import grid, random_from_list
+from .utils.iterable import grid, random_from_list, average
 
 class EvolveEngine(ABC):
     """

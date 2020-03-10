@@ -46,8 +46,8 @@ class TrainingService(object):
         self._cuda = any(device.startswith('cuda') for device in devices)
         self._context = torch.multiprocessing.get_context('spawn')
         self._end_event = self._context.Event()
-        self._return_queue = self._context.SimpleQueue()
-        send_queues = [self._context.SimpleQueue() for _ in devices]
+        self._return_queue = self._context.Queue()
+        send_queues = [self._context.Queue() for _ in devices]
         workers = list()
         for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
