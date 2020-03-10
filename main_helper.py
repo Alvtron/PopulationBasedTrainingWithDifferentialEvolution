@@ -13,7 +13,7 @@ import numpy as np
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 
-import pbt.evolution as evolution
+import pbt.evolution
 from pbt.controller import Controller
 from pbt.task import mnist, creditfraud
 from pbt.analyze import Analyzer
@@ -49,25 +49,25 @@ def import_task(task_name : str):
 
 def create_evolver(evolver_name, population_size, end_nfe):
     if evolver_name == 'rw':
-        return evolution.evolution.RandomWalk(explore_factor = 0.2)
+        return pbt.evolution.RandomWalk(explore_factor = 0.2)
     if evolver_name == 'pbt':
-        return evolution.pbt.ExploitAndExplore( exploit_factor = 0.2, explore_factors = (0.9, 1.1))
+        return pbt.evolution.ExploitAndExplore( exploit_factor = 0.2, explore_factors = (0.9, 1.1))
     if evolver_name == 'pbt_de':
-        return evolution.pbt.ExploitAndExploreWithDifferentialEvolution( exploit_factor = 0.2, F = 0.2, Cr = 0.8)
+        return pbt.evolution.ExploitAndExploreWithDifferentialEvolution( exploit_factor = 0.2, F = 0.2, Cr = 0.8)
     if evolver_name == 'de':
-        return evolution.de.DifferentialEvolution(F = 0.2, Cr = 0.8)
+        return pbt.evolution.DifferentialEvolution(F = 0.2, Cr = 0.8)
     if evolver_name == 'shade':
-        return evolution.de.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
-        return evolution.de.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'decaying_lshade_linear':
-        return evolution.de.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear')
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear')
     if evolver_name == 'decaying_lshade_curve':
-        return evolution.de.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve')
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve')
     if evolver_name == 'decaying_lshade_logistic':
-        return evolution.de.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic')
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic')
     if evolver_name == 'lshadewithweightsharing':
-        return evolution.de.LSHADEWithWeightSharing(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.LSHADEWithWeightSharing(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     else:
         raise NotImplementedError(f"Your evolver request '{evolver_name}'' is not available.")
 

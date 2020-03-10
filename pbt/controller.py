@@ -29,7 +29,7 @@ from .utils.date import get_datetime_string
 from .hyperparameters import DiscreteHyperparameter, Hyperparameters
 from .trainer import Trainer
 from .evaluator import Evaluator
-from .evolution.evolution import EvolveEngine
+from .evolution import EvolveEngine
 from .database import Database
 
 class Controller(object):
