@@ -3,7 +3,7 @@ import math
 import copy
 import warnings
 from functools import partial
-from typing import Dict, Union, Iterable, TypeVar
+from typing import Dict, Union, Tuple, Iterable, TypeVar, Generic
 from abc import abstractmethod
 
 from .utils.constraint import translate, clip, reflect
@@ -18,18 +18,21 @@ class _Hyperparameter(object):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.
     '''
-    def __init__(self, *args : Iterable[HP_TYPE], value : HP_TYPE = None, constraint : str = 'clip'):
+    def __init__(self, *args : Iterable[HP_TYPE], value : HP_TYPE = None, constraint : str = 'clip') -> None:
         ''' 
         Provide a set of [lower bound, upper bound] as float/int, or categorical elements [obj1, obj2, ..., objn].
         Sets the search space and samples a new candidate from an uniform distribution.
         '''
         if args == None:
             raise ValueError("No arguments provided.")
-        self.MIN_NORM = 0.0
-        self.MAX_NORM = 1.0
+        self.MIN_NORM : float = 0.0
+        self.MAX_NORM : float = 1.0
         self.set_constraint(constraint)
-        self.search_space = list(args)
+        self.search_space : Tuple[HP_TYPE, ...] = tuple(args)
         self._normalized = self.from_value(value) if value is not None else random.uniform(self.MIN_NORM, self.MAX_NORM)
+
+    def __repr__(self):
+        return repr(self.value)
 
     def _translate_from_norm(self, normalized_value : float) -> float:
         return translate(normalized_value, self.MIN_NORM, self.MAX_NORM, self.lower_bound, self.upper_bound)
@@ -97,10 +100,6 @@ class _Hyperparameter(object):
     def sample_uniform(self):
         ''' Samples a new candidate from an uniform distribution bound by the lower and upper bounds. '''
         self._normalized = random.uniform(self.MIN_NORM, self.MAX_NORM)
-
-    def update(self, expression):
-        ''' Changes the hyper-parameter value with the given expression. '''
-        self._normalized = float(self._constrain(expression(self._normalized)))
 
     def equal_search_space(self, other) -> bool:
         """Return true if the search space is equal."""
