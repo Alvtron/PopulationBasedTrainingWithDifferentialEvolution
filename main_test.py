@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from main_helper import run
 
 if __name__ == "__main__":
-    torch.multiprocessing.set_sharing_strategy("file_descriptor")
+    torch.multiprocessing.set_sharing_strategy('file_system')
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)

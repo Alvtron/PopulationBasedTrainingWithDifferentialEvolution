@@ -34,7 +34,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_descriptor')
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 class TrainingService(object):
     def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),

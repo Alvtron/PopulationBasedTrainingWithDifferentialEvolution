@@ -32,7 +32,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_descriptor')
+torch.multiprocessing.set_sharing_strategy('file_system')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
 STOP_FLAG = None
