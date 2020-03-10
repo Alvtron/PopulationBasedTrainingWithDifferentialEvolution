@@ -28,12 +28,12 @@ def grid(span, n_grids):
     return tuple(step * (i + 1) for i in range(n_grids))
 
 def average(iterable : Iterable):
-    sum = 0
+    total = 0
     n_values = 0
     for value in iterable:
-        sum += value
+        total += value
         n_values += 1
-    return sum / n_values
+    return total / n_values
 
 def split_number_evenly(number, n) -> list:
     parts = int(number / n)

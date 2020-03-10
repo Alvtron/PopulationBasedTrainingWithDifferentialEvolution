@@ -221,13 +221,16 @@ class Generation(object):
         return len(self._members)
 
     def __iter__(self):
-        return iter(self._members.values())
+        return self._members.values()
 
     def __getitem__(self, id):
         return self._members[id]
 
     def __setitem__(self, id, member):
         self._members[id] = member
+
+    def items(self):
+        return self._members.items()
 
     def append(self, member : MemberState):
         if member.id in self._members:
