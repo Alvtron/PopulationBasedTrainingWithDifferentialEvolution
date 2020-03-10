@@ -354,7 +354,7 @@ class SHADE(EvolveEngine):
     def on_generation_end(self, generation : Generation, logger : Callable[[str], None]):
         self.memory.update()
         logger(f"SHADE: Average F-values: {average(self.F.values())}")
-        logger(f"SHADE: Average Cr-values: {average(self.CR.values())")
+        logger(f"SHADE: Average Cr-values: {average(self.CR.values())}")
 
     def get_control_parameters(self):
         """
