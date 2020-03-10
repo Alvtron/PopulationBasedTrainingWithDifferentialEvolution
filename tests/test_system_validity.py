@@ -54,9 +54,7 @@ tester = Evaluator(
     loss_group='test',
     loss_functions=task.loss_functions)
 hp = Hyperparameters(
-    augment_params=None,
-    model_params=None,
-    optimizer_params={
+    optimizer={
         'lr': ContiniousHyperparameter(0.000001, 0.1, value=0.01),
         'momentum': ContiniousHyperparameter(0.001, 0.9, value=0.5)
     })

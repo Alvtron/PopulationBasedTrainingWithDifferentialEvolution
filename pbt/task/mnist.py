@@ -28,8 +28,8 @@ class Mnist(Task):
     @property
     def hyper_parameters(self) -> Hyperparameters:
         return Hyperparameters(
-            model_params= lenet5.MnistNetLarger.create_hyper_parameters(),
-            optimizer_params={
+            model= lenet5.MnistNetLarger.create_hyper_parameters(),
+            optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),
                 'weight_decay': ContiniousHyperparameter(1e-9, 1e-1),
@@ -94,8 +94,8 @@ class MnistKnowledgeSharing(Mnist):
     def hyper_parameters(self) -> Hyperparameters:
         model_hyper_parameters = self.model_class.create_hyper_parameters()
         return Hyperparameters(
-            model_params= model_hyper_parameters,
-            optimizer_params={
+            model= model_hyper_parameters,
+            optimizer={
                 'lr': ContiniousHyperparameter(0.0, 1e-1),
                 'momentum': ContiniousHyperparameter(0.0, 1.0)
             })
@@ -207,8 +207,8 @@ class EMnist(Mnist):
     @property
     def hyper_parameters(self) -> Hyperparameters:
         return Hyperparameters(
-            model_params=self.model_class.create_hyper_parameters(),
-            optimizer_params={
+            model=self.model_class.create_hyper_parameters(),
+            optimizer={
                 'lr': ContiniousHyperparameter(1e-6, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-6, 0.5),
                 'weight_decay': ContiniousHyperparameter(0.0, 1e-5),
