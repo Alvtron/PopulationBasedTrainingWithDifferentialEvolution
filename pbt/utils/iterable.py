@@ -2,12 +2,13 @@ import itertools
 import random
 import collections
 from abc import ABCMeta, abstractmethod
-from typing import Any, TypeVar, Iterable, Dict, Sequence, Tuple
+from typing import Any, TypeVar, Iterable, Iterator, Dict, Sequence, Tuple, Generator, Callable, Union, List
 
 class Comparable(metaclass=ABCMeta):
     @abstractmethod
     def __lt__(self, other: Any) -> bool: ...
 
+T = TypeVar('T')
 CT = TypeVar('CT', bound=Comparable)
 
 def random_from_dict(values : Dict[object, CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
@@ -50,15 +51,23 @@ def flatten_dict(dictionary, exclude = [], delimiter ='_'):
             flat_dict[key] = value
     return flat_dict
 
-def unwrap_iterable(iterable) -> list:
-    elements = list()
-    unwrapped_list = iterable.values() if isinstance(iterable, dict) else iterable
-    for value in unwrapped_list:
-        if isinstance(value, (dict, list, tuple)):
-            elements = elements + unwrap_iterable(value)
+def unwrap_iterable(iterable : Iterable[Union[Iterable, T]]) -> Generator[T, None, None]:
+    for value in iterable.values() if isinstance(iterable, dict) else iterable:
+        if isinstance(value, Iterable):
+            yield from unwrap_iterable(value)
         else:
-            elements.append(value)
-    return elements
+            yield value
+
+def modify_iterable(iterable : Union[List[T], Dict[object,T]], expression : Callable[[T], T], condition : Callable[[T], bool] = None) -> None:
+    if not isinstance(iterable, (list, dict)):
+        raise TypeError("iterable must be a dict or list.")
+    for key, value in iterable.items() if isinstance(iterable, dict) else enumerate(iterable):
+        if isinstance(value, (list, dict)):
+            modify_iterable(value, expression, condition)
+        elif condition is None or condition(value):
+            iterable[key] = expression(value)
+        else:
+            continue
 
 def merge_dictionaries(dicts) -> collections.defaultdict:
     ''' Merge dictionaries and keep values of common keys in list'''

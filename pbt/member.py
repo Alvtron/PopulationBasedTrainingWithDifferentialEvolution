@@ -1,19 +1,20 @@
-import copy
 import gc
-import torch
+import copy
 import math
-import warnings
 import shutil
-
+import warnings
 from pathlib import Path
 from abc import abstractmethod 
 from collections import defaultdict, deque
 from itertools import islice, chain
 from typing import List, Dict, Iterable, Sequence, Generator, Iterator
 
+import torch
+
 from .utils.conversion import dict_to_binary, binary_to_dict
 from .utils.iterable import chunks, insert_sequence
 from .hyperparameters import ContiniousHyperparameter, _Hyperparameter, Hyperparameters
+from .utils.iterable import modify_iterable
 
 # extend Path to include copy method
 def _copy(self, target):
@@ -244,6 +245,12 @@ class Checkpoint(MemberState):
         elif other.has_optimizer_state_files():
             other.__optimizer_state_path().copy(self.__optimizer_state_path())
 
+    def move_state(self, device : str):
+        if hasattr(self, 'model_state') and self.model_state is not None:
+            modify_iterable(self.model_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
+        if hasattr(self, 'optimizer_state') and self.optimizer_state is not None:
+            modify_iterable(self.optimizer_state, lambda x: x.to(device) , lambda x: isinstance(x, torch.Tensor))
+
     def performance_details(self) -> str:
         strings = list()
         for loss_group, loss_values in self.loss.items():
@@ -258,13 +265,11 @@ class MemberAlreadyExistsError(Exception):
     pass
 
 class Generation(object):
-    def __init__(self, members : Iterator = None):
+    def __init__(self, members : Iterator[MemberState] = None):
         super().__init__()
         self._members : Dict[MemberState] = dict()
         if members is None:
             return
-        if not isinstance(members, Iterator):
-            raise TypeError
         for member in members:
             if not isinstance(member, MemberState):
                 raise TypeError("Members must be of type MemberState!")
@@ -314,16 +319,9 @@ class Generation(object):
         self._members = dict()
 
 class Population(object):
-    def __init__(self, arg = None):
+    def __init__(self):
         super().__init__()
-        if isinstance(arg, Generation):
-            self.generations : List[Generation] = [arg]
-        elif isinstance(arg, Iterable):
-            self.generations : List[Generation] = [Generation(arg)]
-        elif arg is None:
-            self.generations : List[Generation] = list()
-        else:
-            raise TypeError
+        self.generations : List[Generation] = list()
 
     @property
     def current(self) -> Generation:
