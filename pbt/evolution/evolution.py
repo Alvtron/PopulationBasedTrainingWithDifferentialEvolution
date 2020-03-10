@@ -3,7 +3,7 @@ import copy
 from abc import ABC
 from typing import Tuple, Callable, Generator
 
-from ..member import MemberState, Generation
+from pbt.member import MemberState, Generation
 
 class EvolveEngine(ABC):
     """
