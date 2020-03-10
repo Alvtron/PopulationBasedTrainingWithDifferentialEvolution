@@ -290,7 +290,7 @@ class SHADE(EvolveEngine):
             warnings.warn(f"p-parameter too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
         super().__init__()
         self.N_INIT = N_INIT
-        self.r_arc
+        self.r_arc = r_arc
         self.archive = ExternalArchive(size=round(self.N_INIT * r_arc))
         self.memory = HistoricalMemory(size=memory_size)
         self.p = p
