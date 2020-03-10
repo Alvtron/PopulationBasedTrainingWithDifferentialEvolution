@@ -447,10 +447,8 @@ class DecayingLSHADE(LSHADE):
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, type='linear'):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
         self.type = type
-        self.n_generations
     
     def on_generation_end(self, generation, logger):
-        self.n_generations += 1
         return super().on_generation_end(generation, logger)
 
     def get_control_parameters(self):
