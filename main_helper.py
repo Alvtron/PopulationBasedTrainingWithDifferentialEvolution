@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import pbt.evolution
 from pbt.controller import Controller
-from pbt.task import mnist, creditfraud
+from pbt.task import mnist, fashionmnist, creditfraud
 from pbt.analyze import Analyzer
 from pbt.database import Database
 from pbt.evaluator import Evaluator
@@ -26,11 +26,13 @@ def import_task(task_name : str):
         return creditfraud.CreditCardFraud()
     elif task_name == "mnist":
         return mnist.Mnist()
-    elif task_name == "fashionmnist":
-        return mnist.FashionMnist()
     elif task_name == "mnist_lenet5":
-        return mnist.MnistKnowledgeSharing('lenet5')
+        return mnist.Mnist('lenet5')
     elif task_name == "mnist_mlp":
+        return mnist.Mnist('mlp')
+    elif task_name == "mnist_knowledge_sharing_lenet5":
+        return mnist.MnistKnowledgeSharing('lenet5')
+    elif task_name == "mnist_knowledge_sharing_mlp":
         return mnist.MnistKnowledgeSharing('mlp')
     elif task_name == "emnist_byclass":
         return mnist.EMnist("byclass")
@@ -44,6 +46,16 @@ def import_task(task_name : str):
         return mnist.EMnist("digits")
     elif task_name == "emnist_mnist":
         return mnist.EMnist("mnist")
+    elif task_name == "fashionmnist":
+        return fashionmnist.FashionMnist('default')
+    elif task_name == "fashionmnist_lenet5":
+        return fashionmnist.FashionMnist('lenet5')
+    elif task_name == "fashionmnist_mlp":
+        return fashionmnist.FashionMnist('mlp')
+    elif task_name == "fashionmnist_knowledge_sharing_lenet5":
+        return fashionmnist.FashionMnistKnowledgeSharing('lenet5')
+    elif task_name == "fashionmnist_knowledge_sharing_mlp":
+        return fashionmnist.FashionMnistKnowledgeSharing('mlp')
     else:
         raise NotImplementedError(f"Your requested task '{task_name}'' is not available.")
 
