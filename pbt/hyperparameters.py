@@ -407,12 +407,13 @@ class DiscreteHyperparameter(_Hyperparameter):
 class Hyperparameters(object):
     ''' Class for storing and updating hyperparameters. '''
     def __init__(self, **hp_groups : Dict[str, Dict[str, _Hyperparameter]]):
-        if not all(isinstance(group, str) and isinstance(hp_dict, dict)
-            and all(isinstance(hp_name, str) and isinstance(hp_value, _Hyperparameter)
-            for hp_name, hp_value in hp_dict.items())
-            for group, hp_dict in hp_groups.items()):
-                raise TypeError(f"Hyperparameters can only contain {_Hyperparameter} objects.")
+        if not hp_groups or sum(1 for hp_dict in hp_groups.values() if hp_dict is not None) == 0:
+            raise TypeError(f"At least one argument required!")
         for group, hp_dict in hp_groups.items():
+            if hp_dict is None:
+                continue
+            if isinstance(hp_dict, dict) and not all(isinstance(hp_name, str) and isinstance(hp_value, _Hyperparameter) for hp_name, hp_value in hp_dict.items()):
+                raise TypeError(f"arguments must be one or more dicts of type Dict[str, _Hyperparameter].")
             setattr(self, group, hp_dict)
 
     def __str__(self) -> str:

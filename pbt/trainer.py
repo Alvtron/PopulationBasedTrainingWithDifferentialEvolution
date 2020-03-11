@@ -40,7 +40,7 @@ class Trainer(object):
         if model_state is not None:
             self._print("loading model state...")
             model.load_state_dict(model_state)
-        if isinstance(model, HyperNet) and hyper_parameters and hyper_parameters.model:
+        if isinstance(model, HyperNet) and hyper_parameters is not None and hasattr(hyper_parameters, 'model'):
             self._print("applying hyper-parameters...")
             model.apply_hyper_parameters(hyper_parameters.model, device)
         model.train()

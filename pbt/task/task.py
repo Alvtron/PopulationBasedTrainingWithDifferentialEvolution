@@ -18,6 +18,10 @@ class Task(ABC):
     """
 
     @property
+    def num_classes(self) -> int:
+        raise NotImplementedError()
+
+    @property
     def model_class(self) -> HyperNet:
         raise NotImplementedError()
 

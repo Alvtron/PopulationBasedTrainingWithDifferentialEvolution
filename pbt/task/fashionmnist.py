@@ -14,18 +14,22 @@ from ..loss import F1, Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
 class FashionMnist(Task):
-    def __init__(self, model : str = 'default'):
+    def __init__(self, model : str = 'lenet5_dropout'):
+        super().__init__()
         self.model = model
-        pass
+
+    @property
+    def num_classes(self) -> int:
+        return 10
     
     @property
     def model_class(self) -> hypernet.HyperNet:
-        if self.model == 'default':
-            return partial(lenet5.MnistNetLarger, 10)
+        if self.model == 'lenet5_dropout':
+            return partial(lenet5.Lenet5WithDropout, self.num_classes)
         elif self.model == 'lenet5':
-            return lenet5.LeNet5
+            return partial(lenet5.LeNet5, self.num_classes)
         elif self.model == 'mlp':
-            return mlp.MLP
+            return partial(mlp.MLP, self.num_classes)
         else:
             raise NotImplementedError
 
@@ -35,8 +39,11 @@ class FashionMnist(Task):
 
     @property
     def hyper_parameters(self) -> Hyperparameters:
+        model_hyper_parameters = None
+        if self.model == 'lenet5_dropout':
+            model_hyper_parameters = lenet5.Lenet5WithDropout.create_hyper_parameters()
         return Hyperparameters(
-            model= self.model_class.create_hyper_parameters(),
+            model= model_hyper_parameters,
             optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),
@@ -80,30 +87,18 @@ class FashionMnist(Task):
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         # split training set into training set and validation set
-        train_data, eval_data = random_split(
-            train_data, fraction=54000/60000, random_state=1)
+        train_data, eval_data = random_split(train_data, fraction=54000/60000, random_state=1)
         #train_data, _, eval_data, _ = stratified_split(
         #    train_data, labels=train_data.targets, fraction=54000/60000, random_state=1)
         return Datasets(train_data, eval_data, test_data)
 
 class FashionMnistKnowledgeSharing(FashionMnist):
     def __init__(self, model = 'lenet5'):
-        self.model = model
-        pass
-    
-    @property
-    def model_class(self) -> hypernet.HyperNet:
-        if self.model == 'lenet5':
-            return lenet5.LeNet5
-        elif self.model == 'mlp':
-            return mlp.MLP
-        else:
-            raise NotImplementedError
+        super().__init__(model)
 
     @property
     def hyper_parameters(self) -> Hyperparameters:
         return Hyperparameters(
-            model= self.model_class.create_hyper_parameters(),
             optimizer={
                 'lr': ContiniousHyperparameter(0.0, 1e-1),
                 'momentum': ContiniousHyperparameter(0.0, 1.0)

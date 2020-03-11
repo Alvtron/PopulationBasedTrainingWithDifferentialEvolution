@@ -1,14 +1,16 @@
 import random
 import math
+import copy
+from collections import defaultdict
+from typing import Iterable, Dict, Sequence
+
+import numpy as np
 import torch
 import torchvision
-import copy
-import numpy as np
+import torch.utils.data
 from torch.utils.data import Dataset, Subset
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
-from collections import defaultdict
-from typing import Iterable, Dict, Sequence
 
 def display_class_balance(labels : Sequence[object]):
     for unique, counts in zip(*np.unique(labels, return_counts=True)):
@@ -32,7 +34,7 @@ def random_split(dataset : Dataset, fraction : float, random_state : int = None)
     dataset_length = len(dataset)
     first_set_length = round(fraction * dataset_length)
     second_set_length = dataset_length - first_set_length
-    first_set, second_set = random_split(
+    first_set, second_set = torch.utils.data.random_split(
         dataset, (first_set_length, second_set_length))
     first_set = Subset(first_set.dataset, first_set.indices)
     second_set = Subset(second_set.dataset, second_set.indices)

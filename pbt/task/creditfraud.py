@@ -20,6 +20,10 @@ class CreditCardFraud(Task):
         pass
 
     @property
+    def num_classes(self) -> int:
+        return 2
+
+    @property
     def model_class(self) -> hypernet.HyperNet:
         return fraudnet.FraudNet
 
@@ -44,7 +48,7 @@ class CreditCardFraud(Task):
         {
             'bce': BinaryCrossEntropy(),
             'acc': Accuracy(),
-            'f1': F1(classes=2)
+            'f1': F1(classes=self.num_classes)
         }
 
     @property

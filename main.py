@@ -26,7 +26,7 @@ def validate_arguments(args):
 def import_user_arguments():
     # import user arguments
     parser = argparse.ArgumentParser(description="Population Based Training")
-    parser.add_argument("--task", type=str, required=True, help="The name of the task, e.g. 'mnist' or 'creditfraud'.")
+    parser.add_argument("--task", type=str, required=True, help="The name of the task, e.g. 'mnist_lenet5' or 'creditfraud'.")
     parser.add_argument("--evolver", type=str, required=True, help="Select which evolve algorithm to use.")
     parser.add_argument("--directory", type=str, default='checkpoints', help="Directory path to where the checkpoint database is to be located. Default: 'checkpoints/'.")
     parser.add_argument("--population_size", type=int, required=True, help="The number of members in the initial generation.")

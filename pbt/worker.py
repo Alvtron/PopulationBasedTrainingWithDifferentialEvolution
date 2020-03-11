@@ -35,8 +35,6 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_system')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
-STOP_FLAG = None
-
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
     # load checkpoint state
     logger(f"loading state of checkpoint {checkpoint.id}...")
@@ -67,9 +65,23 @@ class Job:
             raise TypeError
         self.step_size = step_size
 
+STOP_FLAG = None
+
+@dataclass
+class InvalidInputMessage(object):
+    sender_id : int
+    text : str
+
+@dataclass
+class FailMessage(object):
+    sender_id : int
+    text : str
+    exception : str = None
+
+
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, id, end_event, receive_queue, return_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
+    def __init__(self, id : int, end_event, receive_queue, return_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
         super().__init__()
         self._id = id
         self.end_event = end_event
@@ -81,6 +93,10 @@ class Worker(CONTEXT.Process):
         self.device = device
         self.random_seed = random_seed
         self.verbose = verbose
+
+    @property
+    def id(self):
+        return self._id
 
     def __log(self, message : str):
         if not self.verbose:
@@ -106,9 +122,14 @@ class Worker(CONTEXT.Process):
             # get next checkpoint from train queue
             self.__log("awaiting job...")
             job = self.receive_queue.get()
-            if job is STOP_FLAG:
+            job_copy = copy.deepcopy(job)
+            if job == STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
+            if not isinstance(job, Job):
+                self.__log("Received wrong job-type.")
+                self.return_queue.put(InvalidInputMessage(self._id, f"Wrong job-type received: {job}!"))
+                continue
             try:
                 if self.cuda:
                     with torch.cuda.device(self.device):
@@ -117,10 +138,13 @@ class Worker(CONTEXT.Process):
                     result = self._process_job(job)
                 self.return_queue.put(result)
             except Exception as exception:
-                self.__log("job excecution failed...")
+                self.__log("job excecution failed! Exception:")
                 self.__log(str(exception))
-                self.__log("returning task to send queue...")
-                self.receive_queue.put(job)
+                #self.receive_queue.put(job_copy)
+                fail_message = FailMessage(self._id, "Job excecution failed!", str(exception))
+                self.return_queue.put(fail_message)
+                # delete failed job
+                del job
                 break
             finally:
                 # Explicitly trigger garbage collection to make sure that all

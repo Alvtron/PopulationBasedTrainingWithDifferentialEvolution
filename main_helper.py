@@ -15,17 +15,19 @@ from torch.utils.tensorboard import SummaryWriter
 
 import pbt.evolution
 from pbt.controller import Controller
-from pbt.task import mnist, fashionmnist, creditfraud
+from pbt.task import mnist, emnist, fashionmnist, creditfraud
 from pbt.analyze import Analyzer
 from pbt.database import Database
 from pbt.evaluator import Evaluator
 from pbt.trainer import Trainer
 
 def import_task(task_name : str):
+    # CREDIT CARD FRAUD
     if task_name == "creditfraud":
         return creditfraud.CreditCardFraud()
-    elif task_name == "mnist":
-        return mnist.Mnist()
+    # MNIST
+    elif task_name == "mnist_lenet5_dropout":
+        return mnist.Mnist('lenet5_dropout')
     elif task_name == "mnist_lenet5":
         return mnist.Mnist('lenet5')
     elif task_name == "mnist_mlp":
@@ -34,20 +36,46 @@ def import_task(task_name : str):
         return mnist.MnistKnowledgeSharing('lenet5')
     elif task_name == "mnist_knowledge_sharing_mlp":
         return mnist.MnistKnowledgeSharing('mlp')
-    elif task_name == "emnist_byclass":
-        return mnist.EMnist("byclass")
-    elif task_name == "emnist_bymerge":
-        return mnist.EMnist("bymerge")
-    elif task_name == "emnist_balanced":
-        return mnist.EMnist("balanced")
-    elif task_name == "emnist_letters":
-        return mnist.EMnist("letters")
-    elif task_name == "emnist_digits":
-        return mnist.EMnist("digits")
-    elif task_name == "emnist_mnist":
-        return mnist.EMnist("mnist")
-    elif task_name == "fashionmnist":
-        return fashionmnist.FashionMnist('default')
+    # EMNIST
+    elif task_name == "emnist_byclass_lenet5_dropout":
+        return emnist.EMnist('lenet5_dropout', 'byclass')
+    elif task_name == "emnist_byclass_lenet5":
+        return emnist.EMnist('lenet5', 'byclass')
+    elif task_name == "emnist_byclass_mlp":
+        return emnist.EMnist('mlp', 'byclass')
+    elif task_name == "emnist_bymerge_lenet5_dropout":
+        return emnist.EMnist('lenet5_dropout', 'bymerge')
+    elif task_name == "emnist_bymerge_lenet5":
+        return emnist.EMnist('lenet5', 'bymerge')
+    elif task_name == "emnist_bymerge_mlp":
+        return emnist.EMnist('mlp', 'bymerge')
+    elif task_name == "emnist_balanced_lenet5_dropout":
+        return emnist.EMnist('lenet5_dropout', 'balanced')
+    elif task_name == "emnist_balanced_lenet5":
+        return emnist.EMnist('lenet5', 'balanced')
+    elif task_name == "emnist_balanced_mlp":
+        return emnist.EMnist('mlp', 'balanced')
+    elif task_name == "emnist_letters_lenet5_dropout":
+        return emnist.EMnist('lenet5_dropout', 'letters')
+    elif task_name == "emnist_letters_lenet5":
+        return emnist.EMnist('lenet5', 'letters')
+    elif task_name == "emnist_letters_mlp":
+        return emnist.EMnist('mlp', 'letters')
+    elif task_name == "emnist_digits_lenet5_dropout":
+        return emnist.EMnist('lenet5_dropout', 'digits')
+    elif task_name == "emnist_digits_lenet5":
+        return emnist.EMnist('lenet5', 'digits')
+    elif task_name == "emnist_digits_mlp":
+        return emnist.EMnist('mlp', 'digits')
+    elif task_name == "emnist_mnist_lenet5_dropout":
+        return emnist.EMnist('lenet5_dropout', 'mnist')
+    elif task_name == "emnist_mnist_lenet5":
+        return emnist.EMnist('lenet5', 'mnist')
+    elif task_name == "emnist_mnist_mlp":
+        return emnist.EMnist('mlp', 'mnist')
+    # FashionMNIST
+    elif task_name == "fashionmnist_lenet5_dropout":
+        return fashionmnist.FashionMnist('lenet5_dropout')
     elif task_name == "fashionmnist_lenet5":
         return fashionmnist.FashionMnist('lenet5')
     elif task_name == "fashionmnist_mlp":
