@@ -75,6 +75,7 @@ class FashionMnist(Task):
             train=True,
             download=True,
             transform=torchvision.transforms.Compose([
+                torchvision.transforms.Pad(padding=2, padding_mode='edge'),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
@@ -83,6 +84,7 @@ class FashionMnist(Task):
             train=False,
             download=True,
             transform=torchvision.transforms.Compose([
+                torchvision.transforms.Pad(padding=2, padding_mode='edge'),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
@@ -107,7 +109,7 @@ class FashionMnistKnowledgeSharing(FashionMnist):
     @property
     def datasets(self) -> Datasets:
         train_data_path = test_data_path = './data'
-        train_data = MNIST(
+        train_data = FashionMNIST(
             train_data_path,
             train=True,
             download=True,
@@ -116,7 +118,7 @@ class FashionMnistKnowledgeSharing(FashionMnist):
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
-        test_data = MNIST(
+        test_data = FashionMNIST(
             test_data_path,
             train=False,
             download=True,
