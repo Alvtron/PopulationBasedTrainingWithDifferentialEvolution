@@ -122,7 +122,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         end_nfe : int = None, end_steps : int = None, end_score : float = None, history : int = 2,
         directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
         tensorboard : bool = False, detect_NaN : bool = False, old_controller : bool = False,
-        verbose : int = 1, logging : bool = True):
+        num_workers : int = 0, pin_memory : bool = False, verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
     _task = import_task(task)
@@ -176,6 +176,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         loss_functions = _task.loss_functions,
         loss_metric = _task.loss_metric,
         batch_size = batch_size,
+        num_workers=3,
+        pin_memory=True,
         verbose=False)
     print(f"Creating evaluator...")
     EVALUATOR = Evaluator(
@@ -184,6 +186,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         loss_functions=_task.loss_functions,
         batch_size = batch_size,
         loss_group = 'eval',
+        num_workers=3,
+        pin_memory=True,
         verbose=False)
     print(f"Creating tester...")
     TESTER = Evaluator(
@@ -192,6 +196,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         loss_functions=_task.loss_functions,
         batch_size = batch_size,
         loss_group = 'test',
+        num_workers=3,
+        pin_memory=True,
         verbose=False)
     # define controller
     print(f"Creating evolver...")

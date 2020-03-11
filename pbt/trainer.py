@@ -17,9 +17,8 @@ from .utils.data import create_subset
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
-    def __init__(
-            self, model_class : HyperNet, optimizer_class : Optimizer, train_data : Dataset, batch_size : int,
-            loss_functions : dict, loss_metric : str, verbose : bool = False):
+    def __init__(self, model_class : HyperNet, optimizer_class : Optimizer, train_data : Dataset, batch_size : int,
+            loss_functions : dict, loss_metric : str, num_workers : int = 0, pin_memory : bool = False, verbose : bool = False):
         self.LOSS_GROUP = 'train'
         self.model_class = model_class
         self.optimizer_class = optimizer_class
@@ -27,6 +26,8 @@ class Trainer(object):
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_metric = loss_metric
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
         self.verbose = verbose
 
     def _print(self, message : str = None, end : str = '\n'):
@@ -69,7 +70,8 @@ class Trainer(object):
             dataset = subset,
             batch_size = self.batch_size,
             shuffle = False,
-            num_workers=0))
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory))
 
     def __call__(self, checkpoint : Checkpoint, step_size : int = 1, device : str = 'cpu'):
         if step_size < 1:

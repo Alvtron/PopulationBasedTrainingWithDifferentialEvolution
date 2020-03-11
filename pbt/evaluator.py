@@ -10,14 +10,15 @@ from .hyperparameters import Hyperparameters
 
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
-    def __init__(
-            self, model_class : Module, test_data : Dataset, batch_size : int, loss_functions : dict, loss_group : str = 'eval', verbose : bool = False):
+    def __init__(self, model_class : Module, test_data : Dataset, batch_size : int, loss_functions : dict,
+            loss_group : str = 'eval', num_workers : int = 0, pin_memory : bool = False, verbose : bool = False):
         self.model_class = model_class
         self.test_data = DataLoader(
             dataset=test_data,
             batch_size = batch_size,
             shuffle = False,
-            num_workers=0)
+            num_workers=num_workers,
+            pin_memory=pin_memory)
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
