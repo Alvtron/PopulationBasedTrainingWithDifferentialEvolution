@@ -61,7 +61,6 @@ class EMnist(Mnist):
             train=True,
             download=True,
             transform=torchvision.transforms.Compose([
-                torchvision.transforms.Pad(padding=2, padding_mode='edge'),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
@@ -71,7 +70,6 @@ class EMnist(Mnist):
             train=False,
             download=True,
             transform=torchvision.transforms.Compose([
-                torchvision.transforms.Pad(padding=2, padding_mode='edge'),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))

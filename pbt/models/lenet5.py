@@ -1,8 +1,11 @@
 import math
+from abc import abstractmethod, abstractstaticmethod
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from abc import abstractmethod, abstractstaticmethod
+import kornia
+
 from .hypernet import HyperNet, Print
 from ..hyperparameters import ContiniousHyperparameter
 
@@ -11,6 +14,7 @@ class LeNet5(HyperNet):
         super().__init__()
         if not 0 < output_size <= 84:
             raise ValueError("Output size must be between 1 and 84.")
+        self.padding = nn.ZeroPad2d(2)
         self.conv_1 = nn.Conv2d(1, 6, kernel_size=5, stride=1)
         self.pool_1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.relu_1 = nn.ReLU()
@@ -30,6 +34,7 @@ class Lenet5WithDropout(HyperNet):
         super().__init__()
         if not 0 < output_size <= 84:
             raise ValueError("Output size must be between 1 and 84.")
+        self.padding = nn.ZeroPad2d(2)
         self.conv_1 = nn.Conv2d(1, 6, kernel_size=5, stride=1)
         self.pool_1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.relu_1 = nn.ReLU()
