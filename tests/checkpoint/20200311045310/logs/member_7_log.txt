@@ -1,0 +1,165 @@
+2020-03-11 04:53:33 (0/1200) G000 Member 007, epoch 000, step 00250: train_cce 1.31429, train_acc 50.56875, eval_cce 0.76872, eval_acc 70.07425
+2020-03-11 04:53:58 (3/1200) G001 Member 007, epoch 000, step 00500: mutate member 7 (x 0.6967 < u 0.6670).
+2020-03-11 04:53:58 (3/1200) G001 Member 007, epoch 000, step 00500: adding parent member 7 to archive.
+2020-03-11 04:53:58 (4/1200) G001 Member 007, epoch 000, step 00500: train_cce 0.76267, train_acc 71.48125, eval_cce 0.66705, eval_acc 74.92797
+2020-03-11 04:54:34 (35/1200) G002 Member 007, epoch 000, step 00750: mutate member 7 (x 0.6271 < u 0.5925).
+2020-03-11 04:54:34 (35/1200) G002 Member 007, epoch 000, step 00750: adding parent member 7 to archive.
+2020-03-11 04:54:34 (36/1200) G002 Member 007, epoch 000, step 00750: train_cce 0.69997, train_acc 73.75625, eval_cce 0.59252, eval_acc 78.11946
+2020-03-11 04:55:10 (66/1200) G003 Member 007, epoch 001, step 01000: mutate member 7 (x 0.5863 < u 0.5624).
+2020-03-11 04:55:10 (66/1200) G003 Member 007, epoch 001, step 01000: adding parent member 7 to archive.
+2020-03-11 04:55:10 (67/1200) G003 Member 007, epoch 001, step 01000: train_cce 0.66167, train_acc 75.05208, eval_cce 0.56237, eval_acc 78.10838
+2020-03-11 04:55:45 (94/1200) G004 Member 007, epoch 001, step 01250: maintain member 7 (x 0.5534 > u 0.6007).
+2020-03-11 04:55:45 (95/1200) G004 Member 007, epoch 001, step 01250: train_cce 0.61768, train_acc 77.01875, eval_cce 0.55338, eval_acc 79.08356
+2020-03-11 04:56:20 (121/1200) G005 Member 007, epoch 001, step 01500: mutate member 7 (x 0.5133 < u 0.5050).
+2020-03-11 04:56:20 (121/1200) G005 Member 007, epoch 001, step 01500: adding parent member 7 to archive.
+2020-03-11 04:56:20 (122/1200) G005 Member 007, epoch 001, step 01500: train_cce 0.55582, train_acc 79.44375, eval_cce 0.50498, eval_acc 81.63785
+2020-03-11 04:56:55 (148/1200) G006 Member 007, epoch 002, step 01750: maintain member 7 (x 0.5099 > u 0.5585).
+2020-03-11 04:56:55 (149/1200) G006 Member 007, epoch 002, step 01750: train_cce 0.56344, train_acc 79.24375, eval_cce 0.50986, eval_acc 81.92598
+2020-03-11 04:57:30 (170/1200) G007 Member 007, epoch 002, step 02000: maintain member 7 (x 0.5448 > u 0.5577).
+2020-03-11 04:57:30 (171/1200) G007 Member 007, epoch 002, step 02000: train_cce 0.53553, train_acc 80.19375, eval_cce 0.54478, eval_acc 78.67354
+2020-03-11 04:58:04 (201/1200) G008 Member 007, epoch 002, step 02250: mutate member 7 (x 0.4863 < u 0.4844).
+2020-03-11 04:58:04 (201/1200) G008 Member 007, epoch 002, step 02250: adding parent member 7 to archive.
+2020-03-11 04:58:04 (202/1200) G008 Member 007, epoch 002, step 02250: train_cce 0.52636, train_acc 80.34375, eval_cce 0.48436, eval_acc 82.75709
+2020-03-11 04:58:36 (223/1200) G009 Member 007, epoch 002, step 02500: mutate member 7 (x 0.4505 < u 0.4376).
+2020-03-11 04:58:36 (223/1200) G009 Member 007, epoch 002, step 02500: adding parent member 7 to archive.
+2020-03-11 04:58:36 (224/1200) G009 Member 007, epoch 002, step 02500: train_cce 0.49136, train_acc 82.16250, eval_cce 0.43762, eval_acc 83.98715
+2020-03-11 04:59:07 (248/1200) G010 Member 007, epoch 003, step 02750: maintain member 7 (x 0.4081 > u 0.4082).
+2020-03-11 04:59:07 (249/1200) G010 Member 007, epoch 003, step 02750: train_cce 0.45058, train_acc 83.69375, eval_cce 0.40815, eval_acc 85.35572
+2020-03-11 04:59:39 (275/1200) G011 Member 007, epoch 003, step 03000: maintain member 7 (x 0.3936 > u 0.4051).
+2020-03-11 04:59:39 (276/1200) G011 Member 007, epoch 003, step 03000: train_cce 0.41295, train_acc 85.18750, eval_cce 0.39360, eval_acc 86.09818
+2020-03-11 05:00:10 (298/1200) G012 Member 007, epoch 003, step 03250: mutate member 7 (x 0.3901 < u 0.3718).
+2020-03-11 05:00:10 (298/1200) G012 Member 007, epoch 003, step 03250: adding parent member 7 to archive.
+2020-03-11 05:00:10 (299/1200) G012 Member 007, epoch 003, step 03250: train_cce 0.38916, train_acc 85.73750, eval_cce 0.37181, eval_acc 86.40293
+2020-03-11 05:00:41 (323/1200) G013 Member 007, epoch 004, step 03500: maintain member 7 (x 0.3632 > u 0.3904).
+2020-03-11 05:00:41 (324/1200) G013 Member 007, epoch 004, step 03500: train_cce 0.38303, train_acc 85.91875, eval_cce 0.36324, eval_acc 86.99579
+2020-03-11 05:01:11 (350/1200) G014 Member 007, epoch 004, step 03750: maintain member 7 (x 0.3637 > u 0.3991).
+2020-03-11 05:01:11 (351/1200) G014 Member 007, epoch 004, step 03750: train_cce 0.36440, train_acc 86.81250, eval_cce 0.36372, eval_acc 87.01795
+2020-03-11 05:01:42 (373/1200) G015 Member 007, epoch 004, step 04000: maintain member 7 (x 0.3532 > u 0.5687).
+2020-03-11 05:01:42 (374/1200) G015 Member 007, epoch 004, step 04000: train_cce 0.35351, train_acc 86.99375, eval_cce 0.35324, eval_acc 87.08998
+2020-03-11 05:02:15 (393/1200) G016 Member 007, epoch 005, step 04250: maintain member 7 (x 0.3544 > u 0.3841).
+2020-03-11 05:02:15 (394/1200) G016 Member 007, epoch 005, step 04250: train_cce 0.36399, train_acc 86.74167, eval_cce 0.35437, eval_acc 87.36148
+2020-03-11 05:02:47 (417/1200) G017 Member 007, epoch 005, step 04500: mutate member 7 (x 0.3418 < u 0.3379).
+2020-03-11 05:02:47 (417/1200) G017 Member 007, epoch 005, step 04500: adding parent member 7 to archive.
+2020-03-11 05:02:47 (418/1200) G017 Member 007, epoch 005, step 04500: train_cce 0.33900, train_acc 87.58750, eval_cce 0.33794, eval_acc 88.12057
+2020-03-11 05:03:18 (434/1200) G018 Member 007, epoch 005, step 04750: maintain member 7 (x 0.3268 > u 0.3295).
+2020-03-11 05:03:18 (435/1200) G018 Member 007, epoch 005, step 04750: train_cce 0.33098, train_acc 88.18125, eval_cce 0.32679, eval_acc 88.53613
+2020-03-11 05:03:51 (455/1200) G019 Member 007, epoch 005, step 05000: maintain member 7 (x 0.3698 > u 0.3845).
+2020-03-11 05:03:51 (456/1200) G019 Member 007, epoch 005, step 05000: train_cce 0.33764, train_acc 87.61875, eval_cce 0.36979, eval_acc 86.81294
+2020-03-11 05:04:15 (477/1200) G020 Member 007, epoch 006, step 05250: maintain member 7 (x 0.3205 > u 0.4144).
+2020-03-11 05:04:15 (478/1200) G020 Member 007, epoch 006, step 05250: train_cce 0.32364, train_acc 88.35000, eval_cce 0.32050, eval_acc 88.55275
+2020-03-11 05:04:39 (501/1200) G021 Member 007, epoch 006, step 05500: maintain member 7 (x 0.3124 > u 0.3127).
+2020-03-11 05:04:39 (502/1200) G021 Member 007, epoch 006, step 05500: train_cce 0.32047, train_acc 88.68125, eval_cce 0.31238, eval_acc 88.88520
+2020-03-11 05:05:03 (518/1200) G022 Member 007, epoch 006, step 05750: maintain member 7 (x 0.3061 > u 0.3613).
+2020-03-11 05:05:03 (519/1200) G022 Member 007, epoch 006, step 05750: train_cce 0.31256, train_acc 88.55625, eval_cce 0.30606, eval_acc 89.18440
+2020-03-11 05:05:27 (536/1200) G023 Member 007, epoch 007, step 06000: maintain member 7 (x 0.3081 > u 0.3252).
+2020-03-11 05:05:27 (537/1200) G023 Member 007, epoch 007, step 06000: train_cce 0.31271, train_acc 88.59375, eval_cce 0.30807, eval_acc 89.22872
+2020-03-11 05:05:50 (550/1200) G024 Member 007, epoch 007, step 06250: maintain member 7 (x 0.3088 > u 0.3097).
+2020-03-11 05:05:50 (551/1200) G024 Member 007, epoch 007, step 06250: train_cce 0.30358, train_acc 89.29375, eval_cce 0.30882, eval_acc 89.05142
+2020-03-11 05:06:13 (568/1200) G025 Member 007, epoch 007, step 06500: mutate member 7 (x 0.3618 < u 0.2992).
+2020-03-11 05:06:13 (568/1200) G025 Member 007, epoch 007, step 06500: adding parent member 7 to archive.
+2020-03-11 05:06:13 (569/1200) G025 Member 007, epoch 007, step 06500: train_cce 0.27861, train_acc 89.93750, eval_cce 0.29925, eval_acc 89.47806
+2020-03-11 05:06:37 (588/1200) G026 Member 007, epoch 007, step 06750: mutate member 7 (x 0.2945 < u 0.2925).
+2020-03-11 05:06:37 (588/1200) G026 Member 007, epoch 007, step 06750: adding parent member 7 to archive.
+2020-03-11 05:06:37 (589/1200) G026 Member 007, epoch 007, step 06750: train_cce 0.29962, train_acc 89.13125, eval_cce 0.29248, eval_acc 89.62766
+2020-03-11 05:07:00 (602/1200) G027 Member 007, epoch 007, step 07000: mutate member 7 (x 0.2935 < u 0.2898).
+2020-03-11 05:07:00 (602/1200) G027 Member 007, epoch 007, step 07000: adding parent member 7 to archive.
+2020-03-11 05:07:00 (603/1200) G027 Member 007, epoch 007, step 07000: train_cce 0.28101, train_acc 90.05000, eval_cce 0.28976, eval_acc 90.08754
+2020-03-11 05:07:23 (625/1200) G028 Member 007, epoch 007, step 07250: maintain member 7 (x 0.2843 > u 0.3046).
+2020-03-11 05:07:23 (626/1200) G028 Member 007, epoch 007, step 07250: train_cce 0.27496, train_acc 89.99375, eval_cce 0.28428, eval_acc 90.24823
+2020-03-11 05:07:46 (642/1200) G029 Member 007, epoch 007, step 07500: mutate member 7 (x 0.2926 < u 0.2814).
+2020-03-11 05:07:46 (642/1200) G029 Member 007, epoch 007, step 07500: adding parent member 7 to archive.
+2020-03-11 05:07:46 (643/1200) G029 Member 007, epoch 007, step 07500: train_cce 0.26597, train_acc 90.26875, eval_cce 0.28144, eval_acc 90.28147
+2020-03-11 05:08:08 (654/1200) G030 Member 007, epoch 008, step 07750: maintain member 7 (x 0.2798 > u 0.3418).
+2020-03-11 05:08:08 (655/1200) G030 Member 007, epoch 008, step 07750: train_cce 0.25313, train_acc 90.95417, eval_cce 0.27982, eval_acc 90.29255
+2020-03-11 05:08:31 (674/1200) G031 Member 007, epoch 008, step 08000: mutate member 7 (x 0.2794 < u 0.2791).
+2020-03-11 05:08:31 (674/1200) G031 Member 007, epoch 008, step 08000: adding parent member 7 to archive.
+2020-03-11 05:08:31 (675/1200) G031 Member 007, epoch 008, step 08000: train_cce 0.26103, train_acc 90.68750, eval_cce 0.27909, eval_acc 90.44770
+2020-03-11 05:08:53 (686/1200) G032 Member 007, epoch 008, step 08250: maintain member 7 (x 0.2794 > u 0.2802).
+2020-03-11 05:08:53 (687/1200) G032 Member 007, epoch 008, step 08250: train_cce 0.25842, train_acc 90.69375, eval_cce 0.27942, eval_acc 90.24269
+2020-03-11 05:09:15 (702/1200) G033 Member 007, epoch 009, step 08500: mutate member 7 (x 0.2802 < u 0.2791).
+2020-03-11 05:09:15 (702/1200) G033 Member 007, epoch 009, step 08500: adding parent member 7 to archive.
+2020-03-11 05:09:15 (703/1200) G033 Member 007, epoch 009, step 08500: train_cce 0.28044, train_acc 89.76250, eval_cce 0.27912, eval_acc 90.24269
+2020-03-11 05:09:36 (716/1200) G034 Member 007, epoch 009, step 08750: maintain member 7 (x 0.2791 > u 0.4577).
+2020-03-11 05:09:36 (717/1200) G034 Member 007, epoch 009, step 08750: train_cce 0.26879, train_acc 90.45000, eval_cce 0.27912, eval_acc 90.31472
+2020-03-11 05:09:58 (729/1200) G035 Member 007, epoch 009, step 09000: mutate member 7 (x 0.2790 < u 0.2785).
+2020-03-11 05:09:58 (729/1200) G035 Member 007, epoch 009, step 09000: adding parent member 7 to archive.
+2020-03-11 05:09:58 (730/1200) G035 Member 007, epoch 009, step 09000: train_cce 0.24766, train_acc 91.09375, eval_cce 0.27845, eval_acc 90.46432
+2020-03-11 05:10:20 (743/1200) G036 Member 007, epoch 009, step 09250: maintain member 7 (x 0.2781 > u 0.2783).
+2020-03-11 05:10:20 (744/1200) G036 Member 007, epoch 009, step 09250: train_cce 0.26609, train_acc 90.42500, eval_cce 0.27808, eval_acc 90.29255
+2020-03-11 05:10:41 (762/1200) G037 Member 007, epoch 010, step 09500: maintain member 7 (x 0.2778 > u 0.3157).
+2020-03-11 05:10:41 (763/1200) G037 Member 007, epoch 010, step 09500: train_cce 0.25439, train_acc 90.88750, eval_cce 0.27783, eval_acc 90.39783
+2020-03-11 05:11:03 (777/1200) G038 Member 007, epoch 010, step 09750: maintain member 7 (x 0.2777 > u 0.2780).
+2020-03-11 05:11:03 (778/1200) G038 Member 007, epoch 010, step 09750: train_cce 0.25236, train_acc 90.99375, eval_cce 0.27772, eval_acc 90.43107
+2020-03-11 05:11:24 (785/1200) G039 Member 007, epoch 010, step 10000: mutate member 7 (x 0.2778 < u 0.2778).
+2020-03-11 05:11:24 (785/1200) G039 Member 007, epoch 010, step 10000: adding parent member 7 to archive.
+2020-03-11 05:11:24 (786/1200) G039 Member 007, epoch 010, step 10000: train_cce 0.28709, train_acc 89.79375, eval_cce 0.27778, eval_acc 90.41445
+2020-03-11 05:11:45 (800/1200) G040 Member 007, epoch 011, step 10250: mutate member 7 (x 0.2780 < u 0.2779).
+2020-03-11 05:11:45 (800/1200) G040 Member 007, epoch 011, step 10250: adding parent member 7 to archive.
+2020-03-11 05:11:45 (801/1200) G040 Member 007, epoch 011, step 10250: train_cce 0.28589, train_acc 89.66250, eval_cce 0.27795, eval_acc 90.46432
+2020-03-11 05:12:06 (814/1200) G041 Member 007, epoch 011, step 10500: maintain member 7 (x 0.2779 > u 0.2833).
+2020-03-11 05:12:06 (815/1200) G041 Member 007, epoch 011, step 10500: train_cce 0.28615, train_acc 89.95625, eval_cce 0.27791, eval_acc 90.44770
+2020-03-11 05:12:26 (826/1200) G042 Member 007, epoch 011, step 10750: mutate member 7 (x 0.2783 < u 0.2782).
+2020-03-11 05:12:26 (826/1200) G042 Member 007, epoch 011, step 10750: adding parent member 7 to archive.
+2020-03-11 05:12:26 (827/1200) G042 Member 007, epoch 011, step 10750: train_cce 0.27831, train_acc 89.63125, eval_cce 0.27817, eval_acc 90.38121
+2020-03-11 05:12:47 (842/1200) G043 Member 007, epoch 012, step 11000: maintain member 7 (x 0.2780 > u 0.2781).
+2020-03-11 05:12:47 (843/1200) G043 Member 007, epoch 012, step 11000: train_cce 0.29184, train_acc 89.50000, eval_cce 0.27798, eval_acc 90.43107
+2020-03-11 05:13:07 (855/1200) G044 Member 007, epoch 012, step 11250: mutate member 7 (x 0.2780 < u 0.2779).
+2020-03-11 05:13:07 (855/1200) G044 Member 007, epoch 012, step 11250: adding parent member 7 to archive.
+2020-03-11 05:13:07 (856/1200) G044 Member 007, epoch 012, step 11250: train_cce 0.25458, train_acc 90.94375, eval_cce 0.27795, eval_acc 90.43107
+2020-03-11 05:13:28 (863/1200) G045 Member 007, epoch 012, step 11500: maintain member 7 (x 0.2779 > u 0.2779).
+2020-03-11 05:13:28 (864/1200) G045 Member 007, epoch 012, step 11500: train_cce 0.25365, train_acc 90.96875, eval_cce 0.27791, eval_acc 90.44770
+2020-03-11 05:13:48 (870/1200) G046 Member 007, epoch 012, step 11750: maintain member 7 (x 0.2779 > u 0.3546).
+2020-03-11 05:13:48 (871/1200) G046 Member 007, epoch 012, step 11750: train_cce 0.26891, train_acc 90.38125, eval_cce 0.27793, eval_acc 90.43107
+2020-03-11 05:14:08 (883/1200) G047 Member 007, epoch 013, step 12000: maintain member 7 (x 0.2779 > u 0.3630).
+2020-03-11 05:14:08 (884/1200) G047 Member 007, epoch 013, step 12000: train_cce 0.25301, train_acc 90.88750, eval_cce 0.27790, eval_acc 90.44770
+2020-03-11 05:14:28 (894/1200) G048 Member 007, epoch 013, step 12250: maintain member 7 (x 0.2779 > u 0.2783).
+2020-03-11 05:14:28 (895/1200) G048 Member 007, epoch 013, step 12250: train_cce 0.25547, train_acc 90.91875, eval_cce 0.27788, eval_acc 90.44770
+2020-03-11 05:14:48 (904/1200) G049 Member 007, epoch 013, step 12500: maintain member 7 (x 0.2779 > u 0.2781).
+2020-03-11 05:14:48 (905/1200) G049 Member 007, epoch 013, step 12500: train_cce 0.25943, train_acc 90.59375, eval_cce 0.27790, eval_acc 90.39783
+2020-03-11 05:15:00 (920/1200) G050 Member 007, epoch 014, step 12750: maintain member 7 (x 0.2779 > u 0.2895).
+2020-03-11 05:15:00 (921/1200) G050 Member 007, epoch 014, step 12750: train_cce 0.26443, train_acc 90.46875, eval_cce 0.27790, eval_acc 90.41445
+2020-03-11 05:15:12 (929/1200) G051 Member 007, epoch 014, step 13000: maintain member 7 (x 0.2778 > u 0.2780).
+2020-03-11 05:15:12 (930/1200) G051 Member 007, epoch 014, step 13000: train_cce 0.25645, train_acc 90.90625, eval_cce 0.27782, eval_acc 90.44770
+2020-03-11 05:15:25 (940/1200) G052 Member 007, epoch 014, step 13250: maintain member 7 (x 0.2778 > u 0.2779).
+2020-03-11 05:15:25 (941/1200) G052 Member 007, epoch 014, step 13250: train_cce 0.25331, train_acc 90.92500, eval_cce 0.27784, eval_acc 90.41445
+2020-03-11 05:15:37 (951/1200) G053 Member 007, epoch 014, step 13500: mutate member 7 (x 0.2778 < u 0.2778).
+2020-03-11 05:15:37 (951/1200) G053 Member 007, epoch 014, step 13500: adding parent member 7 to archive.
+2020-03-11 05:15:37 (952/1200) G053 Member 007, epoch 014, step 13500: train_cce 0.26277, train_acc 90.55625, eval_cce 0.27777, eval_acc 90.38121
+2020-03-11 05:15:49 (958/1200) G054 Member 007, epoch 014, step 13750: maintain member 7 (x 0.2777 > u 0.3277).
+2020-03-11 05:15:49 (959/1200) G054 Member 007, epoch 014, step 13750: train_cce 0.24834, train_acc 91.17500, eval_cce 0.27769, eval_acc 90.43107
+2020-03-11 05:16:01 (968/1200) G055 Member 007, epoch 014, step 14000: maintain member 7 (x 0.2776 > u 0.2776).
+2020-03-11 05:16:01 (969/1200) G055 Member 007, epoch 014, step 14000: train_cce 0.24920, train_acc 91.28125, eval_cce 0.27757, eval_acc 90.44770
+2020-03-11 05:16:12 (973/1200) G056 Member 007, epoch 014, step 14250: maintain member 7 (x 0.2776 > u 0.2776).
+2020-03-11 05:16:12 (974/1200) G056 Member 007, epoch 014, step 14250: train_cce 0.25886, train_acc 90.64375, eval_cce 0.27757, eval_acc 90.38121
+2020-03-11 05:16:24 (981/1200) G057 Member 007, epoch 015, step 14500: maintain member 7 (x 0.2776 > u 0.3234).
+2020-03-11 05:16:24 (982/1200) G057 Member 007, epoch 015, step 14500: train_cce 0.25027, train_acc 91.15208, eval_cce 0.27762, eval_acc 90.34796
+2020-03-11 05:16:37 (994/1200) G058 Member 007, epoch 015, step 14750: mutate member 7 (x 0.2775 < u 0.2775).
+2020-03-11 05:16:37 (994/1200) G058 Member 007, epoch 015, step 14750: adding parent member 7 to archive.
+2020-03-11 05:16:37 (995/1200) G058 Member 007, epoch 015, step 14750: train_cce 0.25653, train_acc 90.81875, eval_cce 0.27748, eval_acc 90.48094
+2020-03-11 05:16:48 (1001/1200) G059 Member 007, epoch 015, step 15000: maintain member 7 (x 0.2776 > u 0.2829).
+2020-03-11 05:16:48 (1002/1200) G059 Member 007, epoch 015, step 15000: train_cce 0.25174, train_acc 90.64375, eval_cce 0.27759, eval_acc 90.26485
+2020-03-11 05:16:59 (1012/1200) G060 Member 007, epoch 016, step 15250: mutate member 7 (x 0.2776 < u 0.2775).
+2020-03-11 05:16:59 (1012/1200) G060 Member 007, epoch 016, step 15250: adding parent member 7 to archive.
+2020-03-11 05:16:59 (1013/1200) G060 Member 007, epoch 016, step 15250: train_cce 0.25633, train_acc 90.63125, eval_cce 0.27754, eval_acc 90.33134
+2020-03-11 05:17:11 (1020/1200) G061 Member 007, epoch 016, step 15500: maintain member 7 (x 0.2774 > u 0.2979).
+2020-03-11 05:17:11 (1021/1200) G061 Member 007, epoch 016, step 15500: train_cce 0.25037, train_acc 91.16250, eval_cce 0.27742, eval_acc 90.38121
+2020-03-11 05:17:22 (1026/1200) G062 Member 007, epoch 016, step 15750: mutate member 7 (x 0.2774 < u 0.2774).
+2020-03-11 05:17:22 (1026/1200) G062 Member 007, epoch 016, step 15750: adding parent member 7 to archive.
+2020-03-11 05:17:22 (1027/1200) G062 Member 007, epoch 016, step 15750: train_cce 0.23753, train_acc 91.59375, eval_cce 0.27743, eval_acc 90.39783
+2020-03-11 05:17:33 (1032/1200) G063 Member 007, epoch 016, step 16000: maintain member 7 (x 0.2774 > u 0.2936).
+2020-03-11 05:17:33 (1033/1200) G063 Member 007, epoch 016, step 16000: train_cce 0.25862, train_acc 90.72500, eval_cce 0.27744, eval_acc 90.39783
+2020-03-11 05:17:44 (1038/1200) G064 Member 007, epoch 017, step 16250: maintain member 7 (x 0.2775 > u 0.2979).
+2020-03-11 05:17:44 (1039/1200) G064 Member 007, epoch 017, step 16250: train_cce 0.24299, train_acc 91.20000, eval_cce 0.27745, eval_acc 90.41445
+2020-03-11 05:17:55 (1045/1200) G065 Member 007, epoch 017, step 16500: maintain member 7 (x 0.2775 > u 0.2775).
+2020-03-11 05:17:55 (1046/1200) G065 Member 007, epoch 017, step 16500: train_cce 0.24048, train_acc 91.42500, eval_cce 0.27745, eval_acc 90.41445
+2020-03-11 05:18:06 (1057/1200) G066 Member 007, epoch 017, step 16750: maintain member 7 (x 0.2775 > u 0.2775).
+2020-03-11 05:18:06 (1058/1200) G066 Member 007, epoch 017, step 16750: train_cce 0.24830, train_acc 91.06250, eval_cce 0.27747, eval_acc 90.41445
+2020-03-11 05:18:17 (1061/1200) G067 Member 007, epoch 018, step 17000: maintain member 7 (x 0.2775 > u 0.5825).
+2020-03-11 05:18:17 (1062/1200) G067 Member 007, epoch 018, step 17000: train_cce 0.24875, train_acc 91.11875, eval_cce 0.27749, eval_acc 90.41445
+2020-03-11 05:18:28 (1070/1200) G068 Member 007, epoch 018, step 17250: mutate member 7 (x 0.2775 < u 0.2775).
+2020-03-11 05:18:28 (1070/1200) G068 Member 007, epoch 018, step 17250: adding parent member 7 to archive.
+2020-03-11 05:18:28 (1071/1200) G068 Member 007, epoch 018, step 17250: train_cce 0.24568, train_acc 91.23750, eval_cce 0.27749, eval_acc 90.41445
+2020-03-11 05:18:39 (1078/1200) G069 Member 007, epoch 018, step 17500: maintain member 7 (x 0.2775 > u 0.5593).
+2020-03-11 05:18:39 (1079/1200) G069 Member 007, epoch 018, step 17500: train_cce 0.24001, train_acc 91.35000, eval_cce 0.27749, eval_acc 90.39783
+2020-03-11 05:18:49 (1080/1200) G070 Member 007, epoch 019, step 17750: maintain member 7 (x 0.2775 > u 0.3189).
+2020-03-11 05:18:49 (1081/1200) G070 Member 007, epoch 019, step 17750: train_cce 0.25521, train_acc 90.63542, eval_cce 0.27749, eval_acc 90.41445

@@ -417,10 +417,24 @@ class Hyperparameters(object):
             setattr(self, group, hp_dict)
 
     def __str__(self) -> str:
-        info = []
-        for hp_name, hp_value in self.items():
-            info.append(f"{hp_name}: {hp_value}\n")
-        return ''.join(info)
+        return ''.join(f"{hp_name}: {hp_value}\n" for hp_name, hp_value in self.items())
+
+    def __eq__(self, other) -> bool:
+        if not hasattr(other, '__iter__'):
+            return False
+        elif not hasattr(other, 'items'):
+            return False
+        elif any(not isinstance(hp, _Hyperparameter) for hp in other):
+            return False
+        elif any(self_hp != other_hp for self_hp, other_hp in zip(self, other)):
+            return False
+        elif any(self_key != other_key for self_key, other_key in zip(self.keys(), other.keys())):
+            return False
+        else:
+            return True
+
+    def __ne__(self, other) -> bool:
+        return not self.__eq__(other)
 
     def __len__(self) -> int:
         return sum(len(hp_name) for hp_name in self.__dict__.values())

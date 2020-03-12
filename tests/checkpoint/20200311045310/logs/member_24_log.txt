@@ -1,0 +1,3 @@
+2020-03-11 04:53:45 (0/1200) G000 Member 024, epoch 000, step 00250: train_cce nan, train_acc 10.68750, eval_cce nan, eval_acc 10.02327
+2020-03-11 04:54:21 (23/1200) G001 Member 024, epoch 000, step 00500: mutate member 24 (x nan < u nan).
+2020-03-11 04:54:21 (24/1200) G001 Member 024, epoch 000, step 00500: train_cce nan, train_acc 9.78750, eval_cce nan, eval_acc 10.02327

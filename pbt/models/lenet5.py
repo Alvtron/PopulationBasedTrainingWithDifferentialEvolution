@@ -4,7 +4,6 @@ from abc import abstractmethod, abstractstaticmethod
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import kornia
 
 from .hypernet import HyperNet, Print
 from ..hyperparameters import ContiniousHyperparameter
