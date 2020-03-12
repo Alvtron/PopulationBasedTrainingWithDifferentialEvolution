@@ -22,7 +22,7 @@ from pbt.task.mnist import MnistKnowledgeSharing
 
 class TestSystemValidity(unittest.TestCase):
     def test_system(self):
-        epochs = 100
+        epochs = 5
         batch_size = 64
         device = "cuda"
         loss_metric = 'cce'

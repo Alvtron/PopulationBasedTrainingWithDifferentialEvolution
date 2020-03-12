@@ -51,9 +51,9 @@ def flatten_dict(dictionary, exclude = [], delimiter ='_'):
             flat_dict[key] = value
     return flat_dict
 
-def unwrap_iterable(iterable : Iterable[Union[Iterable, T]]) -> Generator[T, None, None]:
+def unwrap_iterable(iterable : Iterable[Union[Iterable, T]], exceptions : Sequence = []) -> Generator[T, None, None]:
     for value in iterable.values() if isinstance(iterable, dict) else iterable:
-        if isinstance(value, Iterable):
+        if isinstance(value, Iterable) and not type(value) not in exceptions:
             yield from unwrap_iterable(value)
         else:
             yield value
@@ -87,3 +87,15 @@ def chunks(sequence, n):
 def insert_sequence(index, seq1, seq2):
     """Inserts the second sequence on the index in the first sequence."""
     return seq1[:index] + seq2 + seq1[index:]
+
+def value_by_fraction(sequence : Sequence[T], fraction : float) -> T:
+    """Returns the value that reside within a specific fraction of the sequence."""
+    if not sequence:
+        raise ValueError("the provided sequence cannot be empty")
+    if fraction < 0.0 or fraction > 1.0:
+        raise ValueError("the provided fraction must be a float between 0.0 and 1.0")
+    index = int(fraction / (1 / len(sequence) + 1e-9))
+    return sequence[index]
+
+def singular(iterable : Iterable) -> bool:
+    return len(set(iterable)) <= 1

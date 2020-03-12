@@ -7,8 +7,9 @@ from typing import Dict, Union, Tuple, Iterable, TypeVar, Generic
 from abc import abstractmethod
 
 from .utils.constraint import translate, clip, reflect
+from .utils.iterable import value_by_fraction
 
-HP_TYPE = TypeVar('X')
+HP_TYPE = TypeVar('ParameterType')
 
 class InvalidSearchSpaceException(Exception):
     def __init__(self, *args, **kwargs):
@@ -157,19 +158,6 @@ class _Hyperparameter(object):
         else:
             raise ValueError(f"Divition is only supported for values of type {_Hyperparameter}, {float} or {int}.")
 
-    def __pow__(self, other):
-        new_hp = copy.deepcopy(self)
-        if isinstance(other, _Hyperparameter):
-            if not new_hp.equal_search_space(other):
-                raise ValueError("Exponentiation is not supported for hyperparameters of unequal search spaces.")
-            new_hp._normalized = self._constrain(new_hp._normalized ** other._normalized)
-            return new_hp
-        elif isinstance(other, (float, int)):
-            new_hp._normalized = self._constrain(new_hp._normalized ** other)
-            return new_hp
-        else:
-            raise ValueError(f"Exponentiation is only supported for values of type {_Hyperparameter}, {float} or {int}.")
-
     def __iadd__(self, other):
         if isinstance(other, _Hyperparameter):
             if not self.equal_search_space(other):
@@ -212,17 +200,6 @@ class _Hyperparameter(object):
             self._normalized = self._constrain(self._normalized / other)
         else:
             raise ValueError(f"Divition is only supported for values of type {_Hyperparameter}, {float} or {int}.")
-        return self
-
-    def __ipow__(self, other):
-        if isinstance(other, _Hyperparameter):
-            if not self.equal_search_space(other):
-                raise ValueError("Exponentiation is not supported for hyperparameters of unequal search spaces.")
-            self._normalized = self._constrain(self._normalized ** other._normalized)
-        elif isinstance(other, (float, int)):
-            self._normalized = clip(self._normalized ** other)
-        else:
-            raise ValueError(f"Exponentiation is only supported for values of type {_Hyperparameter}, {float} or {int}.")
         return self
 
     def __lt__(self, other):
@@ -350,12 +327,12 @@ class DiscreteHyperparameter(_Hyperparameter):
 
     @property
     def lower_bound(self) -> int:
-        ''' Returns the lower bounds of the hyper-parameter search space. If categorical, return the first search space index. '''
+        ''' Returns the lower bounds of the hyper-parameter search space. For categorical, it returns the first search space index. '''
         return 0
 
     @property 
     def upper_bound(self) -> int:
-        ''' Returns the upper bounds of the hyper-parameter search space. If categorical, return the last search space index. '''
+        ''' Returns the upper bounds of the hyper-parameter search space. For categorical, it returns the last search space index. '''
         return len(self.search_space) - 1
 
     def from_value(self, value : HP_TYPE) -> float:
@@ -367,9 +344,7 @@ class DiscreteHyperparameter(_Hyperparameter):
     def from_normalized(self, normalized_value : float) -> HP_TYPE:
         """Returns a search space value from the provided normalized value."""
         constrained = self._constrain(normalized_value)
-        trainslated = self._translate_from_norm(constrained)
-        index = int(round(trainslated))
-        return self.search_space[index]
+        return value_by_fraction(self.search_space, constrained)
 
     def equal_search_space(self, other) -> bool:
         return isinstance(other, DiscreteHyperparameter) and super().equal_search_space(other)

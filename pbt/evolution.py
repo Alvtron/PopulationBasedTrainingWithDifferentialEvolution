@@ -183,7 +183,7 @@ class DifferentialEvolution(EvolveEngine):
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
-    def on_evolve(self, member : MemberState, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
+    def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
         """
         Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
         implementation of differential evolution.

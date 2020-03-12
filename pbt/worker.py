@@ -122,7 +122,6 @@ class Worker(CONTEXT.Process):
             # get next checkpoint from train queue
             self.__log("awaiting job...")
             job = self.receive_queue.get()
-            job_copy = copy.deepcopy(job)
             if job == STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
@@ -136,11 +135,11 @@ class Worker(CONTEXT.Process):
                         result = self._process_job(job)
                 else:
                     result = self._process_job(job)
+                self.__log("returning job result...")
                 self.return_queue.put(result)
             except Exception as exception:
                 self.__log("job excecution failed! Exception:")
                 self.__log(str(exception))
-                #self.receive_queue.put(job_copy)
                 fail_message = FailMessage(self._id, "Job excecution failed!", str(exception))
                 self.return_queue.put(fail_message)
                 # delete failed job
