@@ -1,5 +1,5 @@
 import unittest
-import shutil
+import copy
 import itertools
 
 import torch
@@ -78,9 +78,10 @@ class TestEvovling(unittest.TestCase):
 
     def test_lshade(self):
         evolver = LSHADE(self.population_size, 100)
-        old_members = self.members
-        for member in self.members:
+        old_members = copy.deepcopy(self.members)
+        for member in old_members:
             evolver.on_member_spawn(member, self.logger)
+        old_members_copy = copy.deepcopy(old_members)
         evolver.on_generation_start(member, self.logger)
         canidates = evolver.on_evolve(old_members, self.logger)
         new_members = Generation()
@@ -89,4 +90,6 @@ class TestEvovling(unittest.TestCase):
             new_members.append(best)
         evolver.on_generation_end(old_members, self.logger)
         self.assertTrue(all(id(old) != id(new) for old, new in zip(old_members, new_members)))
-        self.assertTrue(all(id(old.parameters) != id(new.parameters)  for old, new in zip(old_members, new_members)))
+        self.assertTrue(all(id(old.parameters) != id(new.parameters) for old, new in zip(old_members, new_members)))
+        self.assertTrue(all(old.parameters != original_copy.parameters for old, original_copy in zip(old_members, self.members)))
+        self.assertTrue(all(old.parameters == old_copy.parameters for old, old_copy in zip(old_members, old_members_copy)))

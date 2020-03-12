@@ -237,9 +237,10 @@ class Controller(object):
             self.evolver.on_generation_start(self.population.current, self._whisper)
             # create new generation
             new_generation = Generation()
-            # generate new candidates
-            new_candidates = list(self.evolver.on_evolve(copy.deepcopy(self.population.current), self._whisper))
             # 1. evolve, 2. train, 3. evaluate, 4. save
+            # generate new candidates
+            new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
+            # train new candidates
             for candidates in self.training_service.train(new_candidates, self.step_size):
                 member = self.evolver.on_evaluation(candidates, self._whisper)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
