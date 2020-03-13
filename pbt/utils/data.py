@@ -40,7 +40,7 @@ def random_split(dataset : Dataset, fraction : float, random_state : int = None)
     second_set = Subset(second_set.dataset, second_set.indices)
     return first_set, second_set
 
-def stratified_split(dataset : Dataset, labels : Iterable, fraction : float, random_state : int = None, verbose : bool = False):
+def stratified_split(dataset : Dataset, labels : Iterable, fraction : float, random_state : int = None, return_labels : bool = False):
     if random_state: random.seed(random_state)
     if isinstance(labels, torch.Tensor):
         labels = labels.numpy().tolist()
@@ -67,15 +67,8 @@ def stratified_split(dataset : Dataset, labels : Iterable, fraction : float, ran
     random.shuffle(second_set_indices)
     first_set_inputs = Subset(dataset, first_set_indices)
     second_set_inputs = Subset(dataset, second_set_indices)
+    if not return_labels:
+        return first_set_inputs, second_set_inputs
     first_set_labels = list(map(labels.__getitem__, first_set_indices))
     second_set_labels = list(map(labels.__getitem__, second_set_indices))
-    if verbose:
-        print("first_set:")
-        display_class_balance(first_set_labels)
-        print(f"Length: {len(first_set_labels)}")
-        print("second_set:")
-        display_class_balance(second_set_labels)
-        print(f"Length: {len(second_set_labels)}")
-        kek = first_set_labels + second_set_labels
-        print(f"Is distinct? {len(kek) != len(set(kek))}")
     return first_set_inputs, first_set_labels, second_set_inputs, second_set_labels

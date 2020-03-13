@@ -2,6 +2,7 @@ from functools import partial
 
 import torch
 import torchvision
+from torch import nn
 from torchvision.datasets import (EMNIST, KMNIST, MNIST, QMNIST, FashionMNIST)
 from torch.optim import Optimizer
 from torch.utils.data import Dataset
@@ -76,6 +77,7 @@ class Mnist(Task):
             download=True,
             transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
+                nn.ZeroPad2d(2),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         test_data = MNIST(
@@ -84,6 +86,7 @@ class Mnist(Task):
             download=True,
             transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
+                nn.ZeroPad2d(2),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         # split training set into training set and validation set
@@ -112,6 +115,7 @@ class MnistKnowledgeSharing(Mnist):
             download=True,
             transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
+                nn.ZeroPad2d(2),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         test_data = MNIST(
@@ -120,6 +124,7 @@ class MnistKnowledgeSharing(Mnist):
             download=True,
             transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
+                nn.ZeroPad2d(2),
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         # split training set into training set and validation set
