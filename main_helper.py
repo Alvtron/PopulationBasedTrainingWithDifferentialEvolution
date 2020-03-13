@@ -101,17 +101,17 @@ def create_evolver(evolver_name, population_size, end_nfe):
     if evolver_name == 'lshade':
         return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade_decay_linear':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear')
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='linear')
     if evolver_name == 'lshade_decay_curve':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve')
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='curve')
     if evolver_name == 'lshade_decay_logistic':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic')
+        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='logistic')
     if evolver_name == 'lshade_guide_linear':
-        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear', strength=0.5)
+        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='linear', strength=0.5)
     if evolver_name == 'lshade_guide_curve':
-        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve', strength=0.5)
+        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='curve', strength=0.5)
     if evolver_name == 'lshade_guide_logistic':
-        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic', strength=0.5)
+        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='logistic', strength=0.5)
     if evolver_name == 'lshade_weight_sharing':
         return pbt.evolution.LSHADEWithWeightSharing(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     else:

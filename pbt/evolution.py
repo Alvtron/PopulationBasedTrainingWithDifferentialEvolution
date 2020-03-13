@@ -442,41 +442,36 @@ def curve(x, k=5):
     return x**k
 
 class DecayingLSHADE(LSHADE):
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, type='linear'):
+    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, decay_type='linear'):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
-        self.type = type
-        if self.type == 'linear':
+        if decay_type == 'linear':
             self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - nfe/max_nfe)
-        elif self.type == 'curve':
+        elif decay_type == 'curve':
             self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - curve(nfe/max_nfe))
-        elif self.type == 'logistic':
+        elif decay_type == 'logistic':
             self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - logistic(nfe/max_nfe))
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"'{decay_type}' is not implemented.'")
 
     def get_control_parameters(self):
         cr, f = super().get_control_parameters()
         return cr, self.decay_function(f, self.NFE, self.MAX_NFE)
 
 class GuidedLSHADE(LSHADE):
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, type : str = 'linear', strength : int = 0.5):
+    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, guide_type : str = 'linear', strength : int = 0.5):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
-        self.type = type
-        if self.type == 'linear':
-            self.guide_function = lambda hp, nfe, max_nfe: hp + ((1.0 - nfe/max_nfe) - hp) * strength
-        elif self.type == 'curve':
-            self.guide_function = lambda hp, nfe, max_nfe: hp + ((1.0 - curve(nfe/max_nfe)) - hp) * strength
-        elif self.type == 'logistic':
-            self.guide_function = lambda hp, nfe, max_nfe: hp + ((1.0 - logistic(nfe/max_nfe)) - hp) * strength
+        if guide_type == 'linear':
+            self.guide_function = lambda f, nfe, max_nfe: f + ((1.0 - nfe/max_nfe) - f) * strength
+        elif guide_type == 'curve':
+            self.guide_function = lambda f, nfe, max_nfe: f + ((1.0 - curve(nfe/max_nfe)) - f) * strength
+        elif guide_type == 'logistic':
+            self.guide_function = lambda f, nfe, max_nfe: f + ((1.0 - logistic(nfe/max_nfe)) - f) * strength
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"'{guide_type}' is not implemented.'")
 
-    def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
-        for candidates in super().on_evolve(generation, logger):
-            for candidate in candidates:
-                for j, hp in enumerate(candidate):
-                    candidate[j] = self.guide_function(hp, self.NFE, self.MAX_NFE)
-            yield candidates
+    def get_control_parameters(self):
+        cr, f = super().get_control_parameters()
+        return cr, self.guide_function(f, self.NFE, self.MAX_NFE)
     
 class LSHADEWithWeightSharing(LSHADE):
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):

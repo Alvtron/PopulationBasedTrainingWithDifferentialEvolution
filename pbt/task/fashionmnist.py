@@ -90,7 +90,6 @@ class FashionMnist(Task):
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         # split training set into training set and validation set
-        #train_data, eval_data = random_split(train_data, fraction=54000/60000, random_state=1)
         train_data, eval_data = stratified_split(train_data, labels=train_data.targets, fraction=50000/60000, random_state=1)
         return Datasets(train_data, eval_data, test_data)
 

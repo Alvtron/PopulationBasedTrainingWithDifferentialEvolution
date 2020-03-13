@@ -77,16 +77,18 @@ class EMnist(Mnist):
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         # split training set into training set and validation set
-        split_method = {
-            'byclass': partial(stratified_split, train_data, train_data.targets, (697932-116323)/697932, 1),
-            'bymerge': partial(stratified_split, train_data, train_data.targets, (697932-116323)/697932, 1),
-            'balanced': partial(split, train_data, (112800-18800)/112800),
-            'digits': partial(split, train_data, (240000-40000)/240000),
-            'letters': partial(split, train_data, (124800-20800)/124800),
-            'mnist': partial(split, train_data, (60000-10000)/60000)
-            }
-        if self.split in ['byclass', 'bymerge']:
-            train_data, _, eval_data, _ = split_method[self.split]()
+        if self.split == 'byclass':
+            train_data, eval_data = stratified_split(train_data, labels=train_data.targets, fraction=(697932-116323)/697932, random_state=1)
+        if self.split == 'bymerge':
+            train_data, eval_data = stratified_split(train_data, labels=train_data.targets, fraction=(697932-116323)/697932, random_state=1)
+        if self.split == 'balanced':
+            train_data, eval_data = split(train_data, fraction=(112800-18800)/112800)
+        if self.split == 'digits':
+            train_data, eval_data = split(train_data, fraction=(240000-40000)/240000)
+        if self.split == 'letters':
+            train_data, eval_data = split(train_data, fraction=(124800-20800)/124800)
+        if self.split == 'mnist':
+            train_data, eval_data = split(train_data, fraction=(60000-10000)/60000)
         else:
-            train_data, eval_data = split_method[self.split]()
+            raise ValueError(f"'{self.split}' is not a valid split-method.")
         return Datasets(train_data, eval_data, test_data)

@@ -70,8 +70,7 @@ class CreditCardFraud(Task):
         torch_labels = from_numpy(labels).float()
         dataset = torch.utils.data.TensorDataset(torch_inputs, torch_labels)
         # split dataset into training-, testing- and validation set
-        train_data, train_labels, test_data, _ = stratified_split(
-            dataset, labels, fraction=0.9, random_state=1)
-        train_data, _, eval_data, _ = stratified_split(
-            train_data, train_labels, fraction=0.9, random_state=1)
+        unique_labels = set(labels)
+        train_data, test_data = stratified_split(dataset, unique_labels, fraction=0.9, random_state=1)
+        train_data, eval_data = stratified_split(train_data, unique_labels, fraction=0.9, random_state=1)
         return Datasets(train_data, eval_data, test_data)
