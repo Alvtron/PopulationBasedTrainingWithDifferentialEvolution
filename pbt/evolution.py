@@ -437,6 +437,16 @@ class LSHADE(SHADE):
             generation.remove(worst)
             logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
 
+class ConservativeLSHADE(LSHADE):
+    """
+    Gives the user the additional min_f and max_f parameters. Defaults are 0.0 and 1.0 respecively.\n
+    This gives the user greater control over the exploration step size.
+    """
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, min_f : int = 0.0, max_f : int = 1.0) -> None:
+        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
+        self.MIN_F = min_f
+        self.MAX_F = max_f
+
 def logistic(x : float, k : float = 20) -> float:
     return 1 / (1 + math.exp(-k * (x - 0.5)))
 
@@ -444,6 +454,10 @@ def curve(x : float, k : float = 5) -> float:
     return x**k
 
 class DecayingLSHADE(LSHADE):
+    """
+    Decays the F-value by multiplying it with a guide. The guide can be a line, a box curve or a logistic curve.\n
+    The guide starts at 1.0 and moves towards 0.0.
+    """
     def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, decay_type : str = 'linear') -> None:
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
         if decay_type == 'linear':
@@ -460,6 +474,10 @@ class DecayingLSHADE(LSHADE):
         return cr, self.decay_function(f, self.NFE, self.MAX_NFE)
 
 class GuidedLSHADE(LSHADE):
+    """
+    Guides the F-value along a guide. The guide can be a line, a box curve or a logistic curve.\n
+    The strength determines the guides influence on F. A strength of 1.0 perfectly maps it to the guide.
+    """
     def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, guide_type : str = 'linear', strength : int = 0.5) -> None:
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
         if guide_type == 'linear':
@@ -474,12 +492,6 @@ class GuidedLSHADE(LSHADE):
     def get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super().get_control_parameters()
         return cr, self.guide_function(f, self.NFE, self.MAX_NFE)
-
-class ConservativeLSHADE(LSHADE):
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, min_f : int = 0.5, max_f : int = 0.5) -> None:
-        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
-        self.MIN_F = min_f
-        self.MAX_F = max_f
     
 class LSHADEWithWeightSharing(LSHADE):
     def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5) -> None:
@@ -488,7 +500,8 @@ class LSHADEWithWeightSharing(LSHADE):
     def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
         """
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
-        implementation of differential evolution, with adapted CR and F parameters.
+        implementation of differential evolution, with adapted CR and F parameters. \n
+        Also copies the network model- and optimizer state of the pbest member.
         """
         if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher.")
