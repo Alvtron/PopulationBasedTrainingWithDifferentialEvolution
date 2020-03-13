@@ -19,11 +19,11 @@ class EvolveEngine(ABC):
     Base class for all evolvers.
     """
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]):
+    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         pass
 
-    def on_generation_start(self, generation : Generation, logger : Callable[[str], None]):
+    def on_generation_start(self, generation : Generation, logger : Callable[[str], None]) -> None:
         """Called before each generation."""
         pass
 
@@ -35,7 +35,7 @@ class EvolveEngine(ABC):
         """Returns the determined 'best' member between the candidates."""
         pass
 
-    def on_generation_end(self, generation : Generation, logger : Callable[[str], None]):
+    def on_generation_end(self, generation : Generation, logger : Callable[[str], None]) -> None:
         """Called at the end of each generation."""
         pass
 
@@ -43,7 +43,7 @@ class RandomSearch(EvolveEngine):
     def __init__(self):
         super().__init__()
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]):
+    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -57,11 +57,11 @@ class RandomSearch(EvolveEngine):
         return candidate
 
 class RandomWalk(EvolveEngine):
-    def __init__(self, explore_factor = 0.2):
+    def __init__(self, explore_factor = 0.2) -> None:
         super().__init__()
         self.explore_factor = explore_factor
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]):
+    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -83,14 +83,14 @@ class ExploitAndExplore(EvolveEngine):
     """
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """
-    def __init__(self, exploit_factor = 0.2, explore_factors = (0.8, 1.2)):
+    def __init__(self, exploit_factor : float = 0.2, explore_factors : Tuple[float, ...] = (0.8, 1.2)) -> None:
         super().__init__()
         assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
         assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]):
+    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -135,7 +135,7 @@ class ExploitAndExploreWithDifferentialEvolution(ExploitAndExplore):
     """
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """
-    def __init__(self, exploit_factor = 0.2, F = 0.2, Cr = 0.8):
+    def __init__(self, exploit_factor : float = 0.2, F : float = 0.2, Cr : float = 0.8) -> None:
         super().__init__()
         self.exploit_factor = exploit_factor
         self.F = F
@@ -174,7 +174,7 @@ class DifferentialEvolution(EvolveEngine):
     """
     A general, modifiable implementation of Differential Evolution (DE)
     """
-    def __init__(self, F = 0.2, Cr = 0.8):
+    def __init__(self, F : float = 0.2, Cr : float = 0.8) -> None:
         super().__init__()
         self.F = F
         self.Cr = Cr
@@ -212,7 +212,7 @@ class DifferentialEvolution(EvolveEngine):
             logger(f"maintain member {member.id} (x {member.score():.4f} > u {candidate.score():.4f}).")
             return member
 
-def mean_wl(S, weights):
+def mean_wl(S, weights : Sequence[float]) -> float:
     """
     The weighted Lehmer mean of a tuple x of positive real numbers,
     with respect to a tuple w of positive weights.
@@ -224,26 +224,26 @@ def mean_wl(S, weights):
     return A / B
 
 class HistoricalMemory(object):
-    def __init__(self, size):
+    def __init__(self, size : int, default : float = 0.5) -> None:
         self.size = size
-        self.m_cr = [0.5] * size
-        self.m_f = [0.5] * size
+        self.m_cr = [default] * size
+        self.m_f = [default] * size
         self.s_cr = list()
         self.s_f = list()
         self.weights = list()
         self.k = 0
 
-    def record(self, cr_i, f_i, delta_score):
+    def record(self, cr_i : float, f_i : float, delta_score : float) -> None:
         self.s_cr.append(cr_i)
         self.s_f.append(f_i)
         self.weights.append(delta_score)
     
-    def reset(self):
+    def reset(self) -> None:
         self.s_cr = list()
         self.s_f = list()
         self.weights = list()
 
-    def update(self):
+    def update(self) -> None:
         if not self.s_cr or not self.s_f or not self.weights:
             return
         if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
@@ -254,20 +254,20 @@ class HistoricalMemory(object):
         self.k = 0 if self.k >= self.size - 1 else self.k + 1
 
 class ExternalArchive(list):
-    def __init__(self, size):
+    def __init__(self, size : int) -> None:
         list.__init__(self)
         self.size = size
 
-    def append(self, parent : MemberState):
+    def append(self, parent : MemberState) -> None:
         if len(self) == self.size:
             random_index = random.randrange(self.size)
             del self[random_index]
         super().append(parent)
 
-    def insert(self, index, parent):
+    def insert(self, index, parent) -> None:
         raise NotImplementedError()
     
-    def extend(self, parents):
+    def extend(self, parents) -> None:
         raise NotImplementedError()
 
 class SHADE(EvolveEngine):
@@ -283,12 +283,14 @@ class SHADE(EvolveEngine):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT, r_arc = 2.0, p=0.1, memory_size = 5):
+    def __init__(self, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5) -> None:
         if N_INIT < 4:
             raise ValueError("population size must be at least 4 or higher.")
         if round(N_INIT * p) < 1:
             warnings.warn(f"p-parameter too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
         super().__init__()
+        self.MIN_F = 0.0
+        self.MAX_F = 1.0
         self.N_INIT = N_INIT
         self.r_arc = r_arc
         self.archive = ExternalArchive(size=round(self.N_INIT * r_arc))
@@ -297,11 +299,11 @@ class SHADE(EvolveEngine):
         self.CR = dict()
         self.F = dict()
         
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]):
+    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
-    def on_generation_start(self, generation : Generation, logger : Callable[[str], None]):
+    def on_generation_start(self, generation : Generation, logger : Callable[[str], None]) -> None:
         self.memory.reset()
         self.CR = dict()
         self.F = dict()
@@ -356,7 +358,7 @@ class SHADE(EvolveEngine):
         logger(f"SHADE: Average F-values: {average(self.F.values())}")
         logger(f"SHADE: Average Cr-values: {average(self.CR.values())}")
 
-    def get_control_parameters(self):
+    def get_control_parameters(self) -> Tuple[float, float]:
         """
         The crossover probability CRi is generated according to a normal distribution
         of mean μCR and standard deviation 0.1 and then truncated to [0, 1].
@@ -377,15 +379,15 @@ class SHADE(EvolveEngine):
         # generate MF_i
         while True:
             F_i = randc(MF_i, 0.1)
-            if F_i <= 0.0:
+            if F_i <= self.MIN_F:
                 continue
-            if F_i >= 1.0:
-                F_i = 1.0
+            if F_i >= self.MAX_F:
+                F_i = self.MAX_F
                 break
             break
         return CR_i, F_i
         
-    def pbest_member(self, generation : List[MemberState]):
+    def pbest_member(self, generation : Sequence[MemberState]) -> MemberState:
         """Sample a random top member from the popualtion."""
         sorted_members = sorted(generation, reverse=True)
         n_elitists = round(len(generation) * self.p)
@@ -409,7 +411,7 @@ class LSHADE(SHADE):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5) -> None:
         super().__init__(N_INIT, r_arc, p, memory_size)
         self.N_MIN = 4
         self.NFE = 0
@@ -435,14 +437,14 @@ class LSHADE(SHADE):
             generation.remove(worst)
             logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
 
-def logistic(x, k=20):
+def logistic(x : float, k : float = 20) -> float:
     return 1 / (1 + math.exp(-k * (x - 0.5)))
 
-def curve(x, k=5):
+def curve(x : float, k : float = 5) -> float:
     return x**k
 
 class DecayingLSHADE(LSHADE):
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, decay_type='linear'):
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, decay_type : str = 'linear') -> None:
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
         if decay_type == 'linear':
             self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - nfe/max_nfe)
@@ -453,12 +455,12 @@ class DecayingLSHADE(LSHADE):
         else:
             raise NotImplementedError(f"'{decay_type}' is not implemented.'")
 
-    def get_control_parameters(self):
+    def get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super().get_control_parameters()
         return cr, self.decay_function(f, self.NFE, self.MAX_NFE)
 
 class GuidedLSHADE(LSHADE):
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, guide_type : str = 'linear', strength : int = 0.5):
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, guide_type : str = 'linear', strength : int = 0.5) -> None:
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
         if guide_type == 'linear':
             self.guide_function = lambda f, nfe, max_nfe: f + ((1.0 - nfe/max_nfe) - f) * strength
@@ -469,12 +471,18 @@ class GuidedLSHADE(LSHADE):
         else:
             raise NotImplementedError(f"'{guide_type}' is not implemented.'")
 
-    def get_control_parameters(self):
+    def get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super().get_control_parameters()
         return cr, self.guide_function(f, self.NFE, self.MAX_NFE)
+
+class ConservativeLSHADE(LSHADE):
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, min_f : int = 0.5, max_f : int = 0.5) -> None:
+        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
+        self.MIN_F = min_f
+        self.MAX_F = max_f
     
 class LSHADEWithWeightSharing(LSHADE):
-    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5) -> None:
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
 
     def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
