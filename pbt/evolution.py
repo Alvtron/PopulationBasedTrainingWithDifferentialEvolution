@@ -131,7 +131,7 @@ class ExploitAndExplore(EvolveEngine):
             explorer[index] = explorer[index] * perturb_factor
         return explorer
 
-class ExploitAndExploreWithDifferentialEvolution(ExploitAndExplore):
+class BlindDifferentialEvolution(ExploitAndExplore):
     """
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """

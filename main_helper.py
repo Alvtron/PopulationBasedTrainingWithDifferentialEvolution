@@ -91,11 +91,11 @@ def create_evolver(evolver_name, population_size, end_nfe):
     if evolver_name == 'rw':
         return pbt.evolution.RandomWalk(explore_factor = 0.2)
     if evolver_name == 'pbt':
-        return pbt.evolution.ExploitAndExplore( exploit_factor = 0.2, explore_factors = (0.9, 1.1))
-    if evolver_name == 'pbt_de':
-        return pbt.evolution.ExploitAndExploreWithDifferentialEvolution( exploit_factor = 0.2, F = 0.2, Cr = 0.8)
+        return pbt.evolution.ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     if evolver_name == 'de':
         return pbt.evolution.DifferentialEvolution(F = 0.2, Cr = 0.8)
+    if evolver_name == 'de_blind':
+        return pbt.evolution.BlindDifferentialEvolution(exploit_factor = 0.2, F = 0.2, Cr = 0.8)
     if evolver_name == 'shade':
         return pbt.evolution.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
