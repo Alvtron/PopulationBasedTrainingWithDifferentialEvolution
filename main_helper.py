@@ -102,6 +102,8 @@ def create_evolver(evolver_name, population_size, end_nfe):
         return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade_conservative':
         return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5)
+    if evolver_name == 'lshade_very_conservative':
+        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.1)
     if evolver_name == 'lshade_explorative':
         return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=2.0)
     if evolver_name == 'lshade_decay_linear':
