@@ -143,7 +143,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         f"Evolver: {evolver}",
         f"Database path: {database.path}",
         f"Population size: {population_size}",
-        f"Hyper-parameters: {len(_task.hyper_parameters)} {_task.hyper_parameters.keys()}",
+        f"Hyper-parameters: {len(_task.hyper_parameters)} {list(_task.hyper_parameters.keys())}",
         f"Batch size: {batch_size}",
         f"Step size: {step_size}",
         f"End criterium - fitness evaluations: {end_nfe}",        

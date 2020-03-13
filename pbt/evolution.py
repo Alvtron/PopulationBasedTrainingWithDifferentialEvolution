@@ -200,7 +200,7 @@ class DifferentialEvolution(EvolveEngine):
                     candidate[j] = de_rand_1(F = self.F, x_r0 = x_r0[j], x_r1 = x_r1[j], x_r2 = x_r2[j])
                 else:
                     candidate[j] = member[j]
-            yield member, candidate
+            yield member.copy(), candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
@@ -335,7 +335,7 @@ class SHADE(EvolveEngine):
                     candidate[j] = constrained
                 else:
                     candidate[j] = member[j]
-            yield member, candidate
+            yield member.copy(), candidate
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
         """Evaluates candidate, compares it to the original member and returns the best performer."""
@@ -491,6 +491,7 @@ class LSHADEWithWeightSharing(LSHADE):
                 else:
                     candidate[j] = member[j]
             # copy weights from pbest
-            member.copy_state(x_pbest)
+            existing = member.copy()
+            existing.copy_state(x_pbest)
             candidate.copy_state(x_pbest)
-            yield member, candidate
+            yield existing, candidate
