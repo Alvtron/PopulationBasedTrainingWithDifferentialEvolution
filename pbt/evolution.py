@@ -283,18 +283,24 @@ class SHADE(EvolveEngine):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5) -> None:
+    def __init__(self, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0) -> None:
         if N_INIT < 4:
             raise ValueError("population size must be at least 4 or higher.")
         if round(N_INIT * p) < 1:
             warnings.warn(f"p-parameter too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
         super().__init__()
-        self.MIN_F = 0.0
-        self.MAX_F = 1.0
+        if f_min < 0:
+            raise ValueError("f_min cannot be negative.")
+        if f_max <= 0:
+            raise ValueError("f_max cannot be negative.")
+        if f_max < f_min:
+            raise ValueError("f_max cannot be less than f_min.")
+        self.F_MIN = f_min
+        self.F_MAX = f_max
         self.N_INIT = N_INIT
         self.r_arc = r_arc
         self.archive = ExternalArchive(size=round(self.N_INIT * r_arc))
-        self.memory = HistoricalMemory(size=memory_size)
+        self.memory = HistoricalMemory(size=memory_size, default=(self.F_MAX - self.F_MIN) / 2.0)
         self.p = p
         self.CR = dict()
         self.F = dict()
@@ -379,10 +385,10 @@ class SHADE(EvolveEngine):
         # generate MF_i
         while True:
             F_i = randc(MF_i, 0.1)
-            if F_i <= self.MIN_F:
+            if F_i <= self.F_MIN:
                 continue
-            if F_i >= self.MAX_F:
-                F_i = self.MAX_F
+            if F_i >= self.F_MAX:
+                F_i = self.F_MAX
                 break
             break
         return CR_i, F_i
@@ -411,14 +417,14 @@ class LSHADE(SHADE):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5) -> None:
-        super().__init__(N_INIT, r_arc, p, memory_size)
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0) -> None:
+        super().__init__(N_INIT, r_arc, p, memory_size, f_min, f_max)
         self.N_MIN = 4
-        self.NFE = 0
         self.MAX_NFE = MAX_NFE
+        self._nfe = 0
 
     def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
-        self.NFE += 1 # increment the number of fitness evaluations
+        self._nfe += 1 # increment the number of fitness evaluations
         return super().on_evaluation(candidates, logger)
 
     def on_generation_end(self, generation : Generation, logger : Callable[[str], None]):
@@ -426,7 +432,7 @@ class LSHADE(SHADE):
         super().on_generation_end(generation, logger)
 
     def adjust_generation_size(self, generation : Generation, logger : Callable[[str], None]):
-        new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self.NFE + self.N_INIT)
+        new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self._nfe + self.N_INIT)
         if new_size >= len(generation):
             return
         logger(f"adjusting generation size {len(generation)} --> {new_size}")
@@ -436,16 +442,6 @@ class LSHADE(SHADE):
         for worst in sorted(generation)[:size_delta]:
             generation.remove(worst)
             logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
-
-class ConservativeLSHADE(LSHADE):
-    """
-    Gives the user the additional min_f and max_f parameters. Defaults are 0.0 and 1.0 respecively.\n
-    This gives the user greater control over the exploration step size.
-    """
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, min_f : int = 0.0, max_f : int = 1.0) -> None:
-        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
-        self.MIN_F = min_f
-        self.MAX_F = max_f
 
 def logistic(x : float, k : float = 20) -> float:
     return 1 / (1 + math.exp(-k * (x - 0.5)))
@@ -458,8 +454,8 @@ class DecayingLSHADE(LSHADE):
     Decays the F-value by multiplying it with a guide. The guide can be a line, a box curve or a logistic curve.\n
     The guide starts at 1.0 and moves towards 0.0.
     """
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, decay_type : str = 'linear') -> None:
-        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, f_min : float = 0.0, f_max : float = 1.0, decay_type : str = 'linear') -> None:
+        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size, f_min, f_max)
         if decay_type == 'linear':
             self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - nfe/max_nfe)
         elif decay_type == 'curve':
@@ -471,15 +467,15 @@ class DecayingLSHADE(LSHADE):
 
     def get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super().get_control_parameters()
-        return cr, self.decay_function(f, self.NFE, self.MAX_NFE)
+        return cr, self.decay_function(f, self._nfe, self.MAX_NFE)
 
 class GuidedLSHADE(LSHADE):
     """
     Guides the F-value along a guide. The guide can be a line, a box curve or a logistic curve.\n
     The strength determines the guides influence on F. A strength of 1.0 perfectly maps it to the guide.
     """
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, guide_type : str = 'linear', strength : int = 0.5) -> None:
-        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5, f_min : float = 0.0, f_max : float = 1.0, guide_type : str = 'linear', strength : int = 0.5) -> None:
+        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size, f_min, f_max)
         if guide_type == 'linear':
             self.guide_function = lambda f, nfe, max_nfe: f + ((1.0 - nfe/max_nfe) - f) * strength
         elif guide_type == 'curve':
@@ -491,12 +487,9 @@ class GuidedLSHADE(LSHADE):
 
     def get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super().get_control_parameters()
-        return cr, self.guide_function(f, self.NFE, self.MAX_NFE)
+        return cr, self.guide_function(f, self._nfe, self.MAX_NFE)
     
 class LSHADEWithWeightSharing(LSHADE):
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size :int = 5) -> None:
-        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
-
     def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
         """
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
