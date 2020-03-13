@@ -445,17 +445,38 @@ class DecayingLSHADE(LSHADE):
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, type='linear'):
         super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
         self.type = type
+        if self.type == 'linear':
+            self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - nfe/max_nfe)
+        elif self.type == 'curve':
+            self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - curve(nfe/max_nfe))
+        elif self.type == 'logistic':
+            self.decay_function = lambda f, nfe, max_nfe: f * (1.0 - logistic(nfe/max_nfe))
+        else:
+            raise NotImplementedError
 
     def get_control_parameters(self):
         cr, f = super().get_control_parameters()
+        return cr, self.decay_function(f, self.NFE, self.MAX_NFE)
+
+class GuidedLSHADE(LSHADE):
+    def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5, type : str = 'linear', strength : int = 0.5):
+        super().__init__(N_INIT, MAX_NFE, r_arc, p, memory_size)
+        self.type = type
         if self.type == 'linear':
-            return cr, f * (1.0 - self.NFE/self.MAX_NFE)
+            self.guide_function = lambda hp, nfe, max_nfe: hp + ((1.0 - nfe/max_nfe) - hp) * strength
         elif self.type == 'curve':
-            return cr, f * (1.0 - curve(self.NFE/self.MAX_NFE))
+            self.guide_function = lambda hp, nfe, max_nfe: hp + ((1.0 - curve(nfe/max_nfe)) - hp) * strength
         elif self.type == 'logistic':
-            return cr, f * (1.0 - logistic(self.NFE/self.MAX_NFE))
+            self.guide_function = lambda hp, nfe, max_nfe: hp + ((1.0 - logistic(nfe/max_nfe)) - hp) * strength
         else:
             raise NotImplementedError
+
+    def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
+        for candidates in super().on_evolve(generation, logger):
+            for candidate in candidates:
+                for j, hp in enumerate(candidate):
+                    candidate[j] = self.guide_function(hp, self.NFE, self.MAX_NFE)
+            yield candidates
     
 class LSHADEWithWeightSharing(LSHADE):
     def __init__(self, N_INIT, MAX_NFE, r_arc = 2.0, p=0.1, memory_size = 5):

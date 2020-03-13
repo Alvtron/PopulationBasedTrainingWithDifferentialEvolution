@@ -100,13 +100,19 @@ def create_evolver(evolver_name, population_size, end_nfe):
         return pbt.evolution.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
         return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
-    if evolver_name == 'decaying_lshade_linear':
+    if evolver_name == 'lshade_decay_linear':
         return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear')
-    if evolver_name == 'decaying_lshade_curve':
+    if evolver_name == 'lshade_decay_curve':
         return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve')
-    if evolver_name == 'decaying_lshade_logistic':
+    if evolver_name == 'lshade_decay_logistic':
         return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic')
-    if evolver_name == 'lshadewithweightsharing':
+    if evolver_name == 'lshade_guide_linear':
+        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='linear', strength=0.5)
+    if evolver_name == 'lshade_guide_curve':
+        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='curve', strength=0.5)
+    if evolver_name == 'lshade_guide_logistic':
+        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, type='logistic', strength=0.5)
+    if evolver_name == 'lshade_weight_sharing':
         return pbt.evolution.LSHADEWithWeightSharing(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     else:
         raise NotImplementedError(f"Your evolver request '{evolver_name}'' is not available.")
