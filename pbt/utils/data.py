@@ -16,9 +16,17 @@ def display_class_balance(labels : Sequence[object]):
     for unique, counts in zip(*np.unique(labels, return_counts=True)):
         print(f"{unique}: {counts} ({counts/len(labels)*100.0:.2f}%)")
 
-def create_subset(dataset, start, end = None) -> Subset:
-    end = len(dataset) if not end else end
+def create_subset(dataset : Dataset, start : int, end : int = None) -> Subset:
+    dataset_length = len(dataset)
+    if end is not None and end > dataset_length:
+        raise ValueError("end index is larger than dataset length.")
+    end = dataset_length if not end else end
     return Subset(dataset, list(range(start, end)))
+
+def create_subset_with_indices(dataset : Dataset, indices : Sequence[int], shuffle : bool = False) -> Subset:
+    if not indices:
+        raise ValueError("indice-sequence is empty.")
+    return Subset(dataset, random.sample(indices, len(indices)) if shuffle else indices)
 
 def split(dataset : Dataset, fraction : float) -> (Subset, Subset):
     assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"

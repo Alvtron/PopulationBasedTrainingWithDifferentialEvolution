@@ -47,7 +47,7 @@ class Controller(object):
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
         self.training_service = TrainingService(trainer=trainer, evaluator=evaluator,
-            devices=devices, n_jobs=n_jobs, verbose=verbose>2)
+            devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.step_size = step_size
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
@@ -183,7 +183,7 @@ class Controller(object):
     def create_initial_generation(self) -> Generation:
         new_members = self.create_members(k=self.population_size)
         generation = Generation()
-        for member in self.training_service.train(new_members, self.step_size):
+        for member in self.training_service.train(new_members, self.step_size, None):
             # log performance
             self._say(member.performance_details(), member)
             # Save member to database directory.
@@ -241,7 +241,7 @@ class Controller(object):
             # generate new candidates
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             # train new candidates
-            for candidates in self.training_service.train(new_candidates, self.step_size):
+            for candidates in self.training_service.train(new_candidates, self.step_size, None):
                 member = self.evolver.on_evaluation(candidates, self._whisper)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
@@ -262,7 +262,7 @@ class Controller(object):
             self.remove_bad_member_states()
         self._say(f"end criteria has been reached.")
 
-    def train_synchronously_old(self, eval_steps=1):
+    def train_synchronously_old(self, eval_steps=8):
         """
         Performs the training of the population synchronously.
         Each member is trained individually and asynchronously,
@@ -278,12 +278,12 @@ class Controller(object):
             # generate new candidates
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             best_candidates = list()
-            for candidates in self.training_service.train(new_candidates, eval_steps):
+            for candidates in self.training_service.train(new_candidates, eval_steps, eval_steps):
                 member = self.evolver.on_evaluation(candidates, self._whisper)
                 best_candidates.append(member)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
             # train best
-            for member in self.training_service.train(best_candidates, self.step_size - eval_steps):
+            for member in self.training_service.train(best_candidates, self.step_size - eval_steps, None):
                 # log performance
                 self._say(member.performance_details(), member)
                 # Save member to database directory.

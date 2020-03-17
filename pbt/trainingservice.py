@@ -38,7 +38,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 class TrainingService(object):
     def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),
-            n_jobs : int = 1, verbose : bool = False):
+            n_jobs : int = 1, verbose : int = 0):
         super().__init__()
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")
@@ -51,18 +51,18 @@ class TrainingService(object):
         workers = list()
         for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices)):
             worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
-                trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose)
+                trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose > 1)
             workers.append(worker)
         self._workers : List[Worker] = list(workers)
 
     def _print(self, message : str) -> None:
-        if not self.verbose:
+        if self.verbose < 1:
             return
         full_message = f"Training Service: {message}"
         print(full_message)
 
     def _print_gpu_memory_stats(self) -> None:
-        if not self.verbose or not self._cuda or os.name == 'nt':
+        if self.verbose < 2 or not self._cuda or os.name == 'nt':
             return
         memory_stats = get_gpu_memory_stats()
         memory_stats_formatted = (f"CUDA:{id} ({memory[0]}/{memory[1]}MB)" for id, memory in memory_stats.items())
@@ -88,7 +88,7 @@ class TrainingService(object):
         # spawn new worker
         self._print(f"spawning new worker with id {worker.id}...")
         new_worker = Worker(id=worker.id, end_event=self._end_event, receive_queue=worker.receive_queue, return_queue=self._return_queue,
-                trainer=worker.trainer, evaluator=worker.evaluator, device = worker.device, random_seed = worker.id, verbose = self.verbose)
+                trainer=worker.trainer, evaluator=worker.evaluator, device = worker.device, random_seed = worker.id, verbose = self.verbose > 1)
         self._workers.append(new_worker)
         new_worker.start()
 
@@ -114,14 +114,15 @@ class TrainingService(object):
         [worker.join() for worker in self._workers]
         [worker.close() for worker in self._workers]
 
-    def train(self, candidates : Iterable[Union[Checkpoint, Tuple[Checkpoint,...]]], step_size : int) -> Generator[Union[Checkpoint, Tuple[Checkpoint,...]], None, None]:
+    def train(self, candidates : Iterable[Union[Checkpoint, Tuple[Checkpoint,...]]], train_step_size : int, eval_step_size : int = None,
+            shuffle : bool = False) -> Generator[Union[Checkpoint, Tuple[Checkpoint,...]], None, None]:
         self._print(f"queuing candidates for training...")
         n_sent = 0
         for checkpoints, worker in zip(candidates, itertools.cycle(self._workers)):
-            job = Job(checkpoints, step_size)
+            job = Job(checkpoints, train_step_size, eval_step_size, shuffle)
             worker.receive_queue.put(job)
             n_sent += 1
-        self._print(f"receiving trained candidates...")
+        self._print(f"awaiting trained candidates...")
         n_returned = 0
         failed_workers = set()
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
@@ -137,11 +138,10 @@ class TrainingService(object):
             yield result
         if len(failed_workers) == len(self._workers):
             raise Exception("All workers failed.")
-        if n_returned < n_sent:
+        elif n_returned < n_sent:
             if len(failed_workers) > 0:
                 raise Exception(f"{len(failed_workers)} workers failed.")
-            else:
-                raise Exception(f"{n_sent - n_returned} candidates failed.")
+            raise Exception(f"{n_sent - n_returned} candidates failed.")
         elif len(failed_workers) > 0:
             self._respawn(failed_workers)
         else:

@@ -43,8 +43,6 @@ def import_user_arguments():
     parser.add_argument("--tensorboard", action='store_true', help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
     parser.add_argument("--detect_NaN", action='store_true', help="Wether to enable NaN detection.")
     parser.add_argument("--old_controller", action='store_true', help="Wether to use the old controller.")
-    parser.add_argument("--num_workers", type=int, default=0, help="Number of workers in data loader.")
-    parser.add_argument("--pin_memory", action='store_true', help="Wether to enable memory pinning in data loader.")
     parser.add_argument("--logging", action='store_true', help="Wether to enable logging.")
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity level.")
     args = parser.parse_args()

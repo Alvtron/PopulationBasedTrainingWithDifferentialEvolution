@@ -35,35 +35,40 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_system')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
-def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, step_size : int, device : str, logger : Callable, verbose : bool = False):
+def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, train_step_size : int, eval_step_size : int,
+        device : str, logger : Callable, shuffle : bool = False, verbose : bool = False):
     # load checkpoint state
     logger(f"loading state of checkpoint {checkpoint.id}...")
     try:
-        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < step_size)
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < train_step_size)
     except MissingStateError:
         warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
     # train checkpoint model
     logger(f"training checkpoint {checkpoint.id}...")
-    trainer(checkpoint, step_size, device)
+    trainer(checkpoint, train_step_size, device, shuffle)
     # evaluate checkpoint model
     logger(f"evaluating checkpoint {checkpoint.id}...")
-    evaluator(checkpoint, device)
+    evaluator(checkpoint, eval_step_size, device, shuffle)
     # unload checkpoint state
     logger(f"unloading state of checkpoint {checkpoint.id}...")
     checkpoint.unload_state()
     return checkpoint
 
 class Job:
-    def __init__(self, checkpoints : Tuple[Checkpoint], step_size : int):
+    def __init__(self, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, shuffle : bool = False):
         if isinstance(checkpoints, Sequence) and all(isinstance(checkpoint, Checkpoint) for checkpoint in checkpoints):
             self.checkpoints = checkpoints
         elif isinstance(checkpoints, Checkpoint):
-            self.checkpoints = tuple([checkpoints])
+            self.checkpoints = checkpoints
         else:
             raise TypeError
-        if not isinstance(step_size, int):
+        if not isinstance(train_step_size, int):
             raise TypeError
-        self.step_size = step_size
+        if eval_step_size is not None and not isinstance(eval_step_size, int):
+            raise TypeError
+        self.train_step_size = train_step_size
+        self.eval_step_size = eval_step_size
+        self.shuffle = shuffle
 
 STOP_FLAG = None
 
@@ -77,7 +82,6 @@ class FailMessage(object):
     sender_id : int
     text : str
     exception : str = None
-
 
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
@@ -108,10 +112,16 @@ class Worker(CONTEXT.Process):
     def _process_job(self, job : Job):
         if not job.checkpoints:
             raise ValueError("No checkpoints available in job-object.")
-        if len(job.checkpoints) == 1:
-            return train_and_evaluate(job.checkpoints[0], self.trainer, self.evaluator, job.step_size, self.device, self.__log, self.verbose)
+        if isinstance(job.checkpoints, Checkpoint):
+            return train_and_evaluate(checkpoint=job.checkpoints, trainer=self.trainer, evaluator=self.evaluator,
+                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size,
+                device=self.device, logger=self.__log, shuffle=job.shuffle, verbose=self.verbose)
         else:
-            return tuple(train_and_evaluate(checkpoint, self.trainer, self.evaluator, job.step_size, self.device, self.__log, self.verbose) for checkpoint in job.checkpoints)
+            return tuple(train_and_evaluate(checkpoint=checkpoint, trainer=self.trainer, evaluator=self.evaluator,
+                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size,
+                device=self.device, logger=self.__log, shuffle=job.shuffle, verbose=self.verbose)
+                for checkpoint in job.checkpoints)
+
     def run(self):
         self.__log("running...")
         # set random state for reproducibility
@@ -137,10 +147,12 @@ class Worker(CONTEXT.Process):
                     result = self._process_job(job)
                 self.__log("returning job result...")
                 self.return_queue.put(result)
-            except Exception as exception:
+            except Exception:
+                import traceback
                 self.__log("job excecution failed! Exception:")
-                self.__log(str(exception))
-                fail_message = FailMessage(self._id, "Job excecution failed!", str(exception))
+                traceback_stacktrace = traceback.format_exc()
+                self.__log(str(traceback_stacktrace))
+                fail_message = FailMessage(self._id, "Job excecution failed!", str(traceback_stacktrace))
                 self.return_queue.put(fail_message)
                 # delete failed job
                 del job

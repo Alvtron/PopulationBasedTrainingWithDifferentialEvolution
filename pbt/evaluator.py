@@ -7,18 +7,14 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
 
 from .hyperparameters import Hyperparameters
+from .utils.data import create_subset, create_subset_with_indices
 
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
     def __init__(self, model_class : Module, test_data : Dataset, batch_size : int, loss_functions : dict,
-            loss_group : str = 'eval', num_workers : int = None, pin_memory : bool = False, verbose : bool = False):
+            loss_group : str = 'eval', verbose : bool = False):
         self.model_class = model_class
-        self.test_data = DataLoader(
-            dataset=test_data,
-            batch_size = batch_size,
-            shuffle = False,)
-            #num_workers=num_workers,
-            #pin_memory=pin_memory)
+        self.test_data = test_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
@@ -37,14 +33,19 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, checkpoint : dict, device : str = 'cpu'):
+    def __call__(self, checkpoint : dict, step_size : int = None, device : str = 'cpu', shuffle : bool = False):
         """Evaluate model on the provided validation or test set."""
         start_eval_time_ns = time.time_ns()
-        dataset_length = len(self.test_data)
-        checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
+        self._print("creating model...")
         model = self.create_model(checkpoint.model_state, device)
-        for batch_index, (x, y) in enumerate(self.test_data, start=1):
-            if self.verbose: print(f"({batch_index}/{dataset_length})", end=" ")
+        self._print("creating batches...")
+        batches = DataLoader(dataset = self.test_data, batch_size = self.batch_size, shuffle = shuffle)
+        num_batches = len(batches)
+        # reset loss dict
+        checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
+        self._print("evaluating...")
+        for batch_index, (x, y) in enumerate(batches):
+            if self.verbose: print(f"({batch_index + 1}/{num_batches})", end=" ")
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             with torch.no_grad():
@@ -52,11 +53,13 @@ class Evaluator(object):
             for metric_type, metric_function in self.loss_functions.items():
                 with torch.no_grad():
                     loss = metric_function(output, y)
-                checkpoint.loss[self.loss_group][metric_type] += loss.item() / float(dataset_length)
+                checkpoint.loss[self.loss_group][metric_type] += loss.item() / float(num_batches)
                 if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
                 del loss
             if self.verbose: print(end="\n")
             del output
+            if step_size is not None and batch_index + 1 == step_size:
+                break
         # clean GPU memory
         del model
         torch.cuda.empty_cache()
