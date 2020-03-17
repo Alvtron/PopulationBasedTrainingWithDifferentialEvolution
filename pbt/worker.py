@@ -36,7 +36,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
 def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, train_step_size : int, eval_step_size : int,
-        device : str, logger : Callable, shuffle : bool = False, verbose : bool = False):
+        device : str, logger : Callable, train_shuffle : bool = False, eval_shuffle : bool = False, verbose : bool = False):
     # load checkpoint state
     logger(f"loading state of checkpoint {checkpoint.id}...")
     try:
@@ -45,17 +45,17 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
         warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
     # train checkpoint model
     logger(f"training checkpoint {checkpoint.id}...")
-    trainer(checkpoint, train_step_size, device, shuffle)
+    trainer(checkpoint, train_step_size, device, train_shuffle)
     # evaluate checkpoint model
     logger(f"evaluating checkpoint {checkpoint.id}...")
-    evaluator(checkpoint, eval_step_size, device, shuffle)
+    evaluator(checkpoint, eval_step_size, device, eval_shuffle)
     # unload checkpoint state
     logger(f"unloading state of checkpoint {checkpoint.id}...")
     checkpoint.unload_state()
     return checkpoint
 
 class Job:
-    def __init__(self, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, shuffle : bool = False):
+    def __init__(self, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, train_shuffle : bool = False, eval_shuffle : bool = False):
         if isinstance(checkpoints, Sequence) and all(isinstance(checkpoint, Checkpoint) for checkpoint in checkpoints):
             self.checkpoints = checkpoints
         elif isinstance(checkpoints, Checkpoint):
@@ -68,7 +68,8 @@ class Job:
             raise TypeError
         self.train_step_size = train_step_size
         self.eval_step_size = eval_step_size
-        self.shuffle = shuffle
+        self.train_shuffle = train_shuffle
+        self.eval_shuffle = eval_shuffle
 
 STOP_FLAG = None
 
@@ -114,12 +115,12 @@ class Worker(CONTEXT.Process):
             raise ValueError("No checkpoints available in job-object.")
         if isinstance(job.checkpoints, Checkpoint):
             return train_and_evaluate(checkpoint=job.checkpoints, trainer=self.trainer, evaluator=self.evaluator,
-                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size,
-                device=self.device, logger=self.__log, shuffle=job.shuffle, verbose=self.verbose)
+                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size, device=self.device,
+                logger=self.__log, train_shuffle=job.train_shuffle, eval_shuffle=job.eval_shuffle, verbose=self.verbose)
         else:
             return tuple(train_and_evaluate(checkpoint=checkpoint, trainer=self.trainer, evaluator=self.evaluator,
-                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size,
-                device=self.device, logger=self.__log, shuffle=job.shuffle, verbose=self.verbose)
+                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size, device=self.device,
+                logger=self.__log, train_shuffle=job.train_shuffle, eval_shuffle=job.eval_shuffle, verbose=self.verbose)
                 for checkpoint in job.checkpoints)
 
     def run(self):

@@ -115,11 +115,11 @@ class TrainingService(object):
         [worker.close() for worker in self._workers]
 
     def train(self, candidates : Iterable[Union[Checkpoint, Tuple[Checkpoint,...]]], train_step_size : int, eval_step_size : int = None,
-            shuffle : bool = False) -> Generator[Union[Checkpoint, Tuple[Checkpoint,...]], None, None]:
+            train_shuffle : bool = False, eval_shuffle : bool = False) -> Generator[Union[Checkpoint, Tuple[Checkpoint,...]], None, None]:
         self._print(f"queuing candidates for training...")
         n_sent = 0
         for checkpoints, worker in zip(candidates, itertools.cycle(self._workers)):
-            job = Job(checkpoints, train_step_size, eval_step_size, shuffle)
+            job = Job(checkpoints, train_step_size, eval_step_size, train_shuffle, eval_shuffle)
             worker.receive_queue.put(job)
             n_sent += 1
         self._print(f"awaiting trained candidates...")
