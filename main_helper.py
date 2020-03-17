@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import pbt.evolution
 from pbt.controller import Controller
-from pbt.task import mnist, emnist, fashionmnist, creditfraud
+from pbt.task import mnist, emnist, fashionmnist, creditfraud, cifar
 from pbt.analyze import Analyzer
 from pbt.database import Database
 from pbt.evaluator import Evaluator
@@ -25,6 +25,11 @@ def import_task(task_name : str):
     # CREDIT CARD FRAUD
     if task_name == "creditfraud":
         return creditfraud.CreditCardFraud()
+    # CIFAR
+    elif task_name == "cifar10_vgg16":
+        return cifar.Cifar10('VGG16')
+    elif task_name == "cifar100_vgg16":
+        return cifar.Cifar100('VGG16')
     # MNIST
     elif task_name == "mnist_lenet5_dropout":
         return mnist.Mnist('lenet5_dropout')

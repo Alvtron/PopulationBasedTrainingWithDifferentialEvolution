@@ -3,7 +3,7 @@ from functools import partial
 import torch
 import torchvision
 from torch import nn
-from torchvision.datasets import (EMNIST, KMNIST, MNIST, QMNIST, FashionMNIST)
+from torchvision.datasets import FashionMNIST
 from torch.optim import Optimizer
 from torch.utils.data import Dataset
 

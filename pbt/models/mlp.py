@@ -4,7 +4,6 @@ from abc import abstractmethod, abstractstaticmethod
 import torch.nn as nn
 
 from .hypernet import HyperNet
-from ..hyperparameters import ContiniousHyperparameter
 
 class MLP(HyperNet):
     def __init__(self, output_size : int):
