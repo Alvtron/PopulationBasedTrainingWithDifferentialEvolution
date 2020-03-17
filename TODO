@@ -6,19 +6,20 @@ Possible solution: [Explain what could be done]
 
 -- Pending
 
-Priority level: Medium
+Priority level: Low
 What: Reduce evolve time or make evolver an asynchronous process class to run evolving on a different thread.
 Why: The evolving process can take too long, extending the evolving queue and slowing down the population training process.
-
-Priority level: Medium
-What: Implement a hyper_parameter_eval-function. Approximate the appropriate number of steps a model needs to be trained in order to evaluate its performance.
-Why: We need to be able to compare two different hyper-parameter configurations on a given network model.
 
 Priority level: Low
 What: Implement extraction of hyper-parameter scheduele.
 Why: This is the main purpose of this project. This is nescessary for achieving reproducibility.
 
 -- Completed
+
+Priority level: Medium
+What: Implement a hyper_parameter_eval-function. Approximate the appropriate number of steps a model needs to be trained in order to evaluate its performance.
+Why: We need to be able to compare two different hyper-parameter configurations on a given network model.
+Actual solution: Enabled step size and shuffling for evaluation. Train x steps ahead and evaluate on x random shuffled batches.
 
 Priority level: Low
 What: Combine Tensorboard scalar plots of different members. 

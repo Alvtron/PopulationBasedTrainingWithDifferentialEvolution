@@ -39,7 +39,7 @@ class CreditCardFraud(Task):
                 'lr': ContiniousHyperparameter(1e-6, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-6, 1.0),
                 'weight_decay': ContiniousHyperparameter(0.0, 1e-5),
-                'nesterov': DiscreteHyperparameter(False, True)
+                #'nesterov': DiscreteHyperparameter(False, True)
             })
 
     @property

@@ -18,7 +18,7 @@ class EvolveEngine(ABC):
     """
     Base class for all evolvers.
     """
-
+    
     def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         pass
@@ -197,7 +197,9 @@ class DifferentialEvolution(EvolveEngine):
             j_rand = random.randrange(0, hp_dimension_size)
             for j in range(hp_dimension_size):
                 if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
-                    candidate[j] = de_rand_1(F = self.F, x_r0 = x_r0[j], x_r1 = x_r1[j], x_r2 = x_r2[j])
+                    mutant = de_rand_1(F = self.F, x_r0 = x_r0[j], x_r1 = x_r1[j], x_r2 = x_r2[j])
+                    constrained = clip(mutant, 0.0, 1.0)
+                    candidate[j] = constrained 
                 else:
                     candidate[j] = member[j]
             yield member.copy(), candidate

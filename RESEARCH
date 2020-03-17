@@ -1,0 +1,14 @@
+How much knowledge about the search space is required? (i.e. learning rate lower- and upper bounds)
+
+Which hyper-parameters are not suited for DE optimization?
+
+How many samples (batches) are needed to estimate model performance?
+
+How many steps are appropriate for making good hyper-parameter suggestions? (Knowledge about task vs. good hyper-parameter approximation)
+Should step_size become a hyper-parameter?
+
+c1 ------- c2 ---- c3 -- c4 -------- c5 
+
+c1 ----- c2 --------- c3 - c4 ---- c5
+
+scheduele
