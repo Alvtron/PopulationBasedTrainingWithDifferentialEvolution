@@ -47,9 +47,7 @@ class FashionMnist(Task):
             model= model_hyper_parameters,
             optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
-                'momentum': ContiniousHyperparameter(1e-9, 1.0),
-                #'weight_decay': ContiniousHyperparameter(1e-9, 1e-1),
-                'nesterov': DiscreteHyperparameter(False, True)
+                'momentum': ContiniousHyperparameter(1e-9, 1.0)
             })
 
     @property
