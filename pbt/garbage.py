@@ -1,4 +1,7 @@
+from typing import Sequence
+
 from pbt.database import Database
+from pbt.member import Generation
 
 class GarbageCollector:
     def __init__(self, database : Database, history_limit : int = None, verbose : int = 0):
@@ -6,12 +9,12 @@ class GarbageCollector:
         self.history_limit = history_limit
         self.verbose = verbose
 
-    def _log(self, message : str):
+    def _log(self, message : str) -> None:
         if verbose <= 0:
             return
         print(f"GC: {message}")
 
-    def collect(self, generations):
+    def collect(self, generations : Sequence[Generation]) -> None:
         if self.history_limit is None:
             return
         if len(generations) < self.history_limit + 1:
