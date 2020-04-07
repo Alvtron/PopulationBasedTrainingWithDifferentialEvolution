@@ -232,7 +232,7 @@ class Generation(object):
     def __setitem__(self, id, member):
         self._members[id] = member
 
-    def items(self):
+    def entries(self):
         return iter(self._members.items())
 
     def append(self, member : MemberState):

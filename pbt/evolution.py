@@ -323,7 +323,7 @@ class SHADE(EvolveEngine):
         """
         if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher.")
-        for index, member in generation.items():
+        for index, member in generation.entries():
             # control parameter assignment
             self.CR[index], self.F[index] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
@@ -500,7 +500,7 @@ class LSHADEWithWeightSharing(LSHADE):
         """
         if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher.")
-        for index, member in generation.items():
+        for index, member in generation.entries():
             # control parameter assignment
             self.CR[index], self.F[index] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
