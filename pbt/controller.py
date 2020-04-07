@@ -132,7 +132,7 @@ class Controller(object):
             eval_metric=self.eval_metric,
             minimize=self.loss_functions[self.eval_metric].minimize)
         # process new member with evolver
-        self.evolver.on_member_spawn(member, self._whisper)
+        self.evolver.on_spawn(member, self._whisper)
         return member
 
     def create_members(self, k : int) -> List[Checkpoint]:
@@ -228,7 +228,7 @@ class Controller(object):
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             # train new candidates
             for candidates in self.training_service.train(new_candidates, self.step_size, None, False, False):
-                member = self.evolver.on_evaluation(candidates, self._whisper)
+                member = self.evolver.on_evaluate(candidates, self._whisper)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
                 self._say(member.performance_details(), member)
@@ -266,7 +266,7 @@ class Controller(object):
             best_candidates = list()
             # test candidates with a smaller eval step
             for candidates in self.training_service.train(new_candidates, eval_steps, eval_steps, False, True):
-                member = self.evolver.on_evaluation(candidates, self._whisper)
+                member = self.evolver.on_evaluate(candidates, self._whisper)
                 best_candidates.append(member)
                 self.nfe += 1
             # train best candidate on full dataset

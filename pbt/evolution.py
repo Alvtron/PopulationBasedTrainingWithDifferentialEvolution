@@ -19,7 +19,7 @@ class EvolveEngine(ABC):
     Base class for all evolvers.
     """
     
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
+    def on_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         pass
 
@@ -31,7 +31,7 @@ class EvolveEngine(ABC):
         """Called for each member in generation. Returns one candidate or multiple candidates."""
         pass
 
-    def on_evaluation(self, candidates : Tuple[MemberState, ...], logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidates : Tuple[MemberState, ...], logger : Callable[[str], None]) -> MemberState:
         """Returns the determined 'best' member between the candidates."""
         pass
 
@@ -43,7 +43,7 @@ class RandomSearch(EvolveEngine):
     def __init__(self):
         super().__init__()
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
+    def on_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -52,7 +52,7 @@ class RandomSearch(EvolveEngine):
         for member in generation:
             yield member.copy()
 
-    def on_evaluation(self, candidate : MemberState, logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidate : MemberState, logger : Callable[[str], None]) -> MemberState:
         """Simply returns the candidate. No evaluation conducted."""
         return candidate
 
@@ -61,7 +61,7 @@ class RandomWalk(EvolveEngine):
         super().__init__()
         self.explore_factor = explore_factor
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
+    def on_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -75,7 +75,7 @@ class RandomWalk(EvolveEngine):
                 explorer[index] = explorer[index] * perturb_factor
             yield explorer
 
-    def on_evaluation(self, candidate : MemberState, logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidate : MemberState, logger : Callable[[str], None]) -> MemberState:
         """Simply returns the candidate. No evaluation conducted."""
         return candidate
 
@@ -90,7 +90,7 @@ class ExploitAndExplore(EvolveEngine):
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
+    def on_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -102,7 +102,7 @@ class ExploitAndExplore(EvolveEngine):
                 candidate = self.explore(candidate, logger)
             yield candidate
 
-    def on_evaluation(self, candidate : MemberState, logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidate : MemberState, logger : Callable[[str], None]) -> MemberState:
         """Simply returns the candidate. No evaluation conducted."""
         return candidate
 
@@ -152,7 +152,7 @@ class BlindDifferentialEvolution(ExploitAndExplore):
                 candidate = self.explore(candidate, generation, logger)
             yield candidate
 
-    def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         return candidates
 
@@ -179,7 +179,7 @@ class DifferentialEvolution(EvolveEngine):
         self.F = F
         self.Cr = Cr
 
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]):
+    def on_spawn(self, member : MemberState, logger : Callable[[str], None]):
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -204,7 +204,7 @@ class DifferentialEvolution(EvolveEngine):
                     candidate[j] = member[j]
             yield member.copy(), candidate
 
-    def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         member, candidate = candidates
         if member <= candidate :
@@ -307,7 +307,7 @@ class SHADE(EvolveEngine):
         self.CR = dict()
         self.F = dict()
         
-    def on_member_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
+    def on_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
         [hp.sample_uniform() for hp in member.parameters]
 
@@ -347,7 +347,7 @@ class SHADE(EvolveEngine):
                     candidate[j] = member[j]
             yield member.copy(), candidate
 
-    def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
         """Evaluates candidate, compares it to the original member and returns the best performer."""
         member, candidate = candidates
         if member <= candidate:
@@ -425,9 +425,9 @@ class LSHADE(SHADE):
         self.MAX_NFE = MAX_NFE
         self._nfe = 0
 
-    def on_evaluation(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
+    def on_evaluate(self, candidates : Tuple[MemberState, MemberState], logger : Callable[[str], None]) -> MemberState:
         self._nfe += 1 # increment the number of fitness evaluations
-        return super().on_evaluation(candidates, logger)
+        return super().on_evaluate(candidates, logger)
 
     def on_generation_end(self, generation : Generation, logger : Callable[[str], None]):
         self.adjust_generation_size(generation, logger)

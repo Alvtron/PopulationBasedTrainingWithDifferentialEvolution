@@ -50,12 +50,12 @@ class TestEvolving(unittest.TestCase):
         evolver = DifferentialEvolution()
         old_members = self.members
         for member in self.members:
-            evolver.on_member_spawn(member, self.logger)
+            evolver.on_spawn(member, self.logger)
         evolver.on_generation_start(member, self.logger)
         canidates = evolver.on_evolve(old_members, self.logger)
         new_members = Generation()
         for canidate in canidates:
-            best = evolver.on_evaluation(canidate, self.logger)
+            best = evolver.on_evaluate(canidate, self.logger)
             new_members.append(best)
         evolver.on_generation_end(old_members, self.logger)
         self.assertTrue(all(id(old) != id(new) for old, new in zip(old_members, new_members)))
@@ -65,12 +65,12 @@ class TestEvolving(unittest.TestCase):
         evolver = SHADE(self.population_size)
         old_members = self.members
         for member in self.members:
-            evolver.on_member_spawn(member, self.logger)
+            evolver.on_spawn(member, self.logger)
         evolver.on_generation_start(member, self.logger)
         canidates = evolver.on_evolve(old_members, self.logger)
         new_members = Generation()
         for canidate in canidates:
-            best = evolver.on_evaluation(canidate, self.logger)
+            best = evolver.on_evaluate(canidate, self.logger)
             new_members.append(best)
         evolver.on_generation_end(old_members, self.logger)
         self.assertTrue(all(id(old) != id(new) for old, new in zip(old_members, new_members)))
@@ -80,13 +80,13 @@ class TestEvolving(unittest.TestCase):
         evolver = LSHADE(self.population_size, 100)
         old_members = copy.deepcopy(self.members)
         for member in old_members:
-            evolver.on_member_spawn(member, self.logger)
+            evolver.on_spawn(member, self.logger)
         old_members_copy = copy.deepcopy(old_members)
         evolver.on_generation_start(member, self.logger)
         canidates = evolver.on_evolve(old_members, self.logger)
         new_members = Generation()
         for canidate in canidates:
-            best = evolver.on_evaluation(canidate, self.logger)
+            best = evolver.on_evaluate(canidate, self.logger)
             new_members.append(best)
         evolver.on_generation_end(old_members, self.logger)
         self.assertTrue(all(id(old) != id(new) for old, new in zip(old_members, new_members)))
