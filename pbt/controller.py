@@ -31,6 +31,7 @@ from .trainer import Trainer
 from .evaluator import Evaluator
 from .evolution import EvolveEngine
 from .database import Database
+from .garbage import GarbageCollector
 
 class Controller(object):
     def __init__(
@@ -46,8 +47,8 @@ class Controller(object):
         self.database = database
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
-        self.training_service = TrainingService(trainer=trainer, evaluator=evaluator,
-            devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+        self.training_service = TrainingService(trainer=trainer, evaluator=evaluator, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+        self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.step_size = step_size
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
@@ -56,25 +57,24 @@ class Controller(object):
         self.detect_NaN = detect_NaN
         self.verbose = verbose
         self.logging = logging
-        self.history_limit = history_limit if history_limit and history_limit > 2 else 2
         self.nfe = 0
         self._tensorboard_writer = tensorboard_writer
 
-    def __create_message(self, message : str, tag : str = None):
+    def __create_message(self, message : str, tag : str = None) -> str:
         time = get_datetime_string()
         generation = f"G{len(self.population.generations):03d}"
         nfe = f"({self.nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.nfe
         return f"{time} {nfe} {generation}{f' {tag}' if tag else ''}: {message}"
 
-    def _say(self, message : str, member : Checkpoint = None):
+    def _say(self, message : str, member : Checkpoint = None) -> None:
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 0."""
         self.__register(message=message, verbosity=0, member=member)
 
-    def _whisper(self, message : str, member = None):
+    def _whisper(self, message : str, member = None) -> None:
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 1."""
         self.__register(message=message, verbosity=1, member=member)
 
-    def __register(self, message : str, verbosity : int, member : Checkpoint = None):
+    def __register(self, message : str, verbosity : int, member : Checkpoint = None) -> None:
         """Logs and prints the provided message in the appropriate syntax. If a member is provided, the message is attached to that member."""
         print_tag = member if member else self.__class__.__name__
         file_tag = f"member_{member.id}" if member else self.__class__.__name__
@@ -83,22 +83,22 @@ class Controller(object):
         self.__log_to_file(message=full_message, tag=file_tag)
         self.__log_to_tensorboard(message=full_message, tag=file_tag, global_steps=member.steps if member else None)
     
-    def __print(self, message : str, verbosity : int):
+    def __print(self, message : str, verbosity : int) -> None:
         if self.verbose > verbosity:
             print(message)
 
-    def __log_to_file(self, message : str, tag : str):
+    def __log_to_file(self, message : str, tag : str) -> None:
         if not self.logging:
             return
         with self.database.create_file(tag='logs', file_name=f"{tag}_log.txt").open('a+') as file:
             file.write(message + '\n')
     
-    def __log_to_tensorboard(self, message : str, tag : str, global_steps : int = None):
+    def __log_to_tensorboard(self, message : str, tag : str, global_steps : int = None) -> None:
         if not self._tensorboard_writer:
             return
         self._tensorboard_writer.add_text(tag=tag, text_string=message, global_step=global_steps)
 
-    def _update_tensorboard(self, member : Checkpoint):
+    def _update_tensorboard(self, member : Checkpoint) -> None:
         """Plots member data to tensorboard"""
         if not self._tensorboard_writer:
             return       
@@ -122,7 +122,7 @@ class Controller(object):
                 scalar_value=hparam.normalized if isinstance(hparam, DiscreteHyperparameter) else hparam.value,
                 global_step=member.steps)
 
-    def create_member(self, id):
+    def create_member(self, id) -> Checkpoint:
         """Create a member object"""
         # create new member object
         member = Checkpoint(
@@ -135,39 +135,25 @@ class Controller(object):
         self.evolver.on_member_spawn(member, self._whisper)
         return member
 
-    def create_members(self, k : int):
+    def create_members(self, k : int) -> List[Checkpoint]:
         members = list()
         for id in range(k):
             members.append(self.create_member(id))
         return members
 
-    def remove_bad_member_states(self):
-        if self.history_limit is None:
-            return
-        if len(self.population.generations) < self.history_limit + 1:
-            return
-        for member in self.population.generations[-(self.history_limit + 1)]:
-            if not member.has_state():
-                # skipping the member as it has no state to delete
-                continue
-            self._whisper(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.4f}...")
-            member.delete_state()
-            # updating database
-            self.database.update(member.id, member.steps, member)
-
-    def update_database(self, member : Checkpoint):
+    def update_database(self, member : Checkpoint) -> None:
         """Updates the database stored in files."""
         self._whisper(f"updating member {member.id} in database...")
         self.database.update(member.id, member.steps, member)
 
-    def is_member_finished(self, member : Checkpoint):
+    def is_member_finished(self, member : Checkpoint) -> bool:
         """With the end_criteria, check if the provided member is finished training."""
         if 'steps' in self.end_criteria and self.end_criteria['steps'] and member.steps >= self.end_criteria['steps']:
             # the number of steps is equal or above the given treshold
             return True
         return False
     
-    def is_population_finished(self):
+    def is_population_finished(self) -> bool:
         """
         With the end_criteria, check if the entire population is finished
         by inspecting the provided member.
@@ -191,12 +177,12 @@ class Controller(object):
             generation.append(member)
         return generation
 
-    def start(self, use_old = False):
+    def start(self, use_old = False) -> None:
         """
         Start global training procedure. Ends when end_criteria is met.
         """
         try:
-            self.on_start()
+            self._on_start()
             # start controller loop
             self._say("Starting training procedure...")
             if not use_old:
@@ -208,9 +194,9 @@ class Controller(object):
         except KeyboardInterrupt:
             self._say("interupted.")
         finally:
-            self.on_end()
+            self._on_end()
 
-    def on_start(self):
+    def _on_start(self) -> None:
         """Resets class properties, starts training service and cleans up temporary files."""
         # reset class properties
         self.nfe = 0
@@ -219,12 +205,12 @@ class Controller(object):
         # start training service
         self.training_service.start()
 
-    def on_end(self):
+    def _on_end(self) -> None:
         """Stops training service and cleans up temporary files."""
         # close training service
         self.training_service.stop()
 
-    def train_synchronously(self):
+    def train_synchronously(self) -> None:
         """
         Performs the training of the population synchronously.
         Each member is trained individually and asynchronously,
@@ -259,10 +245,10 @@ class Controller(object):
             self.population.append(new_generation)
             # perform garbage collection
             self._whisper("performing garbage collection...")
-            self.remove_bad_member_states()
+            self.garbage_collector.collect(self.population.generations)
         self._say(f"end criteria has been reached.")
 
-    def train_synchronously_old(self, eval_steps=8):
+    def train_synchronously_old(self, eval_steps=8) -> None:
         """
         Performs the training of the population synchronously.
         Each member is trained individually and asynchronously,
@@ -300,5 +286,5 @@ class Controller(object):
             self.population.append(new_generation)
             # perform garbage collection
             self._whisper("performing garbage collection...")
-            self.remove_bad_member_states()
+            self.garbage_collector.collect(self.population.generations)
         self._say(f"end criteria has been reached.")

@@ -21,7 +21,7 @@ import pbt.member
 from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
-from .worker import STOP_FLAG, FailMessage, InvalidInputMessage, Job, Worker
+from .worker import STOP_FLAG, FailMessage, Trial, Worker
 from .utils.cuda import get_gpu_memory_stats
 
 # various settings for reproducibility
@@ -45,15 +45,15 @@ class TrainingService(object):
         self.verbose = verbose
         self._cuda = any(device.startswith('cuda') for device in devices)
         self._context = torch.multiprocessing.get_context('spawn')
+        self._manager = self._context.Manager()
         self._end_event = self._context.Event()
-        self._return_queue = self._context.Queue()
         send_queues = [self._context.Queue() for _ in devices]
-        workers = list()
-        for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices)):
-            worker = Worker(id=id, end_event=self._end_event, receive_queue=send_queue, return_queue=self._return_queue,
+        self._workers : List[Worker] = [
+            Worker(id=id, end_event=self._end_event, receive_queue=send_queue,
                 trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose > 1)
-            workers.append(worker)
-        self._workers : List[Worker] = list(workers)
+            for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
+        self._workers_iterator = itertools.cycle(self._workers)
+
 
     def _print(self, message : str) -> None:
         if self.verbose < 1:
@@ -69,9 +69,6 @@ class TrainingService(object):
         output = ', '.join(memory_stats_formatted)
         self._print(output)
 
-    def _on_invalid_input_message(self, message : InvalidInputMessage):
-        raise Exception(f"invalid input message received from worker {message.sender_id}: {message.text}.")
-
     def _on_fail_message(self, message : FailMessage) -> None:
         # print info
         self._print(f"fail message received from worker {message.sender_id}: {message.text}.")
@@ -80,27 +77,21 @@ class TrainingService(object):
 
     def _respawn(self, worker_id : int) -> None:
         # stop existing worker
+        worker = self._workers[worker_id]
         self._print(f"terminating old worker with id {worker_id}...")
-        worker = next((worker for worker in self._workers if worker.id == worker_id), None)
-        if worker is None:
-            raise KeyError(f"Could not find worker {worker_id}!")
         self._stop_worker(worker)
         # spawn new worker
         self._print(f"spawning new worker with id {worker.id}...")
-        new_worker = Worker(id=worker.id, end_event=self._end_event, receive_queue=worker.receive_queue, return_queue=self._return_queue,
-                trainer=worker.trainer, evaluator=worker.evaluator, device = worker.device, random_seed = worker.id, verbose = self.verbose > 1)
-        self._workers.append(new_worker)
-        new_worker.start()
+        self._workers[worker_id] = Worker(id=worker.id, end_event=self._end_event, receive_queue=worker.receive_queue, return_queue=self._return_queue,
+            trainer=worker.trainer, evaluator=worker.evaluator, device = worker.device, random_seed = worker.id, verbose = self.verbose > 1)
+        self._workers[worker_id].start()
 
     def _stop_worker(self, worker : Worker) -> None:
         worker.terminate()
         time.sleep(1.0) # give worker one second to stop
         worker.close()
-        self._workers.remove(worker)
 
     def start(self) -> None:
-        if self._workers is None:
-            raise Exception("no workers found.")
         if any(worker.is_alive() for worker in self._workers):
             raise Exception("service is already running. Consider calling stop() when service is not in use.")
         [worker.start() for worker in self._workers]
@@ -116,33 +107,36 @@ class TrainingService(object):
 
     def train(self, candidates : Iterable[Union[Checkpoint, Tuple[Checkpoint,...]]], train_step_size : int, eval_step_size : int = None,
             train_shuffle : bool = False, eval_shuffle : bool = False) -> Generator[Union[Checkpoint, Tuple[Checkpoint,...]], None, None]:
-        self._print(f"queuing candidates for training...")
         n_sent = 0
-        for checkpoints, worker in zip(candidates, itertools.cycle(self._workers)):
-            job = Job(checkpoints, train_step_size, eval_step_size, train_shuffle, eval_shuffle)
-            worker.receive_queue.put(job)
+        n_returned = 0
+        return_queue = self._manager.Queue()
+        failed_workers = set()
+        self._print(f"queuing candidates for training...")
+        for checkpoints, worker in zip(candidates, self._workers_iterator):
+            trial = Trial(return_queue=return_queue, checkpoints=checkpoints, train_step_size=train_step_size,
+                eval_step_size=eval_step_size, train_shuffle=train_shuffle, eval_shuffle=eval_shuffle)
+            worker.receive_queue.put(trial)
             n_sent += 1
         self._print(f"awaiting trained candidates...")
-        n_returned = 0
-        failed_workers = set()
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
-            result = self._return_queue.get()
+            result = return_queue.get()
             self._print_gpu_memory_stats()
-            if isinstance(result, InvalidInputMessage):
-                self._on_invalid_input_message(result)
             if isinstance(result, FailMessage):
                 self._on_fail_message(result)
                 failed_workers.add(result.sender_id)
                 continue
             n_returned += 1
             yield result
-        if len(failed_workers) == len(self._workers):
-            raise Exception("All workers failed.")
+        if not return_queue.empty():
+            raise Exception("return queue is not empty.")
+        elif len(failed_workers) == len(self._workers):
+            raise Exception("all workers failed.")
         elif n_returned < n_sent:
-            if len(failed_workers) > 0:
+            if failed_workers:
                 raise Exception(f"{len(failed_workers)} workers failed.")
-            raise Exception(f"{n_sent - n_returned} candidates failed.")
-        elif len(failed_workers) > 0:
+            else:
+                raise Exception(f"{n_sent - n_returned} candidates failed.")
+        elif failed_workers:
             self._respawn(failed_workers)
         else:
             self._print("all candidates were trained successfully.")

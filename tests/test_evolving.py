@@ -16,7 +16,7 @@ from pbt.member import Checkpoint, Generation
 from pbt.task.mnist import MnistKnowledgeSharing
 from pbt.trainingservice import TrainingService
 
-class TestEvovling(unittest.TestCase):
+class TestEvolving(unittest.TestCase):
     def logger(self, message, checkpoint = None):
         return
 

@@ -2,6 +2,7 @@
 data/
 checkpoints/
 test_output/
+tests/checkpoint/
 .member_states/
 
 # Byte-compiled / optimized / DLL files

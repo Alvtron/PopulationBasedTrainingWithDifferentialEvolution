@@ -7,16 +7,18 @@ import torch
 from pbt.database import ReadOnlyDatabase
 
 class TestDatabase(unittest.TestCase):
+    def setUp(self):
+        self.database = ReadOnlyDatabase("tests/checkpoint/20200323100808", read_function=torch.load)
+
     def test_database(self):
-        database = ReadOnlyDatabase("tests/checkpoint/20200311045310", read_function=torch.load)
-        self.assertTrue(database.exists)
-        len(database)
-        entry = database.entry(0, 250)
+        self.assertTrue(self.database.exists)
+        len(self.database)
+        entry = self.database.entry(0, 250)
         self.assertEqual(entry.id, 0)
         self.assertEqual(entry.steps, 250)
-        entry = database.entry(0, 300)
+        entry = self.database.entry(0, 300)
         self.assertTrue(entry is None)
-        self.assertTrue(0 in database)
-        self.assertFalse(50 in database)
-        list(database.entries(0))
-        list(itertools.islice(database, 0, 10))
+        self.assertTrue(0 in self.database)
+        self.assertFalse(50 in self.database)
+        list(self.database.entries(0))
+        list(itertools.islice(self.database, 0, 10))

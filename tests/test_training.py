@@ -66,7 +66,7 @@ class TestTraining(unittest.TestCase):
         step_size = 10
         old_checkpoints = list(self.checkpoints)
         for epoch in range(epochs):
-            new_checkpoints = list(self.trainingservice.train(candidates=old_checkpoints, step_size=step_size))
+            new_checkpoints = list(self.trainingservice.train(candidates=old_checkpoints, train_step_size=step_size))
             for new_checkpoint in new_checkpoints:
                 old_checkpoint = next(c for c in old_checkpoints if c.id == new_checkpoint.id)
                 self.assertNotEqual(id(old_checkpoint), id(new_checkpoint))

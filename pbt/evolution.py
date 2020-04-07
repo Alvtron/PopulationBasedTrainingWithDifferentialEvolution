@@ -161,7 +161,7 @@ class BlindDifferentialEvolution(ExploitAndExplore):
             raise ValueError("generation size must be at least 3 or higher.")
         candidate = member.copy()
         hp_dimension_size = len(member.parameters)
-        x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
+        x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=(member,))
         j_rand = random.randrange(0, hp_dimension_size)
         for j in range(hp_dimension_size):
             if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
@@ -193,7 +193,7 @@ class DifferentialEvolution(EvolveEngine):
         for member in generation:
             candidate = member.copy()
             hp_dimension_size = len(member.parameters)
-            x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=member)
+            x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=(member,))
             j_rand = random.randrange(0, hp_dimension_size)
             for j in range(hp_dimension_size):
                 if random.uniform(0.0, 1.0) <= self.Cr or j == j_rand:
@@ -327,7 +327,7 @@ class SHADE(EvolveEngine):
             # control parameter assignment
             self.CR[index], self.F[index] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
-            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=member)
+            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=(member,))
             # select random best member
             x_pbest = self.pbest_member(generation)
             # hyper-parameter dimension size
@@ -504,7 +504,7 @@ class LSHADEWithWeightSharing(LSHADE):
             # control parameter assignment
             self.CR[index], self.F[index] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
-            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=member)
+            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=(member,))
             # select random best member
             x_pbest = self.pbest_member(generation)
             # hyper-parameter dimension size

@@ -4,6 +4,7 @@ import sys
 import copy
 import time
 import math
+import uuid
 import random
 import warnings
 import itertools
@@ -54,8 +55,8 @@ def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : E
     checkpoint.unload_state()
     return checkpoint
 
-class Job:
-    def __init__(self, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, train_shuffle : bool = False, eval_shuffle : bool = False):
+class Trial:
+    def __init__(self, return_queue, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, train_shuffle : bool = False, eval_shuffle : bool = False):
         if isinstance(checkpoints, Sequence) and all(isinstance(checkpoint, Checkpoint) for checkpoint in checkpoints):
             self.checkpoints = checkpoints
         elif isinstance(checkpoints, Checkpoint):
@@ -66,17 +67,14 @@ class Job:
             raise TypeError
         if eval_step_size is not None and not isinstance(eval_step_size, int):
             raise TypeError
+        self.id_ = uuid.uuid4()
+        self.return_queue = return_queue
         self.train_step_size = train_step_size
         self.eval_step_size = eval_step_size
         self.train_shuffle = train_shuffle
         self.eval_shuffle = eval_shuffle
 
 STOP_FLAG = None
-
-@dataclass
-class InvalidInputMessage(object):
-    sender_id : int
-    text : str
 
 @dataclass
 class FailMessage(object):
@@ -86,12 +84,11 @@ class FailMessage(object):
 
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, id : int, end_event, receive_queue, return_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
+    def __init__(self, id : int, end_event, receive_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
         super().__init__()
         self._id = id
         self.end_event = end_event
         self.receive_queue = receive_queue
-        self.return_queue = return_queue
         self.trainer = trainer
         self.evaluator = evaluator
         self.cuda = device.startswith('cuda')
@@ -110,18 +107,18 @@ class Worker(CONTEXT.Process):
         full_message = f"{prefix}: {message}"
         print(full_message)
 
-    def _process_job(self, job : Job):
-        if not job.checkpoints:
-            raise ValueError("No checkpoints available in job-object.")
-        if isinstance(job.checkpoints, Checkpoint):
-            return train_and_evaluate(checkpoint=job.checkpoints, trainer=self.trainer, evaluator=self.evaluator,
-                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size, device=self.device,
-                logger=self.__log, train_shuffle=job.train_shuffle, eval_shuffle=job.eval_shuffle, verbose=self.verbose)
+    def _process_trial(self, trial : Trial):
+        if not trial.checkpoints:
+            raise ValueError("No checkpoints available in trial-object.")
+        if isinstance(trial.checkpoints, Checkpoint):
+            return train_and_evaluate(checkpoint=trial.checkpoints, trainer=self.trainer, evaluator=self.evaluator,
+                train_step_size=trial.train_step_size, eval_step_size=trial.eval_step_size, device=self.device,
+                logger=self.__log, train_shuffle=trial.train_shuffle, eval_shuffle=trial.eval_shuffle, verbose=self.verbose)
         else:
             return tuple(train_and_evaluate(checkpoint=checkpoint, trainer=self.trainer, evaluator=self.evaluator,
-                train_step_size=job.train_step_size, eval_step_size=job.eval_step_size, device=self.device,
-                logger=self.__log, train_shuffle=job.train_shuffle, eval_shuffle=job.eval_shuffle, verbose=self.verbose)
-                for checkpoint in job.checkpoints)
+                train_step_size=trial.train_step_size, eval_step_size=trial.eval_step_size, device=self.device,
+                logger=self.__log, train_shuffle=trial.train_shuffle, eval_shuffle=trial.eval_shuffle, verbose=self.verbose)
+                for checkpoint in trial.checkpoints)
 
     def run(self):
         self.__log("running...")
@@ -131,32 +128,31 @@ class Worker(CONTEXT.Process):
         torch.manual_seed(self.random_seed)
         while not self.end_event.is_set():
             # get next checkpoint from train queue
-            self.__log("awaiting job...")
-            job = self.receive_queue.get()
-            if job == STOP_FLAG:
+            self.__log("awaiting trial...")
+            trial = self.receive_queue.get()
+            if trial == STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
-            if not isinstance(job, Job):
-                self.__log("Received wrong job-type.")
-                self.return_queue.put(InvalidInputMessage(self._id, f"Wrong job-type received: {job}!"))
-                continue
+            if not isinstance(trial, Trial):
+                self.__log("Received wrong trial-type.")
+                raise TypeError('received wrong trial-type.')
             try:
                 if self.cuda:
                     with torch.cuda.device(self.device):
-                        result = self._process_job(job)
+                        result = self._process_trial(trial)
                 else:
-                    result = self._process_job(job)
-                self.__log("returning job result...")
-                self.return_queue.put(result)
+                    result = self._process_trial(trial)
+                self.__log("returning trial result...")
+                trial.return_queue.put(result)
             except Exception:
                 import traceback
-                self.__log("job excecution failed! Exception:")
+                self.__log("trial excecution failed! Exception:")
                 traceback_stacktrace = traceback.format_exc()
                 self.__log(str(traceback_stacktrace))
-                fail_message = FailMessage(self._id, "Job excecution failed!", str(traceback_stacktrace))
-                self.return_queue.put(fail_message)
-                # delete failed job
-                del job
+                fail_message = FailMessage(self._id, "trial excecution failed!", str(traceback_stacktrace))
+                trial.return_queue.put(fail_message)
+                # delete failed trial
+                del trial
                 break
             finally:
                 # Explicitly trigger garbage collection to make sure that all

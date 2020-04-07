@@ -18,14 +18,14 @@ class TestAnalyzer(unittest.TestCase):
     def test_analyzer(self):
         batch_size = 64
         device = 'cuda'
-        data_path = 'tests/checkpoint/20200311045310'
+        data_path = 'tests/checkpoint/20200323100808'
         task = FashionMnist()
         tester = Evaluator(
             model_class=task.model_class,
             test_data=task.datasets.test,
             batch_size=batch_size,
             loss_functions=task.loss_functions)
-        result_folder = Path("test_output/analyzer")
+        result_folder = Path("tests/analyzer_output")
         statistics_save_directory = Path(result_folder, "statistics")
         plot_save_directory = Path(result_folder, "plots")
         shutil.rmtree(result_folder, ignore_errors=True)

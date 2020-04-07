@@ -1,4 +1,5 @@
 import unittest
+import warnings
 import random
 import copy
 
@@ -17,6 +18,7 @@ class TestHyperparameters(unittest.TestCase):
         self.assertEqual(a.value, 50)
         a.normalized = 0.75
         self.assertEqual(a.value, 75)
+        warnings.simplefilter("ignore")
         a.value = 130
         self.assertEqual(a.value, 100)
         a.value = -0.40

@@ -1,4 +1,3 @@
-import unittest
 import random
 import time
 from collections import defaultdict
@@ -14,8 +13,8 @@ from pbt.database import ReadOnlyDatabase
 from pbt.analyze import Analyzer 
 from pbt.loss import CategoricalCrossEntropy, Accuracy, F1
 
-class TestControl(unittest.TestCase):
-    def test_train(self):
+class ControlTest():
+    def test_lenet5_mnist(self):
         # this gets test_cce 0.03494, test_acc 99.07444 after 12 epochs
         epochs = 12
         batch_size = 64
@@ -48,7 +47,7 @@ class TestControl(unittest.TestCase):
                 torchvision.transforms.Normalize((0.1307,), (0.3081,))
             ]))
         # split training set into training set and validation set
-        train_set, _, eval_set, _ = pbt.utils.data.stratified_split(
+        train_set, eval_set = pbt.utils.data.stratified_split(
             train_data, labels=train_data.targets, fraction=50000/60000, random_state=1)
 
         train_data = torch.utils.data.DataLoader(

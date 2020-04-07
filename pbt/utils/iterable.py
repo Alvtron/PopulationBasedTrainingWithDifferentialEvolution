@@ -1,6 +1,6 @@
 import itertools
 import random
-import collections
+from collections import defaultdict
 from abc import ABCMeta, abstractmethod
 from typing import Any, TypeVar, Iterable, Iterator, Dict, Sequence, Tuple, Generator, Callable, Union, List
 
@@ -11,14 +11,14 @@ class Comparable(metaclass=ABCMeta):
 T = TypeVar('T')
 CT = TypeVar('CT', bound=Comparable)
 
-def random_from_dict(values : Dict[object, CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
-    if not isinstance(exclude, collections.Sequence):
+def random_from_dict(values : Dict[object, CT], k : int = 1, exclude : Sequence[CT] = []) -> Tuple[CT, ...]:
+    if not isinstance(exclude, Sequence):
         exclude = [exclude]
     filtered = values.values() if not exclude else [v for id, v in values.values() if v not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
-def random_from_list(values : Iterable[CT], k : int = 1, exclude : Sequence[CT] = None) -> Tuple[CT, ...]:
-    if not isinstance(exclude, collections.Sequence):
+def random_from_list(values : Iterable[CT], k : int = 1, exclude : Sequence[CT] = []) -> Tuple[CT, ...]:
+    if not isinstance(exclude, Sequence):
         exclude = [exclude]
     filtered = values if not exclude else [v for v in values if v not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
@@ -69,10 +69,10 @@ def modify_iterable(iterable : Union[List[T], Dict[object,T]], expression : Call
         else:
             continue
 
-def merge_dictionaries(dicts) -> collections.defaultdict:
+def merge_dictionaries(dicts) -> defaultdict:
     ''' Merge dictionaries and keep values of common keys in list'''
     keys = set(itertools.chain(*dicts))
-    result = collections.defaultdict(list)
+    result = defaultdict(list)
     for d in dicts:
         for key in keys:
             if key in d:

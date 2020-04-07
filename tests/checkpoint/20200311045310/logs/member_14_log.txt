@@ -1,9 +1,0 @@
-2020-03-11 04:53:40 (0/1200) G000 Member 014, epoch 000, step 00250: train_cce 1.67638, train_acc 35.02500, eval_cce 1.11700, eval_acc 53.39096
-2020-03-11 04:54:10 (19/1200) G001 Member 014, epoch 000, step 00500: maintain member 14 (x 0.8434 > u 0.8721).
-2020-03-11 04:54:10 (20/1200) G001 Member 014, epoch 000, step 00500: train_cce 1.16638, train_acc 55.91250, eval_cce 0.84342, eval_acc 67.50887
-2020-03-11 04:54:46 (49/1200) G002 Member 014, epoch 000, step 00750: maintain member 14 (x 0.8018 > u 0.8324).
-2020-03-11 04:54:46 (50/1200) G002 Member 014, epoch 000, step 00750: train_cce 1.05105, train_acc 61.73125, eval_cce 0.80184, eval_acc 71.56472
-2020-03-11 04:55:21 (78/1200) G003 Member 014, epoch 001, step 01000: maintain member 14 (x 0.7592 > u 0.7616).
-2020-03-11 04:55:21 (79/1200) G003 Member 014, epoch 001, step 01000: train_cce 1.02559, train_acc 63.03750, eval_cce 0.75915, eval_acc 72.78369
-2020-03-11 04:55:57 (105/1200) G004 Member 014, epoch 001, step 01250: maintain member 14 (x 0.7896 > u 0.8014).
-2020-03-11 04:55:57 (106/1200) G004 Member 014, epoch 001, step 01250: train_cce 0.99708, train_acc 65.38750, eval_cce 0.78955, eval_acc 72.14096
