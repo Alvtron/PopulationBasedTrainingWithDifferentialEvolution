@@ -19,6 +19,7 @@ import torch
 import numpy as np
 
 import pbt.member
+from .step import Step
 from .trainer import Trainer
 from .evaluator import Evaluator
 from .member import Checkpoint, MissingStateError
@@ -35,25 +36,6 @@ torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 CONTEXT = torch.multiprocessing.get_context("spawn")
-
-def train_and_evaluate(checkpoint : Checkpoint, trainer : Trainer, evaluator : Evaluator, train_step_size : int, eval_step_size : int,
-        device : str, logger : Callable, train_shuffle : bool = False, eval_shuffle : bool = False, verbose : bool = False):
-    # load checkpoint state
-    logger(f"loading state of checkpoint {checkpoint.id}...")
-    try:
-        checkpoint.load_state(device=device, missing_ok=checkpoint.steps < train_step_size)
-    except MissingStateError:
-        warnings.warn(f"WARNING on PID {os.getpid()}: trained checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
-    # train checkpoint model
-    logger(f"training checkpoint {checkpoint.id}...")
-    trainer(checkpoint, train_step_size, device, train_shuffle)
-    # evaluate checkpoint model
-    logger(f"evaluating checkpoint {checkpoint.id}...")
-    evaluator(checkpoint, eval_step_size, device, eval_shuffle)
-    # unload checkpoint state
-    logger(f"unloading state of checkpoint {checkpoint.id}...")
-    checkpoint.unload_state()
-    return checkpoint
 
 class Trial:
     def __init__(self, return_queue, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, train_shuffle : bool = False, eval_shuffle : bool = False):
@@ -84,13 +66,14 @@ class FailMessage(object):
 
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, id : int, end_event, receive_queue, trainer, evaluator, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
+    def __init__(self, id : int, end_event, receive_queue, trainer, evaluator, tester = None, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
         super().__init__()
         self._id = id
         self.end_event = end_event
         self.receive_queue = receive_queue
         self.trainer = trainer
         self.evaluator = evaluator
+        self.tester = tester
         self.cuda = device.startswith('cuda')
         self.device = device
         self.random_seed = random_seed
@@ -110,15 +93,14 @@ class Worker(CONTEXT.Process):
     def _process_trial(self, trial : Trial):
         if not trial.checkpoints:
             raise ValueError("No checkpoints available in trial-object.")
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester,
+            train_step_size=trial.train_step_size, eval_step_size=trial.eval_step_size,
+            train_shuffle=trial.train_shuffle, eval_shuffle=trial.eval_shuffle,
+            device=self.device, logger=self.__log)
         if isinstance(trial.checkpoints, Checkpoint):
-            return train_and_evaluate(checkpoint=trial.checkpoints, trainer=self.trainer, evaluator=self.evaluator,
-                train_step_size=trial.train_step_size, eval_step_size=trial.eval_step_size, device=self.device,
-                logger=self.__log, train_shuffle=trial.train_shuffle, eval_shuffle=trial.eval_shuffle, verbose=self.verbose)
+            return step(trial.checkpoints)
         else:
-            return tuple(train_and_evaluate(checkpoint=checkpoint, trainer=self.trainer, evaluator=self.evaluator,
-                train_step_size=trial.train_step_size, eval_step_size=trial.eval_step_size, device=self.device,
-                logger=self.__log, train_shuffle=trial.train_shuffle, eval_shuffle=trial.eval_shuffle, verbose=self.verbose)
-                for checkpoint in trial.checkpoints)
+            return tuple(step(checkpoint) for checkpoint in trial.checkpoints)
 
     def run(self):
         self.__log("running...")

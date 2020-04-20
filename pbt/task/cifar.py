@@ -25,7 +25,7 @@ class Cifar10(Task):
     
     @property
     def model_class(self) -> hypernet.HyperNet:
-        return partial(vgg.VGG, self.vgg_name, output_size = self.num_classes)
+        return vgg.VGG
 
     @property
     def optimizer_class(self) -> Optimizer:

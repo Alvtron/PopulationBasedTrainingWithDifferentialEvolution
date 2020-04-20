@@ -37,6 +37,8 @@ def import_task(task_name : str):
         return mnist.Mnist('lenet5')
     elif task_name == "mnist_mlp":
         return mnist.Mnist('mlp')
+    elif task_name == "mnist_vgg16":
+        return mnist.Mnist('vgg16')
     elif task_name == "mnist_knowledge_sharing_lenet5":
         return mnist.MnistKnowledgeSharing('lenet5')
     elif task_name == "mnist_knowledge_sharing_mlp":
@@ -85,6 +87,8 @@ def import_task(task_name : str):
         return fashionmnist.FashionMnist('lenet5')
     elif task_name == "fashionmnist_mlp":
         return fashionmnist.FashionMnist('mlp')
+    elif task_name == "fashionmnist_vgg16":
+        return fashionmnist.FashionMnist('vgg16')
     elif task_name == "fashionmnist_knowledge_sharing_lenet5":
         return fashionmnist.FashionMnistKnowledgeSharing('lenet5')
     elif task_name == "fashionmnist_knowledge_sharing_mlp":
@@ -220,6 +224,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         hyper_parameters=_task.hyper_parameters,
         trainer=TRAINER,
         evaluator=EVALUATOR,
+        tester=TESTER,
         evolver=EVOLVER,
         loss_metric=_task.loss_metric,
         eval_metric=_task.eval_metric,

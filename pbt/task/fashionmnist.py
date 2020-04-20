@@ -8,7 +8,7 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
 from .task import Task
-from ..models import hypernet, lenet5, mlp
+from ..models import hypernet, lenet5, mlp, vgg
 from ..utils.data import split, random_split, stratified_split
 from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from ..loss import F1, Accuracy, CategoricalCrossEntropy
@@ -31,6 +31,8 @@ class FashionMnist(Task):
             return partial(lenet5.LeNet5, self.num_classes)
         elif self.model == 'mlp':
             return partial(mlp.MLP, self.num_classes)
+        elif self.model == 'vgg16':
+            return vgg.VGG16
         else:
             raise NotImplementedError
 

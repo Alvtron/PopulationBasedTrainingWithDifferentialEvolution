@@ -36,8 +36,8 @@ torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-class TrainingService(object):
-    def __init__(self, trainer : Trainer, evaluator : Evaluator, devices : Sequence[str] = ('cpu',),
+class WorkerPool(object):
+    def __init__(self, trainer : Trainer, evaluator : Evaluator, tester : Evaluator = None, devices : Sequence[str] = ('cpu',),
             n_jobs : int = 1, verbose : int = 0):
         super().__init__()
         if n_jobs < len(devices):
@@ -50,7 +50,7 @@ class TrainingService(object):
         send_queues = [self._context.Queue() for _ in devices]
         self._workers : List[Worker] = [
             Worker(id=id, end_event=self._end_event, receive_queue=send_queue,
-                trainer=trainer, evaluator=evaluator, device = device, random_seed = id, verbose = verbose > 1)
+                trainer=trainer, evaluator=evaluator, tester=tester, device=device, random_seed=id, verbose=verbose > 1)
             for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
 
@@ -58,7 +58,7 @@ class TrainingService(object):
     def _print(self, message : str) -> None:
         if self.verbose < 1:
             return
-        full_message = f"Training Service: {message}"
+        full_message = f"{self.__class__}: {message}"
         print(full_message)
 
     def _print_gpu_memory_stats(self) -> None:

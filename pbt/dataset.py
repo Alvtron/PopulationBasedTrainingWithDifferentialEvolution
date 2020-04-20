@@ -14,10 +14,10 @@ from torchvision.datasets.vision import StandardTransform
 from .hyperparameters import ContiniousHyperparameter, Hyperparameters
 
 class Datasets(object):
-    def __init__(self, train, eval, test):
-        self.train = train
-        self.eval = eval
-        self.test = test
+    def __init__(self, train_data, eval_data, test_data):
+        self.train = train_data
+        self.eval = eval_data
+        self.test = test_data
 
 class AdaptiveDataset(Dataset):
     """

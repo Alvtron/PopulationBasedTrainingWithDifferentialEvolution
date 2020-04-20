@@ -15,7 +15,7 @@ from pbt.evaluator import Evaluator
 from pbt.hyperparameters import Hyperparameters, ContiniousHyperparameter, DiscreteHyperparameter
 from pbt.member import Checkpoint
 from pbt.task.mnist import MnistKnowledgeSharing
-from pbt.trainingservice import TrainingService
+from pbt.trainingservice import WorkerPool
 
 class TestTraining(unittest.TestCase):
     def setUp(self):
@@ -55,7 +55,7 @@ class TestTraining(unittest.TestCase):
             eval_metric=eval_metric,
             minimize=loss_functions[eval_metric].minimize)
             for i in range(population_size)]
-        self.trainingservice = TrainingService(trainer=trainer, evaluator=evaluator, devices=devices, n_jobs=n_jobs, verbose=False)
+        self.trainingservice = WorkerPool(trainer=trainer, evaluator=evaluator, devices=devices, n_jobs=n_jobs, verbose=False)
         self.trainingservice.start()
 
     def tearDown(self):

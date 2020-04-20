@@ -10,7 +10,7 @@ class GarbageCollector:
         self.verbose = verbose
 
     def _log(self, message : str) -> None:
-        if verbose <= 0:
+        if self.verbose <= 0:
             return
         print(f"GC: {message}")
 

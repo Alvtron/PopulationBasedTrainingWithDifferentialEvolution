@@ -14,7 +14,7 @@ from pbt.evolution import DifferentialEvolution, SHADE, LSHADE
 from pbt.hyperparameters import Hyperparameters, ContiniousHyperparameter, DiscreteHyperparameter
 from pbt.member import Checkpoint, Generation
 from pbt.task.mnist import MnistKnowledgeSharing
-from pbt.trainingservice import TrainingService
+from pbt.trainingservice import WorkerPool
 
 class TestEvolving(unittest.TestCase):
     def logger(self, message, checkpoint = None):

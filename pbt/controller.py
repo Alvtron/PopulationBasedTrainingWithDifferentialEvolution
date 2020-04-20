@@ -23,7 +23,7 @@ from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
 
 import pbt.member
-from .trainingservice import TrainingService
+from .worker_pool import WorkerPool
 from .member import Checkpoint, Population, Generation
 from .utils.date import get_datetime_string
 from .hyperparameters import DiscreteHyperparameter, Hyperparameters
@@ -38,7 +38,7 @@ class Controller(object):
             self, population_size : int, hyper_parameters : Hyperparameters,
             trainer : Trainer, evaluator : Evaluator, evolver : EvolveEngine,
             loss_metric : str, eval_metric : str, loss_functions : dict, database : Database,
-            step_size = 1, end_criteria : dict = {'score': 100.0},
+            tester : Evaluator = None, step_size = 1, end_criteria : dict = {'score': 100.0},
             tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False, history_limit : int = None,
             devices : List[str] = ['cpu'], n_jobs : int = -1, verbose : int = 1, logging : bool = True):
         assert step_size and step_size > 0, f"Step size must be of type {int} and 1 or higher."
@@ -47,7 +47,7 @@ class Controller(object):
         self.database = database
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
-        self.training_service = TrainingService(trainer=trainer, evaluator=evaluator, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+        self.worker_pool = WorkerPool(trainer=trainer, evaluator=evaluator, tester=tester, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.step_size = step_size
         self.loss_metric = loss_metric
@@ -169,7 +169,7 @@ class Controller(object):
     def __create_initial_generation(self) -> Generation:
         new_members = self.__create_members(k=self.population_size)
         generation = Generation()
-        for member in self.training_service.train(new_members, self.step_size, None, False, False):
+        for member in self.worker_pool.train(new_members, self.step_size, None, False, False):
             # log performance
             self.__say(member.performance_details(), member)
             # Save member to database directory.
@@ -203,12 +203,12 @@ class Controller(object):
         self.generations = 0
         self.population = Population()
         # start training service
-        self.training_service.start()
+        self.worker_pool.start()
 
     def __on_end(self) -> None:
         """Stops training service and cleans up temporary files."""
         # close training service
-        self.training_service.stop()
+        self.worker_pool.stop()
 
     def __train_synchronously(self) -> None:
         """
@@ -227,7 +227,7 @@ class Controller(object):
             # generate new candidates
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             # train new candidates
-            for candidates in self.training_service.train(new_candidates, self.step_size, None, False, False):
+            for candidates in self.worker_pool.train(new_candidates, self.step_size, None, False, False):
                 member = self.evolver.on_evaluate(candidates, self._whisper)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
@@ -265,12 +265,12 @@ class Controller(object):
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             best_candidates = list()
             # test candidates with a smaller eval step
-            for candidates in self.training_service.train(new_candidates, eval_steps, eval_steps, False, True):
+            for candidates in self.worker_pool.train(new_candidates, eval_steps, eval_steps, False, True):
                 member = self.evolver.on_evaluate(candidates, self._whisper)
                 best_candidates.append(member)
                 self.nfe += 1
             # train best candidate on full dataset
-            for member in self.training_service.train(best_candidates, self.step_size - eval_steps, None, False, False):
+            for member in self.worker_pool.train(best_candidates, self.step_size - eval_steps, None, False, False):
                 # log performance
                 self.__say(member.performance_details(), member)
                 # Save member to database directory.
