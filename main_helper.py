@@ -256,5 +256,5 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     print("Creating plot-files...")
     analyzer.create_loss_plot_files(save_directory=database.create_folder("results/plots"))
     analyzer.create_time_plot_files(save_directory=database.create_folder("results/plots"))
-    analyzer.create_hyper_parameter_plot_files(save_directory=database.create_folder("results/plots"), sensitivity=20)
+    analyzer.create_hyper_parameter_plot_files(save_directory=database.create_folder("results/plots"))
     print("Program completed! You can now exit if needed.")

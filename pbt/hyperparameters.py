@@ -447,9 +447,12 @@ class Hyperparameters(object):
             return
         raise ValueError("Key types supported are integer or string of syntax 'param_group/param_name'.")
 
-    def items(self):
-        for groups in self.__dict__.values():
-            yield from (groups.items())
+    def items(self, full_key : bool = False):
+        if not full_key:
+            for groups in self.__dict__.values():
+                yield from (groups.items())
+        else:
+            yield from self.__keys_and_values()
 
     def _key_to_index(self, key : str) -> int:
         if not isinstance(key, str):
@@ -473,3 +476,8 @@ class Hyperparameters(object):
         for group_name, group_dict in self.__dict__.items():
             for hp_name in group_dict:
                 yield f"{group_name}/{hp_name}"
+
+    def __keys_and_values(self):
+        for group_name, group_dict in self.__dict__.items():
+            for hp_name, hp_value in group_dict.items():
+                yield (f"{group_name}/{hp_name}", hp_value)

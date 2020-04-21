@@ -18,7 +18,7 @@ class TestAnalyzer(unittest.TestCase):
     def test_analyzer(self):
         batch_size = 64
         device = 'cuda'
-        data_path = 'tests/checkpoint/20200323100808'
+        data_path = 'tests/checkpoint/de_20200421184515'
         task = FashionMnist()
         tester = Evaluator(
             model_class=task.model_class,
@@ -37,4 +37,4 @@ class TestAnalyzer(unittest.TestCase):
         analyzer.create_statistics(save_directory=statistics_save_directory)
         analyzer.create_loss_plot_files(save_directory=plot_save_directory)
         analyzer.create_time_plot_files(save_directory=plot_save_directory)
-        analyzer.create_hyper_parameter_plot_files(save_directory=plot_save_directory, sensitivity=20)
+        analyzer.create_hyper_parameter_plot_files(save_directory=plot_save_directory)

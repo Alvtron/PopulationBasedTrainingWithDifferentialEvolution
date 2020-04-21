@@ -135,12 +135,20 @@ class Analyzer(object):
                     info = f"{tag}: {statistic}"
                     file.write(info + "\n")
 
+    def __create_score_dataframe(self):
+        # create data holders
+        loss_dataframe = pd.DataFrame()
+        # aquire plot data
+        for entry_id, entries in self.database.to_dict().items():
+            for step, entry in entries.items():
+                loss_dataframe.at[step, entry_id] = entry.test_score()
+        return loss_dataframe
+
     def __create_loss_dataframes(self):
-        population_entries = self.database.to_dict()
         # create data holders
         loss_dataframes = dict()
         # aquire plot data
-        for entry_id, entries in population_entries.items():
+        for entry_id, entries in self.database.to_dict().items():
             for step, entry in entries.items():
                 for metric_type, metric_value in flatten_dict(entry.loss, delimiter ='_').items():
                     if metric_type not in loss_dataframes:
@@ -149,16 +157,26 @@ class Analyzer(object):
         return loss_dataframes
 
     def __create_time_dataframes(self):
-        population_entries = self.database.to_dict()
         time_dataframes = dict()
         # aquire plot data
-        for entry_id, entries in population_entries.items():
+        for entry_id, entries in self.database.to_dict().items():
             for step, entry in entries.items():
                 for time_group, time_value in flatten_dict(entry.time, delimiter ='_').items():
                     if time_group not in time_dataframes:
                         time_dataframes[time_group] = pd.DataFrame()
                     time_dataframes[time_group].at[step, entry_id] = time_value
         return time_dataframes
+
+    def __create_hp_dataframes(self):
+        hp_dataframes = dict()
+        # aquire plot data
+        for entry_id, entries in self.database.to_dict().items():
+            for step, entry in entries.items():
+                for hp_type, hp_value in entry.parameters.items(full_key = True):
+                    if hp_type not in hp_dataframes:
+                        hp_dataframes[hp_type] = pd.DataFrame()
+                    hp_dataframes[hp_type].at[step, entry_id] = hp_value.value
+        return hp_dataframes
 
     def create_loss_plot_files(self, save_directory):
         for metric_type, df in self.__create_loss_dataframes().items():
@@ -168,8 +186,7 @@ class Analyzer(object):
             df.to_csv(Path(save_directory, f"loss_{metric_type}.csv"))
             # define plot 
             column_names = list(df.columns)
-            ax = df.reset_index().plot(x='index', y=column_names[1:], kind = 'line',  ls='none', marker='o', ms=4,
-                title=metric_type, legend=False, subplots = False, sharex = True, figsize = (10,5))
+            ax = df.plot(title=metric_type, legend=False, subplots = False, sharex = True, figsize = (10,5), kind = 'line',  ls='none', marker='o', ms=4)
             ax.set_xlabel('steps')
             ax.set_ylabel('loss')
             # save plot to file
@@ -182,86 +199,43 @@ class Analyzer(object):
         for time_group, df in self.__create_time_dataframes().items():
             if df.empty:
                 continue
-            # save dataframe to csv-file
-            df.to_csv(Path(save_directory, f"time_{time_group}.csv"))
-            column_names = list(df.columns)
             # define plot
-            ax = df.reset_index().plot(x='index', y=column_names[1:], kind = 'line',  ls='none', marker='o', ms=4,
-                title=time_group, legend=False, subplots = False, sharex = True, figsize = (10,5))
+            ax = df.plot(title=time_group, legend=False, subplots = False, sharex = True, figsize = (10,5), kind = 'line',  ls='none', marker='o', ms=4)
             ax.set_xlabel('steps')
             ax.set_ylabel('seconds')
             # save plot to file
             plt.savefig(fname=Path(save_directory, f"time_{time_group}_plot.png"), format='png', transparent=False)
             plt.savefig(fname=Path(save_directory, f"time_{time_group}_plot.svg"), format='svg', transparent=True)
+            # save dataframe to csv-file
+            df.to_csv(Path(save_directory, f"time_{time_group}.csv"))
             # clear plot
             plt.clf()
 
-    def create_hyper_parameter_plot_files(self, save_directory, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 8, cmap = "winter", best_color = "orange", worst_color = "red"):
-        # get color map
-        color_map = plt.get_cmap(cmap)
-        tab_colors = [color_map(i/10) for i in range(0, 11, 1)]
-        tab_map = matplotlib.colors.ListedColormap(tab_colors)
-        # keep list of hyper_parameters
-        hyper_parameters = set()
-        # get entries
-        population_entries = self.database.to_dict()
-        best_entries = dict()
-        worst_entries = dict()
-        best_score = None
-        worst_score = None
-        # determine best and worst entries
-        for entries in population_entries.values():
-            for entry in entries.values():
-                hyper_parameters.update(entry.parameters.keys())
-                if entry.steps not in best_entries or entry > best_entries[entry.steps]:
-                    best_entries[entry.steps] = entry
-                    if not best_score or entry > best_score:
-                        best_score = entry.score()
-                if entry.steps not in worst_entries or entry < worst_entries[entry.steps]:
-                    worst_entries[entry.steps] = entry
-                    if not worst_score or (not math.isnan(entry.score()) and entry < worst_score):
-                        worst_score = entry.score()
-        # create data holders
-        steps = defaultdict(list)
-        scores = defaultdict(list)
-        colors = defaultdict(list)
-        # aquire plot data
-        for entries in population_entries.values():
-            for entry in entries.values():
-                score_decimal = (entry.score() - worst_score + 1e-7) / (best_score - worst_score + 1e-7)
-                color = score_decimal ** sensitivity
-                for param_name in hyper_parameters:
-                    steps[param_name].append(entry.steps)
-                    scores[param_name].append(entry.parameters[param_name].normalized)
-                    colors[param_name].append(color)
+    def create_hyper_parameter_plot_files(self, save_directory, default_marker='', highlight_marker='s', default_marker_size = 4, highlight_marker_size = 4, default_alpha = 0.4):
+        # set colors
+        highlight_color = '#000000' # black
+        default_color = '#C0C0C0' # silver
+        # determine best member
+        best = get_best_member(self.database)
+        best_entry_id = f"{best.id:03d}"
+        # get hyper-parameter dataframe
+        hp_df = self.__create_hp_dataframes()
         # plot data
-        for param_name in hyper_parameters:
-            # create sub-plots and axes
-            plt.title(param_name)
-            plt.ylim(bottom=0.0, top=1.0, auto=False)
-            plt.xlabel("steps")
-            plt.ylabel("value")
-            # plot hyper_parameters
-            hp_plot = plt.scatter(
-                x=steps[param_name],
-                y=scores[param_name],
-                marker="s",
-                s=6,
-                c=colors[param_name],
-                cmap=tab_map)
-            # plot worst score
-            x, y = zip(*sorted(worst_entries.items()))
-            y = [e.parameters[param_name].normalized for e in y]
-            plt.scatter(x, y, label="worst score", color=worst_color, marker="o", s=6)
-            # plot best score
-            x, y = zip(*sorted(best_entries.items()))
-            y = [e.parameters[param_name].normalized for e in y]
-            plt.scatter(x, y, label="best score", color=best_color, marker="o", s=6)
-            # legend
-            plt.legend()
-            # display colorbar
-            plt.colorbar(hp_plot)
+        for param_name, df in hp_df.items():
+            # create dataframe views
+            hp_df_without_best=df.drop(best_entry_id, axis=1)
+            hp_df_with_best=df[best_entry_id]
+            # plot lines
+            ax = hp_df_without_best.plot(title=param_name, legend=False, subplots = False, sharex = True, figsize = (10,5), kind='line', ls='solid', alpha=default_alpha, marker=default_marker, ms=default_marker_size)
+            # plot best
+            ax = hp_df_with_best.plot(ax=ax, legend=False, kind='line', ls='solid', color=highlight_color, marker=highlight_marker, ms=highlight_marker_size)
+            # set axis labels
+            ax.set_xlabel('steps')
+            ax.set_ylabel('value')
             # save figures to directory
-            plt.savefig(fname=Path(save_directory, f"hp_plot_{param_name.replace('/', '_')}.png"), format='png', transparent=False)
-            plt.savefig(fname=Path(save_directory, f"hp_plot_{param_name.replace('/', '_')}.svg"), format='svg', transparent=True)
+            filename = f"hp_{param_name.replace('/', '_')}"
+            plt.savefig(fname=Path(save_directory, f"{filename}.png"), format='png', transparent=False)
+            plt.savefig(fname=Path(save_directory, f"{filename}.svg"), format='svg', transparent=True)
+            # save dataframe to csv-file
+            df.to_csv(Path(save_directory, f"{filename}.csv"))
             plt.clf()
