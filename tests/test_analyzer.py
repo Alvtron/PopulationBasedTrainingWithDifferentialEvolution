@@ -35,5 +35,6 @@ class TestAnalyzer(unittest.TestCase):
         analyzer = Analyzer(database, verbose = False)
         analyzer.test(evaluator=tester, save_directory = Path(result_folder, "best_member.txt"), device = device)
         analyzer.create_statistics(save_directory=statistics_save_directory)
-        analyzer.create_plot_files(save_directory=plot_save_directory)
+        analyzer.create_loss_plot_files(save_directory=plot_save_directory)
+        analyzer.create_time_plot_files(save_directory=plot_save_directory)
         analyzer.create_hyper_parameter_plot_files(save_directory=plot_save_directory, sensitivity=20)

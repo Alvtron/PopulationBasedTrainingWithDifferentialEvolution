@@ -1,3 +1,4 @@
+import csv
 import math
 import random
 import itertools
@@ -6,6 +7,7 @@ from collections import defaultdict
 from statistics import stdev, mean
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors
 from mpl_toolkits.mplot3d import Axes3D
@@ -133,52 +135,65 @@ class Analyzer(object):
                     info = f"{tag}: {statistic}"
                     file.write(info + "\n")
 
-    def create_plot_files(self, save_directory):
+    def __create_loss_dataframes(self):
         population_entries = self.database.to_dict()
         # create data holders
-        loss_dict = defaultdict(lambda: defaultdict(dict))
-        time_dict = defaultdict(lambda: defaultdict(dict))
+        loss_dataframes = dict()
         # aquire plot data
         for entry_id, entries in population_entries.items():
             for step, entry in entries.items():
                 for metric_type, metric_value in flatten_dict(entry.loss, delimiter ='_').items():
-                    if step not in loss_dict[metric_type][entry_id]:
-                        loss_dict[metric_type][entry_id][step] = list()
-                    loss_dict[metric_type][entry_id][step].append(metric_value)
+                    if metric_type not in loss_dataframes:
+                        loss_dataframes[metric_type] = pd.DataFrame()
+                    loss_dataframes[metric_type].at[step, entry_id] = metric_value
+        return loss_dataframes
+
+    def __create_time_dataframes(self):
+        population_entries = self.database.to_dict()
+        time_dataframes = dict()
+        # aquire plot data
+        for entry_id, entries in population_entries.items():
+            for step, entry in entries.items():
                 for time_group, time_value in flatten_dict(entry.time, delimiter ='_').items():
-                    if step not in time_dict[time_group][entry_id]:
-                        time_dict[time_group][entry_id][step] = list()
-                    time_dict[time_group][entry_id][step].append(time_value)
-        # plot loss
-        for metric_type, members_entries in loss_dict.items():
-            plt.xlabel("steps")
-            plt.ylabel("value")
-            plt.title(metric_type)
-            data = list()
-            for id, steps_entries in members_entries.items():
-                sorted_entries = list(zip(*sorted(steps_entries.items())))
-                data.extend(list(itertools.chain(*sorted_entries[1])))
-                plt.scatter(sorted_entries[0], sorted_entries[1], marker="o", s=4, label=f"m_{id}")
-            if 'acc' in metric_type:
-                ylim_outliers(data, minimum=-5, maximum=105)
-            else:
-                ylim_outliers(data, minimum=-0.05, maximum=1.05)
-            plt.savefig(fname=Path(save_directory, f"loss_{metric_type}_plot.png"), format='png', transparent=False)
-            plt.savefig(fname=Path(save_directory, f"loss_{metric_type}_plot.svg"), format='svg', transparent=True)
+                    if time_group not in time_dataframes:
+                        time_dataframes[time_group] = pd.DataFrame()
+                    time_dataframes[time_group].at[step, entry_id] = time_value
+        return time_dataframes
+
+    def create_loss_plot_files(self, save_directory):
+        for metric_type, df in self.__create_loss_dataframes().items():
+            if df.empty:
+                continue
+            # save dataframe to csv-file
+            df.to_csv(Path(save_directory, f"loss_{metric_type}.csv"))
+            # define plot 
+            column_names = list(df.columns)
+            ax = df.reset_index().plot(x='index', y=column_names[1:], kind = 'line',  ls='none', marker='o', ms=4,
+                title=metric_type, legend=False, subplots = False, sharex = True, figsize = (10,5))
+            ax.set_xlabel('steps')
+            ax.set_ylabel('loss')
+            # save plot to file
+            plt.savefig(fname=Path(save_directory, f"loss_{metric_type}.png"), format='png', transparent=False)
+            plt.savefig(fname=Path(save_directory, f"loss_{metric_type}.svg"), format='svg', transparent=True)
+            # clear plot
             plt.clf()
-        # plot time
-        for time_group, members_entries in time_dict.items():
-            plt.xlabel("steps")
-            plt.ylabel("seconds")
-            plt.title(time_group)
-            data = list()
-            for id, steps_entries in members_entries.items():
-                sorted_entries = list(zip(*sorted(steps_entries.items())))
-                data.extend(list(itertools.chain(*sorted_entries[1])))
-                plt.scatter(sorted_entries[0], sorted_entries[1], marker="o", s=4, label=f"m_{id}")
-            ylim_outliers(data)
+
+    def create_time_plot_files(self, save_directory):
+        for time_group, df in self.__create_time_dataframes().items():
+            if df.empty:
+                continue
+            # save dataframe to csv-file
+            df.to_csv(Path(save_directory, f"time_{time_group}.csv"))
+            column_names = list(df.columns)
+            # define plot
+            ax = df.reset_index().plot(x='index', y=column_names[1:], kind = 'line',  ls='none', marker='o', ms=4,
+                title=time_group, legend=False, subplots = False, sharex = True, figsize = (10,5))
+            ax.set_xlabel('steps')
+            ax.set_ylabel('seconds')
+            # save plot to file
             plt.savefig(fname=Path(save_directory, f"time_{time_group}_plot.png"), format='png', transparent=False)
             plt.savefig(fname=Path(save_directory, f"time_{time_group}_plot.svg"), format='svg', transparent=True)
+            # clear plot
             plt.clf()
 
     def create_hyper_parameter_plot_files(self, save_directory, sensitivity=1, marker='o', min_marker_size = 4, max_marker_size = 8, cmap = "winter", best_color = "orange", worst_color = "red"):
