@@ -15,7 +15,7 @@ from pbt.evaluator import Evaluator
 from pbt.hyperparameters import Hyperparameters, ContiniousHyperparameter, DiscreteHyperparameter
 from pbt.member import Checkpoint
 from pbt.task.mnist import MnistKnowledgeSharing
-from pbt.trainingservice import WorkerPool
+from pbt.worker_pool import WorkerPool
 
 class TestTraining(unittest.TestCase):
     def setUp(self):
@@ -55,18 +55,18 @@ class TestTraining(unittest.TestCase):
             eval_metric=eval_metric,
             minimize=loss_functions[eval_metric].minimize)
             for i in range(population_size)]
-        self.trainingservice = WorkerPool(trainer=trainer, evaluator=evaluator, devices=devices, n_jobs=n_jobs, verbose=False)
-        self.trainingservice.start()
+        self.worker_pool = WorkerPool(trainer=trainer, evaluator=evaluator, devices=devices, n_jobs=n_jobs, verbose=False)
+        self.worker_pool.start()
 
     def tearDown(self):
-        self.trainingservice.stop()
+        self.worker_pool.stop()
     
     def test_training_service(self):
         epochs = 5
         step_size = 10
         old_checkpoints = list(self.checkpoints)
         for epoch in range(epochs):
-            new_checkpoints = list(self.trainingservice.train(candidates=old_checkpoints, train_step_size=step_size))
+            new_checkpoints = list(self.worker_pool.train(candidates=old_checkpoints, train_step_size=step_size))
             for new_checkpoint in new_checkpoints:
                 old_checkpoint = next(c for c in old_checkpoints if c.id == new_checkpoint.id)
                 self.assertNotEqual(id(old_checkpoint), id(new_checkpoint))

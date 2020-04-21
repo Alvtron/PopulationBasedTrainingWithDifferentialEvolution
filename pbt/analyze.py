@@ -142,8 +142,6 @@ class Analyzer(object):
         for entry_id, entries in population_entries.items():
             for step, entry in entries.items():
                 for metric_type, metric_value in flatten_dict(entry.loss, delimiter ='_').items():
-                    if "test" in metric_type:
-                        continue
                     if step not in loss_dict[metric_type][entry_id]:
                         loss_dict[metric_type][entry_id][step] = list()
                     loss_dict[metric_type][entry_id][step].append(metric_value)
