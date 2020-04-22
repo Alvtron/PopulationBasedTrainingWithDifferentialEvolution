@@ -2,6 +2,7 @@ import csv
 import math
 import random
 import itertools
+from functools import partial
 from pathlib import Path
 from collections import defaultdict
 from statistics import stdev, mean
@@ -37,12 +38,6 @@ def ylim_outliers(data, minimum=None, maximum=None, strength = 1.5):
     # limit
     plt.ylim(bottom=lower, top=upper, auto=False)
 
-def get_best_member(database : ReadOnlyDatabase):
-    best = None
-    for member in database:
-        best = member if best is None or member.steps > best.steps or (member.steps == best.steps and member >= best) else best
-    return best
-
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase, verbose : bool = False):
         self.database : ReadOnlyDatabase = database
@@ -52,9 +47,26 @@ class Analyzer(object):
         if self.verbose:
             print(f"Analyzer: {message}")
 
+    def __minimize_score(self):
+        for member in self.database:
+            return member.minimize
+        raise Exception
+
+    def __get_best_member(self):
+        best = None
+        for member in self.database:
+            best = member if best is None or member.steps > best.steps or (member.steps == best.steps and member >= best) else best
+        return best
+
+    def __get_worst_member(self):
+        worst = None
+        for member in self.database:
+            worst = member if worst is None or member.steps < worst.steps or (member.steps == worst.steps and member <= worst) else worst
+        return worst
+
     def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu'):
         self.__print(f"Finding best member in population...")
-        best = get_best_member(self.database)
+        best = self.__get_best_member()
         self.__print(f"Testing {best}...")
         evaluator(best, device)
         # save top members to file
@@ -63,30 +75,6 @@ class Analyzer(object):
             f.write(f"{result}\n\n")
         self.__print(result)
         return best
-
-    def test_generations(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu', limit : int = 10):
-        tested_subjects = list()
-        subjects = sorted((entry for entry in self.database if entry.model_state is not None), reverse=True, key=lambda e: e.steps)[:limit]
-        for index, entry in enumerate(subjects, start=1):
-            if entry.model_state is None:
-                self.__print(f"({index}/{len(subjects)}) Skipping {entry} due to missing model state.")
-                continue
-            self.__print(f"({index}/{len(subjects)}) Testing {entry}...")
-            evaluator(entry, device)
-            tested_subjects.append(entry)
-            self.__print(entry.performance_details())
-        # determine best checkpoint
-        minimize = next(iter(self.database)).minimize
-        sort_method = min if minimize else max
-        best_checkpoint = sort_method(tested_subjects, key=lambda c: c.test_score())
-        result = f"Best checkpoint: {best_checkpoint}: {best_checkpoint.performance_details()}"
-        # save top members to file
-        with Path(save_directory).open('a+') as f:
-            f.write(f"{result}\n\n")
-            for checkpoint in tested_subjects:
-                f.write(str(checkpoint) + "\n")
-        self.__print(result)
-        return tested_subjects
 
     def create_statistics(self, save_directory):
         population_entries = self.database.to_dict()
@@ -137,12 +125,14 @@ class Analyzer(object):
 
     def __create_score_dataframe(self):
         # create data holders
-        loss_dataframe = pd.DataFrame()
+        score_dataframe = pd.DataFrame()
         # aquire plot data
         for entry_id, entries in self.database.to_dict().items():
             for step, entry in entries.items():
-                loss_dataframe.at[step, entry_id] = entry.test_score()
-        return loss_dataframe
+                score_dataframe.at[step, entry_id] = entry.test_score()
+        score_dataframe.index.name = "steps"
+        score_dataframe.sort_index(inplace=True)
+        return score_dataframe
 
     def __create_loss_dataframes(self):
         # create data holders
@@ -154,6 +144,9 @@ class Analyzer(object):
                     if metric_type not in loss_dataframes:
                         loss_dataframes[metric_type] = pd.DataFrame()
                     loss_dataframes[metric_type].at[step, entry_id] = metric_value
+        for df in loss_dataframes.values():
+            df.index.name = "steps"
+            df.sort_index(inplace=True)
         return loss_dataframes
 
     def __create_time_dataframes(self):
@@ -165,6 +158,9 @@ class Analyzer(object):
                     if time_group not in time_dataframes:
                         time_dataframes[time_group] = pd.DataFrame()
                     time_dataframes[time_group].at[step, entry_id] = time_value
+        for df in time_dataframes.values():
+            df.index.name = "steps"
+            df.sort_index(inplace=True)
         return time_dataframes
 
     def __create_hp_dataframes(self):
@@ -176,6 +172,9 @@ class Analyzer(object):
                     if hp_type not in hp_dataframes:
                         hp_dataframes[hp_type] = pd.DataFrame()
                     hp_dataframes[hp_type].at[step, entry_id] = hp_value.value
+        for df in hp_dataframes.values():
+            df.index.name = "steps"
+            df.sort_index(inplace=True)
         return hp_dataframes
 
     def create_loss_plot_files(self, save_directory):
@@ -211,31 +210,117 @@ class Analyzer(object):
             # clear plot
             plt.clf()
 
-    def create_hyper_parameter_plot_files(self, save_directory, default_marker='', highlight_marker='s', default_marker_size = 4, highlight_marker_size = 4, default_alpha = 0.4):
+    def __create_color(self, score, worst_score, best_score, color_map, sensitivity = 20, epsilon = 1e-7):
+        score_decimal = (score - worst_score + epsilon) / (best_score - worst_score + epsilon)
+        adjusted_score_decimal = score_decimal# ** sensitivity
+        color_value = color_map(adjusted_score_decimal)
+        return color_value
+
+    def create_hyper_parameter_plot_files(self, save_directory):
+        self.__create_hyper_parameter_plot_files_v1(save_directory)
+        self.__create_hyper_parameter_plot_files_v2(save_directory)
+
+    def __create_hyper_parameter_plot_files_v1(self, save_directory):
+        # set color map
+        COLOR_MAP = plt.get_cmap('winter')
+        TAB_COLORS = [COLOR_MAP(i/10) for i in range(0, 11, 1)]
+        TAB_MAP = matplotlib.colors.ListedColormap(TAB_COLORS)
         # set colors
-        highlight_color = '#000000' # black
-        default_color = '#C0C0C0' # silver
-        # determine best member
-        best = get_best_member(self.database)
-        best_entry_id = f"{best.id:03d}"
-        # get hyper-parameter dataframe
+        DEFAULT_LINE_COLOR = '#C0C0C0' # gray
+        HIGHLIGHT_COLOR = 'orange'
+        # set markers
+        DEFAULT_MARKER_SIZE = 6
+        HIGHLIGHT_MARKER_SIZE = 6
+        DEFAULT_MARKER='s'
+        HIGHLIGHT_MARKER='s'
+        # create score dataframe
+        score_df = self.__create_score_dataframe()
+        # create color dataframe
+        if self.__minimize_score():
+            best_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
+            worst_member_id = score_df.tail(1).idxmax(axis=1).to_numpy()[0]
+            best_score = score_df.min().min()
+            worst_score = score_df.max().max()
+        else:
+            best_member_id = score_df.tail(1).idxmax(axis=1).to_numpy()[0]
+            worst_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
+            worst_score = score_df.max().max()
+            best_score = score_df.min().min()
+        color_df = score_df.applymap(partial(self.__create_color, worst_score=worst_score, best_score=best_score, color_map=TAB_MAP, sensitivity=10))
+        # create hyper-parameter dataframe
         hp_df = self.__create_hp_dataframes()
         # plot data
         for param_name, df in hp_df.items():
-            # create dataframe views
-            hp_df_without_best=df.drop(best_entry_id, axis=1)
-            hp_df_with_best=df[best_entry_id]
-            # plot lines
-            ax = hp_df_without_best.plot(title=param_name, legend=False, subplots = False, sharex = True, figsize = (10,5), kind='line', ls='solid', alpha=default_alpha, marker=default_marker, ms=default_marker_size)
+            # create figure
+            fig, ax = plt.subplots(figsize = (10,7), sharex = True)
+            ax.set_title(param_name)
+            ax.set_xlabel("steps")
+            ax.set_ylabel("value")
+            # plot default
+            for column_name in df:
+                df.plot(y=column_name, ax=ax, legend=False, kind='line', ls='none', color=color_df[column_name], marker=DEFAULT_MARKER, ms=DEFAULT_MARKER_SIZE, label=column_name)
+            # plot colorbar
+            sm = plt.cm.ScalarMappable(cmap=TAB_MAP, norm=plt.Normalize(vmin=0.0, vmax=1.0))
+            plt.colorbar(sm, ax=ax)
             # plot best
-            ax = hp_df_with_best.plot(ax=ax, legend=False, kind='line', ls='solid', color=highlight_color, marker=highlight_marker, ms=highlight_marker_size)
-            # set axis labels
-            ax.set_xlabel('steps')
-            ax.set_ylabel('value')
+            hp_df_with_best=df[best_member_id]
+            hp_df_with_best.plot(ax=ax, legend=True, kind='line', ls='none', marker=HIGHLIGHT_MARKER, ms=HIGHLIGHT_MARKER_SIZE, color=HIGHLIGHT_COLOR, label='best')
             # save figures to directory
-            filename = f"hp_{param_name.replace('/', '_')}"
-            plt.savefig(fname=Path(save_directory, f"{filename}.png"), format='png', transparent=False)
-            plt.savefig(fname=Path(save_directory, f"{filename}.svg"), format='svg', transparent=True)
+            filename = f"hp_dots_{param_name.replace('/', '_')}"
+            fig.savefig(fname=Path(save_directory, f"{filename}.png"), format='png', transparent=False)
+            fig.savefig(fname=Path(save_directory, f"{filename}.svg"), format='svg', transparent=True)
+            # save dataframe to csv-file
+            df.to_csv(Path(save_directory, f"{filename}.csv"))
+            plt.clf()
+        
+    def __create_hyper_parameter_plot_files_v2(self, save_directory):
+        # set colors
+        FILL_COLOR = 'gainsboro'
+        MEAN_COLOR = 'gray'
+        LINE_COLOR = 'cadetblue'
+        HIGHLIGHT_COLOR = 'darkcyan'
+        NAN_COLOR = 'crimson'
+        # set markers
+        DEFAULT_LINE_SIZE = 2
+        HIGHLIGHT_LINE_SIZE = 2
+        NAN_MARKER_SIZE=6
+        HIGHLIGHT_MARKER='s'
+        NAN_MARKER='x'
+        # get best and worst members
+        score_df = self.__create_score_dataframe()
+        if self.__minimize_score():
+            best_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
+            worst_member_id = score_df.tail(1).idxmax(axis=1).to_numpy()[0]
+        else:
+            best_member_id = score_df.tail(1).idxmax(axis=1).to_numpy()[0]
+            worst_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
+        # create hyper-parameter dataframe
+        hp_df = self.__create_hp_dataframes()
+        # plot data
+        for param_name, df in hp_df.items():
+            # create figure
+            fig, ax = plt.subplots(figsize = (10,7), sharex = True)
+            ax.set_title(param_name)
+            ax.set_xlabel("steps")
+            ax.set_ylabel("value")
+            # plot fill
+            ax.fill_between(df.index, y1=df.min(axis=1), y2=df.max(axis=1), color=FILL_COLOR)
+            # plot lines
+            df.plot(ax=ax, legend=False, kind='line', ls='solid', solid_capstyle='round', linewidth=DEFAULT_LINE_SIZE, color=HIGHLIGHT_COLOR, alpha=0.2)
+            df.mean(axis=1).plot(ax=ax, legend=True, kind='line', ls='solid', linewidth=DEFAULT_LINE_SIZE, color=MEAN_COLOR, label='mean')
+            # plot best
+            hp_df_with_best=df[best_member_id]
+            hp_df_with_best.plot(ax=ax, legend=True, kind='line', ls='solid', linewidth=HIGHLIGHT_LINE_SIZE, color=HIGHLIGHT_COLOR, marker=HIGHLIGHT_MARKER, ms=6, label='best')
+            # plot end points
+            nan_df = pd.DataFrame()
+            for column_name in df:
+                index = df[column_name].last_valid_index()
+                nan_df.at[index, 'end'] = df.at[index,column_name]
+            nan_df.plot(ax=ax, legend=True, kind='line', ls='none', marker=NAN_MARKER, ms=NAN_MARKER_SIZE, color=NAN_COLOR)
+            # save figures to directory
+            filename = f"hp_lines_{param_name.replace('/', '_')}"
+            fig.savefig(fname=Path(save_directory, f"{filename}.png"), format='png', transparent=False)
+            fig.savefig(fname=Path(save_directory, f"{filename}.svg"), format='svg', transparent=True)
             # save dataframe to csv-file
             df.to_csv(Path(save_directory, f"{filename}.csv"))
             plt.clf()

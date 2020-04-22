@@ -120,8 +120,8 @@ class Checkpoint(MemberState):
         self.optimizer_state : dict = None
         self.loss_metric : str = loss_metric
         self.eval_metric : str = eval_metric
-        self.loss : Dict[object, dict] = dict()
-        self.time : Dict[object, dict] = dict()
+        self.loss : Dict[str, dict] = dict()
+        self.time : Dict[str, dict] = dict()
 
     def __str__(self) -> str:
         return super().__str__() + f", epoch {self.epochs:03d}, step {self.steps:05d}"

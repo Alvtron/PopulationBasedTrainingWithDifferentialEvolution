@@ -245,12 +245,10 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database, verbose=True)
-    checkpoint = analyzer.test(
+    analyzer.test(
         evaluator=TESTER,
         save_directory=database.create_file("results", "top_members.txt"),
         device='cpu')
-    print("Updating database with results...")
-    database.update(checkpoint.id, checkpoint.steps, checkpoint)
     print("Creating statistics...")
     analyzer.create_statistics(save_directory=database.create_folder("results/statistics"))
     print("Creating plot-files...")

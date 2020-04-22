@@ -14,9 +14,9 @@ class Step:
             train_shuffle : bool = False, eval_shuffle : bool = False, device : str = 'cpu', logger : Callable[[str], None] = None):
         self.train = partial(trainer, step_size=train_step_size, shuffle=train_shuffle, device=device)
         self.eval = partial(evaluator, step_size=eval_step_size, shuffle=eval_shuffle, device=device)
-        self.test = partial(tester, step_size=None, shuffle=False, device=device) if tester else None
+        self.test = partial(tester, step_size=None, shuffle=False, device=device) if tester is not None else None
         self.device = device
-        self.logger = logger if logger else empty_logger
+        self.logger = logger if logger is not None else empty_logger
 
     def __call__(self, checkpoint : Checkpoint):
         # load checkpoint state
@@ -32,7 +32,7 @@ class Step:
         self.logger(f"evaluating checkpoint {checkpoint.id}...")
         self.eval(checkpoint)
         # test checkpoint model
-        if self.test:
+        if self.test is not None:
             self.logger(f"testing checkpoint {checkpoint.id}...")
             self.test(checkpoint)
         # unload checkpoint state
