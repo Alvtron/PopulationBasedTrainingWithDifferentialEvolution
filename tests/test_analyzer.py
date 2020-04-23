@@ -18,7 +18,7 @@ class TestAnalyzer(unittest.TestCase):
     def test_analyzer(self):
         batch_size = 64
         device = 'cuda'
-        data_path = 'tests/checkpoint/lshade_20200323102907'
+        data_path = 'tests/checkpoint/lshade_20200422231243'
         task = FashionMnist()
         tester = Evaluator(
             model_class=task.model_class,
@@ -33,8 +33,8 @@ class TestAnalyzer(unittest.TestCase):
         plot_save_directory.mkdir(exist_ok=True, parents=True)
         database = ReadOnlyDatabase(data_path, read_function=partial(torch.load, map_location=device))
         analyzer = Analyzer(database, verbose = False)
-        #analyzer.test(evaluator=tester, save_directory = Path(result_folder, "best_member.txt"), device = device)
-        #analyzer.create_statistics(save_directory=statistics_save_directory)
-        #analyzer.create_loss_plot_files(save_directory=plot_save_directory)
-        #analyzer.create_time_plot_files(save_directory=plot_save_directory)
+        analyzer.test(evaluator=tester, save_directory = Path(result_folder, "best_member.txt"), device = device)
+        analyzer.create_statistics(save_directory=statistics_save_directory)
+        analyzer.create_loss_plot_files(save_directory=plot_save_directory)
+        analyzer.create_time_plot_files(save_directory=plot_save_directory)
         analyzer.create_hyper_parameter_plot_files(save_directory=plot_save_directory)
