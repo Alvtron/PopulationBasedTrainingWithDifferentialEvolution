@@ -233,8 +233,9 @@ class Analyzer(object):
             nan_df = pd.DataFrame()
             for column_name in df.loc[:, df.isna().any()]:
                 index = df[column_name].last_valid_index()
-                nan_df.at[index, 'end'] = df.at[index,column_name]
-            nan_df.plot(ax=ax, legend=True, kind='line', ls='none', marker=NAN_MARKER, ms=NAN_MARKER_SIZE, color=NAN_COLOR)
+                nan_df.at[index, 'end'] = df.at[index, column_name]
+            if not nan_df.empty:
+                nan_df.plot(ax=ax, legend=True, kind='line', ls='none', marker=NAN_MARKER, ms=NAN_MARKER_SIZE, color=NAN_COLOR)
             # draw grid
             ax.grid(axis='y', color='black', linestyle='-', linewidth=0.25)
             # save figures to directory
@@ -388,7 +389,8 @@ class Analyzer(object):
             for column_name in df.loc[:, df.isna().any()]:
                 index = df[column_name].last_valid_index()
                 nan_df.at[index, 'end'] = df.at[index,column_name]
-            nan_df.plot(ax=ax, legend=True, kind='line', ls='none', marker=NAN_MARKER, ms=NAN_MARKER_SIZE, color=NAN_COLOR)
+            if not nan_df.empty:
+                nan_df.plot(ax=ax, legend=True, kind='line', ls='none', marker=NAN_MARKER, ms=NAN_MARKER_SIZE, color=NAN_COLOR)
             # save figures to directory
             param_formatted = param_name.replace('/', '_')
             filename = '_'.join(filter(None, [prefix, param_formatted, suffix]))
