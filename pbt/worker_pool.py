@@ -88,7 +88,7 @@ class WorkerPool(object):
 
     def _stop_worker(self, worker : Worker) -> None:
         worker.terminate()
-        time.sleep(1.0) # give worker one second to stop
+        worker.join()
         worker.close()
 
     def start(self) -> None:
