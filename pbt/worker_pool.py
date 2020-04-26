@@ -128,13 +128,17 @@ class WorkerPool(object):
             n_returned += 1
             yield result
         if not return_queue.empty():
+            self.stop()
             raise Exception("return queue is not empty.")
         elif len(failed_workers) == len(self._workers):
+            self.stop()
             raise Exception("all workers failed.")
         elif n_returned < n_sent:
             if failed_workers:
+                self.stop()
                 raise Exception(f"{len(failed_workers)} workers failed.")
             else:
+                self.stop()
                 raise Exception(f"{n_sent - n_returned} candidates failed.")
         elif failed_workers:
             self._respawn(failed_workers)
