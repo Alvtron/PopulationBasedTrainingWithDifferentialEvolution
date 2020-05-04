@@ -37,8 +37,7 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 class WorkerPool(object):
-    def __init__(self, trainer : Trainer, evaluator : Evaluator, tester : Evaluator = None, devices : Sequence[str] = ('cpu',),
-            n_jobs : int = 1, verbose : int = 0):
+    def __init__(self, devices : Sequence[str] = ('cpu',), n_jobs : int = 1, verbose : int = 0):
         super().__init__()
         if n_jobs < len(devices):
             raise ValueError("n_jobs must be larger or equal the number of devices.")
@@ -49,8 +48,7 @@ class WorkerPool(object):
         self._end_event = self._context.Event()
         send_queues = [self._context.Queue() for _ in devices]
         self._workers : List[Worker] = [
-            Worker(id=id, end_event=self._end_event, receive_queue=send_queue,
-                trainer=trainer, evaluator=evaluator, tester=tester, device=device, random_seed=id, verbose=verbose > 1)
+            Worker(id=id, end_event=self._end_event, receive_queue=send_queue, device=device, random_seed=id, verbose=verbose > 1)
             for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
 
@@ -105,16 +103,14 @@ class WorkerPool(object):
         [worker.join() for worker in self._workers]
         [worker.close() for worker in self._workers]
 
-    def train(self, candidates : Iterable[Union[Checkpoint, Tuple[Checkpoint,...]]], train_step_size : int, eval_step_size : int = None,
-            train_shuffle : bool = False, eval_shuffle : bool = False) -> Generator[Union[Checkpoint, Tuple[Checkpoint,...]], None, None]:
+    def imap(self, function: Callable[[object], object], parameter_map: Iterable[object]) -> Generator[object, None, None]:
         n_sent = 0
         n_returned = 0
         return_queue = self._manager.Queue()
         failed_workers = set()
         self._print(f"queuing candidates for training...")
-        for checkpoints, worker in zip(candidates, self._workers_iterator):
-            trial = Trial(return_queue=return_queue, checkpoints=checkpoints, train_step_size=train_step_size,
-                eval_step_size=eval_step_size, train_shuffle=train_shuffle, eval_shuffle=eval_shuffle)
+        for parameters, worker in zip(parameter_map, self._workers_iterator):
+            trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
             worker.receive_queue.put(trial)
             n_sent += 1
         self._print(f"awaiting trained candidates...")
@@ -139,8 +135,8 @@ class WorkerPool(object):
                 raise Exception(f"{len(failed_workers)} workers failed.")
             else:
                 self.stop()
-                raise Exception(f"{n_sent - n_returned} candidates failed.")
+                raise Exception(f"{n_sent - n_returned} one or more parameters failed.")
         elif failed_workers:
             self._respawn(failed_workers)
         else:
-            self._print("all candidates were trained successfully.")
+            self._print("all parameters were executed successfully.")

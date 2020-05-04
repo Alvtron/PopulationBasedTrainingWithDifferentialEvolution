@@ -18,11 +18,11 @@ from multiprocessing.pool import ThreadPool
 import torch
 import numpy as np
 
-import pbt.member
-from .step import Step
-from .trainer import Trainer
-from .evaluator import Evaluator
-from .member import Checkpoint, MissingStateError
+from pbt.step import DeviceCallable
+from pbt.step import Step
+from pbt.trainer import Trainer
+from pbt.evaluator import Evaluator
+from pbt.member import Checkpoint, MissingStateError
 
 # various settings for reproducibility
 # set random state 
@@ -37,26 +37,16 @@ torch.backends.cudnn.enabled = True
 torch.multiprocessing.set_sharing_strategy('file_system')
 CONTEXT = torch.multiprocessing.get_context("spawn")
 
-class Trial:
-    def __init__(self, return_queue, checkpoints : Tuple[Checkpoint], train_step_size : int, eval_step_size : int, train_shuffle : bool = False, eval_shuffle : bool = False):
-        if isinstance(checkpoints, Sequence) and all(isinstance(checkpoint, Checkpoint) for checkpoint in checkpoints):
-            self.checkpoints = checkpoints
-        elif isinstance(checkpoints, Checkpoint):
-            self.checkpoints = checkpoints
-        else:
-            raise TypeError
-        if not isinstance(train_step_size, int):
-            raise TypeError
-        if eval_step_size is not None and not isinstance(eval_step_size, int):
-            raise TypeError
-        self.id_ = uuid.uuid4()
-        self.return_queue = return_queue
-        self.train_step_size = train_step_size
-        self.eval_step_size = eval_step_size
-        self.train_shuffle = train_shuffle
-        self.eval_shuffle = eval_shuffle
-
 STOP_FLAG = None
+
+class Trial:
+    def __init__(self, return_queue, function: DeviceCallable, parameters: object):
+        self.return_queue = return_queue
+        self.function = function
+        self.parameters = parameters
+
+    def __call__(self, device: str = 'cpu', logger = None):
+        return self.function(self.parameters, device=device, logger=logger)
 
 @dataclass
 class FailMessage(object):
@@ -66,14 +56,11 @@ class FailMessage(object):
 
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, id : int, end_event, receive_queue, trainer, evaluator, tester = None, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
+    def __init__(self, id : int, end_event, receive_queue, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
         super().__init__()
         self._id = id
         self.end_event = end_event
         self.receive_queue = receive_queue
-        self.trainer = trainer
-        self.evaluator = evaluator
-        self.tester = tester
         self.cuda = device.startswith('cuda')
         self.device = device
         self.random_seed = random_seed
@@ -89,18 +76,6 @@ class Worker(CONTEXT.Process):
         prefix = f"Worker {self._id} (PID {os.getpid()})"
         full_message = f"{prefix}: {message}"
         print(full_message)
-
-    def _process_trial(self, trial : Trial):
-        if not trial.checkpoints:
-            raise ValueError("No checkpoints available in trial-object.")
-        step = Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester,
-            train_step_size=trial.train_step_size, eval_step_size=trial.eval_step_size,
-            train_shuffle=trial.train_shuffle, eval_shuffle=trial.eval_shuffle,
-            device=self.device, logger=self.__log)
-        if isinstance(trial.checkpoints, Checkpoint):
-            return step(trial.checkpoints)
-        else:
-            return tuple(step(checkpoint) for checkpoint in trial.checkpoints)
 
     def run(self):
         self.__log("running...")
@@ -121,9 +96,9 @@ class Worker(CONTEXT.Process):
             try:
                 if self.cuda:
                     with torch.cuda.device(self.device):
-                        result = self._process_trial(trial)
+                        result = trial(self.device, self.__log)
                 else:
-                    result = self._process_trial(trial)
+                    result = trial(self.device, self.__log)
                 self.__log("returning trial result...")
                 trial.return_queue.put(result)
             except Exception:
@@ -137,7 +112,6 @@ class Worker(CONTEXT.Process):
                 del trial
                 break
             finally:
-                # Explicitly trigger garbage collection to make sure that all
-                # destructors are called...
+                # Explicitly trigger garbage collection to make sure that all destructors are called...
                 gc.collect()
         self.__log("stopped.")

@@ -18,4 +18,4 @@ if __name__ == "__main__":
     torch.backends.cudnn.enabled = True
 
     run(task='fashionmnist_lenet5', evolver='pbt', population_size = 30, batch_size=64,
-        step_size=250, end_nfe = 30 * 4, n_jobs=7, devices=['cuda:0'], old_controller=True, tensorboard=False, verbose=3, logging=True)
+        step_size=250, end_nfe = 30 * 4, n_jobs=7, devices=['cuda:0'], old_controller=True, tensorboard=False, verbose=2, logging=True)

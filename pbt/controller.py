@@ -7,7 +7,8 @@ import copy
 import pickle
 import shutil
 import warnings
-from typing import List, Dict, Sequence, Iterator
+import itertools
+from typing import List, Dict, Sequence, Iterator, Iterable
 from functools import partial 
 from collections import defaultdict
 from multiprocessing.context import BaseContext
@@ -23,15 +24,16 @@ from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
 
 import pbt.member
-from .worker_pool import WorkerPool
-from .member import Checkpoint, Population, Generation
-from .utils.date import get_datetime_string
-from .hyperparameters import DiscreteHyperparameter, Hyperparameters
-from .trainer import Trainer
-from .evaluator import Evaluator
-from .evolution import EvolveEngine
-from .database import Database
-from .garbage import GarbageCollector
+from pbt.worker_pool import WorkerPool
+from pbt.member import Checkpoint, Population, Generation
+from pbt.utils.date import get_datetime_string
+from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters
+from pbt.trainer import Trainer
+from pbt.evaluator import Evaluator
+from pbt.evolution import EvolveEngine
+from pbt.database import Database
+from pbt.garbage import GarbageCollector
+from pbt.step import Step
 
 class Controller(object):
     def __init__(
@@ -45,9 +47,12 @@ class Controller(object):
         self.population_size = population_size
         self.population = Population()
         self.database = database
+        self.trainer = trainer
+        self.evaluator = evaluator
+        self.tester = tester
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
-        self.worker_pool = WorkerPool(trainer=trainer, evaluator=evaluator, tester=tester, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+        self.worker_pool = WorkerPool(devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.step_size = step_size
         self.loss_metric = loss_metric
@@ -169,7 +174,7 @@ class Controller(object):
     def __create_initial_generation(self) -> Generation:
         new_members = self.__create_members(k=self.population_size)
         generation = Generation()
-        for member in self.worker_pool.train(new_members, self.step_size, None, False, False):
+        for member in self.__train(new_members, self.step_size):
             # log performance
             self.__say(member.performance_details(), member)
             # Save member to database directory.
@@ -177,7 +182,7 @@ class Controller(object):
             generation.append(member)
         return generation
 
-    def start(self, use_old = False) -> None:
+    def start(self, use_old: bool = False) -> None:
         """
         Start global training procedure. Ends when end_criteria is met.
         """
@@ -209,6 +214,14 @@ class Controller(object):
         """Stops training service and cleans up temporary files."""
         # close training service
         self.worker_pool.stop()
+    
+    def __train(self, checkpoints : Iterable[Checkpoint], train_steps: int, train_shuffle: bool = False):
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, train_step_size=train_steps, eval_step_size=None, train_shuffle=train_shuffle, eval_shuffle=False)
+        yield from self.worker_pool.imap(step, checkpoints)
+
+    def __eval(self, checkpoints : Iterable[Checkpoint], eval_steps: int, train_shuffle: bool = False):
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester, train_step_size = eval_steps, eval_step_size=eval_steps, train_shuffle=train_shuffle, eval_shuffle=True)
+        yield from self.worker_pool.imap(step, checkpoints)
 
     def __train_synchronously(self) -> None:
         """
@@ -227,7 +240,7 @@ class Controller(object):
             # generate new candidates
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             # train new candidates
-            for candidates in self.worker_pool.train(new_candidates, self.step_size, None, False, False):
+            for candidates in self.__train(new_candidates, self.step_size):
                 member = self.evolver.on_evaluate(candidates, self._whisper)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
@@ -265,12 +278,12 @@ class Controller(object):
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
             best_candidates = list()
             # test candidates with a smaller eval step
-            for candidates in self.worker_pool.train(new_candidates, eval_steps, eval_steps, False, True):
+            for candidates in self.__eval(new_candidates, eval_steps):
                 member = self.evolver.on_evaluate(candidates, self._whisper)
                 best_candidates.append(member)
                 self.nfe += 1
             # train best candidate on full dataset
-            for member in self.worker_pool.train(best_candidates, self.step_size - eval_steps, None, False, False):
+            for member in self.__train(best_candidates, self.step_size - eval_steps):
                 # log performance
                 self.__say(member.performance_details(), member)
                 # Save member to database directory.
