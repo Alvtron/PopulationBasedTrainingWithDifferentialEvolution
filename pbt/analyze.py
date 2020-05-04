@@ -74,13 +74,27 @@ class Analyzer(object):
     def __get_best_member(self):
         best = None
         for member in self.database:
-            best = member if best is None or member.steps > best.steps or (member.steps == best.steps and member >= best) else best
+            if best is None:
+                best = member
+                continue
+            if member.steps < best.steps:
+                continue
+            if member.steps == best.steps and member < best:
+                continue
+            best = member
         return best
 
     def __get_worst_member(self):
         worst = None
         for member in self.database:
-            worst = member if worst is None or member.steps < worst.steps or (member.steps == worst.steps and member <= worst) else worst
+            if worst is None:
+                worst = member
+                continue
+            if member.steps < worst.steps:
+                continue
+            if member.steps == worst.steps and member > worst:
+                continue
+            worst = member
         return worst
 
     def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu'):
