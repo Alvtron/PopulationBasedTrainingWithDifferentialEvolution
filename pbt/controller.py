@@ -37,13 +37,14 @@ from pbt.step import Step
 
 class Controller(object):
     def __init__(
-            self, population_size : int, hyper_parameters : Hyperparameters,
-            trainer : Trainer, evaluator : Evaluator, evolver : EvolveEngine,
-            loss_metric : str, eval_metric : str, loss_functions : dict, database : Database,
-            tester : Evaluator = None, step_size = 1, end_criteria : dict = {'score': 100.0},
-            tensorboard_writer : SummaryWriter = None, detect_NaN : bool = False, history_limit : int = None,
-            devices : List[str] = ['cpu'], n_jobs : int = -1, verbose : int = 1, logging : bool = True):
-        assert step_size and step_size > 0, f"Step size must be of type {int} and 1 or higher."
+            self, population_size: int, hyper_parameters: Hyperparameters, trainer: Trainer, evaluator: Evaluator, evolver: EvolveEngine,
+            loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, tester: Evaluator = None,
+            step_size: int = 1, eval_steps: int = 0, end_criteria: dict = {'score': 100.0}, detect_NaN: bool = False, history_limit: int = None,
+            devices: List[str] = ['cpu'], n_jobs: int = -1, verbose: int = 1, logging: bool = True, tensorboard_writer: SummaryWriter = None):
+        if not isinstance(step_size, int) or step_size < 1: 
+            raise Exception(f"step size must be of type {int} and 1 or higher.")
+        if not isinstance(eval_steps, int) or eval_steps >= step_size:
+            raise Exception(f"eval steps must be of type {int} and lower than step size.")
         self.population_size = population_size
         self.population = Population()
         self.database = database
@@ -55,6 +56,7 @@ class Controller(object):
         self.worker_pool = WorkerPool(devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.step_size = step_size
+        self.eval_steps = eval_steps
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
         self.loss_functions = loss_functions
@@ -182,7 +184,7 @@ class Controller(object):
             generation.append(member)
         return generation
 
-    def start(self, use_old: bool = False) -> None:
+    def start(self) -> None:
         """
         Start global training procedure. Ends when end_criteria is met.
         """
@@ -190,15 +192,11 @@ class Controller(object):
             self.__on_start()
             # start controller loop
             self.__say("Starting training procedure...")
-            if not use_old:
-                self.__train_synchronously()
-            else:
-                self.__train_synchronously_old()
-            # terminate worker processes
-            self.__say("finished.")
+            return self.__train_synchronously()
         except KeyboardInterrupt:
             self.__say("interupted.")
         finally:
+            self.__say("finished.")
             self.__on_end()
 
     def __on_start(self) -> None:
@@ -239,8 +237,16 @@ class Controller(object):
             # 1. evolve, 2. train, 3. evaluate, 4. save
             # generate new candidates
             new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
+            # test candidates with a smaller eval step
+            if self.eval_steps > 0:
+                best_candidates = list()
+                for candidates in self.__eval(new_candidates, self.eval_steps):
+                    member = self.evolver.on_evaluate(candidates, self._whisper)
+                    best_candidates.append(member)
+                    self.nfe += 1
+                new_candidates = best_candidates
             # train new candidates
-            for candidates in self.__train(new_candidates, self.step_size):
+            for candidates in self.__train(new_candidates, self.step_size - self.eval_steps):
                 member = self.evolver.on_evaluate(candidates, self._whisper)
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
@@ -260,44 +266,4 @@ class Controller(object):
             self._whisper("performing garbage collection...")
             self.garbage_collector.collect(self.population.generations)
         self.__say(f"end criteria has been reached.")
-
-    def __train_synchronously_old(self, eval_steps=8) -> None:
-        """
-        Performs the training of the population synchronously.
-        Each member is trained individually and asynchronously,
-        but they are waiting for each other between each generation cycle.
-        """
-        self.__say("Training initial generation...")
-        self.population.append(self.__create_initial_generation())
-        while not self.__is_population_finished():
-            self._whisper("on generation start")
-            self.evolver.on_generation_start(self.population.current, self._whisper)
-            # create new generation
-            new_generation = Generation()
-            # generate new candidates
-            new_candidates = list(self.evolver.on_evolve(self.population.current, self._whisper))
-            best_candidates = list()
-            # test candidates with a smaller eval step
-            for candidates in self.__eval(new_candidates, eval_steps):
-                member = self.evolver.on_evaluate(candidates, self._whisper)
-                best_candidates.append(member)
-                self.nfe += 1
-            # train best candidate on full dataset
-            for member in self.__train(best_candidates, self.step_size - eval_steps):
-                # log performance
-                self.__say(member.performance_details(), member)
-                # Save member to database directory.
-                self.__update_database(member)
-                # write to tensorboard if enabled
-                self.__update_tensorboard(member)
-                # Add member to generation.
-                new_generation.append(member)
-                self._whisper("awaiting next trained member...")
-            self._whisper("on generation end")
-            self.evolver.on_generation_end(new_generation, self._whisper)
-            # add new generation
-            self.population.append(new_generation)
-            # perform garbage collection
-            self._whisper("performing garbage collection...")
-            self.garbage_collector.collect(self.population.generations)
-        self.__say(f"end criteria has been reached.")
+        return list(self.population.current)

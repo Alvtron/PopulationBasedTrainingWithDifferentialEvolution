@@ -142,7 +142,7 @@ def create_tensorboard(log_directory):
 def run(task : str, evolver : str, population_size : int, batch_size : int, step_size : int,
         end_nfe : int = None, end_steps : int = None, end_score : float = None, history : int = 2,
         directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
-        tensorboard : bool = False, detect_NaN : bool = False, old_controller : bool = False,
+        tensorboard : bool = False, detect_NaN : bool = False, eval_steps : bool = False,
         verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
@@ -150,7 +150,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     # prepare database
     print(f"Preparing database...")
     database = Database(
-        directory_path=f"{directory}/{'old' if old_controller else 'new'}_{task}_p{population_size}_steps{step_size}_batch{batch_size}_nfe{end_nfe}_{evolver}",
+        directory_path=f"{directory}/{'random_eval_subset' if eval_steps > 0 else 'full_eval_set'}_{task}_p{population_size}_steps{step_size}_batch{batch_size}_nfe{end_nfe}_{evolver}",
         read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
@@ -231,6 +231,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         loss_functions=_task.loss_functions,
         database=database,
         step_size=step_size,
+        eval_steps=eval_steps,
         end_criteria={'nfe': end_nfe, 'steps': end_steps, 'score': end_score},
         detect_NaN=detect_NaN,
         devices=devices,
@@ -241,7 +242,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         logging=logging)
     # run controller
     print(f"Starting controller...")
-    controller.start(use_old = old_controller) 
+    controller.start() 
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database, verbose=True)
