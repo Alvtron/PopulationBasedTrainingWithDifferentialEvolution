@@ -52,7 +52,7 @@ def create_dataframes():
                 flatten['evolver'] = evolver
                 loss_df = pd.DataFrame(flatten, index=[database_path.name])
                 data = data.append(loss_df)
-        data.to_csv(Path(data_path, f"score_data_{task}.csv"))
+        data.to_csv(Path(data_path, f"{task}.csv"))
 
 def plot_boxplot_figure(df : pd.DataFrame, group : str, categories : list, **kwargs):
     df = df.copy(deep=True)
@@ -63,21 +63,21 @@ def plot_boxplot_figure(df : pd.DataFrame, group : str, categories : list, **kwa
     df_grp = df.groupby(group).tail(5)
     figure, axes = plt.subplots(**kwargs)
     axes = df_grp.boxplot(ax=axes, by=group, column=['train_acc', 'eval_acc', 'test_acc', 'train_cce', 'eval_cce', 'test_cce'], widths=0.5,
-        return_type='axes', showfliers=False, vert=True)
+        return_type='axes', showfliers=False, vert=True, patch_artist=False)
     for ax in axes:
         ax.set_xlabel('')
-        ax.tick_params(axis='x', labelrotation=25)
-    figure.tight_layout(h_pad=1, w_pad=1)
+        ax.tick_params(axis='x', labelrotation=45)
+    figure.tight_layout(h_pad=0.8, w_pad=0.8)
     plt.margins(0.2)
     plt.suptitle('')
     return figure
 
 def create_stats():
-    directories = list(checkpoints_path.glob('*'))
+    directories = list(data_path.glob('*'))
     for index, task_path in enumerate(directories):
-        task = task_path.name
+        task = task_path.stem
         evolver_tag = 'evolver'
-        df = pd.read_csv(Path(data_path, f"score_data_{task}.csv"), index_col=0)
+        df = pd.read_csv(task_path, index_col=0)
         if df.empty:
             continue
         # shorten column names
@@ -89,21 +89,25 @@ def create_stats():
         evolvers = ['pbt', 'de', 'shade', 'lshade', 'lshade_c']
         # create all vs all plot
         print(f"({index + 1} of {len(directories)}) creating plot for {task}...")
-        figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=evolvers, figsize=(10,6), nrows=2, ncols=3, sharey='row')
+        figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=evolvers, figsize=(5.92,3), nrows=2, ncols=3, sharex=True)
         figure.savefig(fname=Path(plots_path, f"{task}.png"), format='png', transparent=False)
         figure.savefig(fname=Path(plots_path, f"{task}.pdf"), format='pdf', transparent=True)
         figure.clf()
+        del figure
+        plt.close('all')
         # create pbt vs rest plots
         for column in filter(lambda x: x != 'pbt', evolvers):
             # create figure
             columns = ['pbt', column]
             file_name = f"{task}_{'_vs_'.join(columns)}"
             print(f"--creating plot for {file_name}...")
-            figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=columns, figsize=(6,6), nrows=2, ncols=3, sharey='row')
+            figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=columns, figsize=(4.8,3), nrows=2, ncols=3, sharex=True)
             figure.savefig(fname=Path(plots_path, f"{file_name}.png"), format='png', transparent=False)
             figure.savefig(fname=Path(plots_path, f"{file_name}.pdf"), format='pdf', transparent=True)
             figure.clf()
+            del figure
+            plt.close('all')
 
 # MAIN
-create_dataframes()
+#create_dataframes()
 create_stats()
