@@ -246,7 +246,7 @@ class Controller(object):
                 new_candidates = best_candidates
             # train new candidates
             for candidates in self.__train(new_candidates, self.step_size - self.eval_steps):
-                member = self.evolver.on_evaluate(candidates, self.__whisper) if self.eval_steps > 0 else candidates
+                member = self.evolver.on_evaluate(candidates, self.__whisper) if self.eval_steps <= 0 else candidates
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
                 self.__say(member.performance_details(), member)
