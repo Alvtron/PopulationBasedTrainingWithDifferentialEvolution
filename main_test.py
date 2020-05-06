@@ -17,5 +17,5 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.enabled = True
 
-    run(task='fashionmnist_lenet5', evolver='pbt', population_size = 30, batch_size=64,
-        step_size=250, end_nfe = 30 * 4, n_jobs=7, devices=['cuda:0'], eval_steps=8, tensorboard=False, verbose=2, logging=True)
+    run(task='fashionmnist_lenet5', evolver='lshade', population_size = 30, batch_size=64,
+        step_size=250, end_nfe = 30 * 40, n_jobs=7, devices=['cuda:0'], eval_steps=8, tensorboard=False, verbose=2, logging=True)
