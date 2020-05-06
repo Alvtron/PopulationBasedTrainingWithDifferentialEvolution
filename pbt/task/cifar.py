@@ -36,7 +36,8 @@ class Cifar10(Task):
         return Hyperparameters(
             optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
-                'momentum': ContiniousHyperparameter(1e-9, 1.0)
+                'momentum': ContiniousHyperparameter(1e-9, 1.0),
+                'weight_decay': ContiniousHyperparameter(1e-9, 1e-2)
             })
 
     @property
