@@ -55,7 +55,7 @@ def is_increasing(df, order=1):
 
 def save_figure_to_files(figure, directory, filename : str):
     figure.savefig(fname=Path(directory, f"{filename}.png"), format='png', transparent=False)
-    figure.savefig(fname=Path(directory, f"{filename}.svg"), format='svg', transparent=True)
+    figure.savefig(fname=Path(directory, f"{filename}.pdf"), format='pdf', transparent=True)
 
 class Analyzer(object):
     def __init__(self, database : ReadOnlyDatabase, verbose : bool = False):
