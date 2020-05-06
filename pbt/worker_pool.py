@@ -51,6 +51,7 @@ class WorkerPool(object):
             Worker(id=id, end_event=self._end_event, receive_queue=send_queue, device=device, random_seed=id, verbose=verbose > 1)
             for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
+        self.__async_return_queue = None
 
 
     def _print(self, message : str) -> None:
@@ -59,7 +60,7 @@ class WorkerPool(object):
         full_message = f"{self.__class__}: {message}"
         print(full_message)
 
-    def _print_gpu_memory_stats(self) -> None:
+    def __print_gpu_memory_stats(self) -> None:
         if self.verbose < 2 or not self._cuda or os.name == 'nt':
             return
         memory_stats = get_gpu_memory_stats()
@@ -103,11 +104,27 @@ class WorkerPool(object):
         [worker.join() for worker in self._workers]
         [worker.close() for worker in self._workers]
 
+    def apply_async(self, function: Callable[[object], object], parameters: object) -> None:
+        if self.__async_return_queue is None:
+            self.__async_return_queue = self._manager.Queue()
+        worker = next(self._workers_iterator)
+        self._print(f"queuing candidates for training...")
+        trial = Trial(return_queue=self.__async_return_queue, function=function, parameters=parameters)
+        worker.receive_queue.put(trial)
+        
+    def get(self) -> object:
+        result = self.__async_return_queue.get()
+        if isinstance(result, FailMessage):
+            self._on_fail_message(result)
+            self.stop()
+            raise Exception("worker failed.")
+        return result
+
     def imap(self, function: Callable[[object], object], parameter_map: Iterable[object]) -> Generator[object, None, None]:
         n_sent = 0
         n_returned = 0
-        return_queue = self._manager.Queue()
         failed_workers = set()
+        return_queue = self._manager.Queue()
         self._print(f"queuing candidates for training...")
         for parameters, worker in zip(parameter_map, self._workers_iterator):
             trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
@@ -116,13 +133,13 @@ class WorkerPool(object):
         self._print(f"awaiting trained candidates...")
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
             result = return_queue.get()
-            self._print_gpu_memory_stats()
             if isinstance(result, FailMessage):
                 self._on_fail_message(result)
                 failed_workers.add(result.sender_id)
                 continue
             n_returned += 1
             yield result
+        # check if all processes were successful
         if not return_queue.empty():
             self.stop()
             raise Exception("return queue is not empty.")

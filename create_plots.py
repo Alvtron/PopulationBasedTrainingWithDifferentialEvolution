@@ -1,9 +1,12 @@
+import itertools
 from pathlib import Path
 
 import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.colors as mcolors
 import matplotlib.font_manager
 from matplotlib import rc
 rc('font', family='serif')
@@ -55,6 +58,7 @@ def create_dataframes():
         data.to_csv(Path(data_path, f"{task}.csv"))
 
 def plot_boxplot_figure(df : pd.DataFrame, group : str, categories : list, **kwargs):
+    colors = mcolors.TABLEAU_COLORS
     df = df.copy(deep=True)
     df = df[df[group].isin(categories)] # remove unwanted columns
     df.evolver = df.evolver.astype("category")
@@ -62,12 +66,19 @@ def plot_boxplot_figure(df : pd.DataFrame, group : str, categories : list, **kwa
     df = df.sort_values(by=group)
     df_grp = df.groupby(group).tail(5)
     figure, axes = plt.subplots(**kwargs)
-    axes = df_grp.boxplot(ax=axes, by=group, column=['train_acc', 'eval_acc', 'test_acc', 'train_cce', 'eval_cce', 'test_cce'], widths=0.5,
-        return_type='axes', showfliers=False, vert=True, patch_artist=False)
-    for ax in axes:
-        ax.set_xlabel('')
-        ax.tick_params(axis='x', labelrotation=45)
+    boxplots = df_grp.boxplot(ax=axes, by=group, column=['train_acc', 'eval_acc', 'test_acc', 'train_cce', 'eval_cce', 'test_cce'], widths=0.5,
+        return_type='both', showfliers=False, vert=True, patch_artist=False)
+    for boxplot in boxplots.values:
+        boxplot.ax.set_xlabel('')
+        boxplot.ax.tick_params(axis='x', labelrotation=0, pad=15, labelsize='small', labelcolor='white')
+        # fill with colors
+        for lines, color in zip(boxplot.lines['boxes'], itertools.cycle(colors)):
+            lines.set_color(color)
+    # layout
     figure.tight_layout(h_pad=0.8, w_pad=0.8)
+    figure.legend(
+        loc='lower center', ncol=len(categories), frameon=False,
+        handles=[mpatches.Patch(fill=False, edgecolor=color, label=category) for category, color in zip(categories, itertools.cycle(colors))])
     plt.margins(0.2)
     plt.suptitle('')
     return figure
@@ -88,20 +99,13 @@ def create_stats():
         # define evolvers to plot
         evolvers = ['pbt', 'de', 'shade', 'lshade', 'lshade_c']
         # create all vs all plot
-        print(f"({index + 1} of {len(directories)}) creating plot for {task}...")
-        figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=evolvers, figsize=(5.92,3), nrows=2, ncols=3, sharex=True)
-        figure.savefig(fname=Path(plots_path, f"{task}.png"), format='png', transparent=False)
-        figure.savefig(fname=Path(plots_path, f"{task}.pdf"), format='pdf', transparent=True)
-        figure.clf()
-        del figure
-        plt.close('all')
-        # create pbt vs rest plots
-        for column in filter(lambda x: x != 'pbt', evolvers):
-            # create figure
-            columns = ['pbt', column]
-            file_name = f"{task}_{'_vs_'.join(columns)}"
-            print(f"--creating plot for {file_name}...")
-            figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=columns, figsize=(4.8,3), nrows=2, ncols=3, sharex=True)
+        for i in range(1, len(evolvers)):
+            evolver_set = evolvers[:i + 1]
+            file_name = f"{task}_{'_vs_'.join(evolver_set)}"
+            print(f"-- ({index + 1} of {len(directories)}) creating plot for {file_name}...")
+            figure_height = 3
+            figure_width = 4.8 + (5.92 - 4.8) * ((i - 1) / (len(evolvers) - 2))
+            figure = plot_boxplot_figure(df=df, group=evolver_tag, categories=evolver_set, figsize=(figure_width, figure_height), nrows=2, ncols=3, sharex=True)
             figure.savefig(fname=Path(plots_path, f"{file_name}.png"), format='png', transparent=False)
             figure.savefig(fname=Path(plots_path, f"{file_name}.pdf"), format='pdf', transparent=True)
             figure.clf()

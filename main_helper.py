@@ -237,7 +237,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         devices=devices,
         n_jobs=n_jobs,
         history_limit=history,
-        tensorboard_writer=tensorboard_writer,
+        tensorboard=tensorboard_writer,
         verbose=verbose,
         logging=logging)
     # run controller
