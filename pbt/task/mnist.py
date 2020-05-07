@@ -8,7 +8,7 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
 from .task import Task
-from ..models import hypernet, lenet5, mlp, vgg
+from ..models import hypernet, lenet5, mlp, vgg, resnet
 from ..utils.data import split, random_split, stratified_split
 from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from ..loss import F1, Accuracy, CategoricalCrossEntropy
@@ -25,14 +25,14 @@ class Mnist(Task):
     
     @property
     def model_class(self) -> hypernet.HyperNet:
-        if self.model == 'lenet5_dropout':
-            return partial(lenet5.Lenet5WithDropout, self.num_classes)
-        elif self.model == 'lenet5':
+        if self.model == 'lenet5':
             return partial(lenet5.LeNet5, self.num_classes)
         elif self.model == 'mlp':
             return partial(mlp.MLP, self.num_classes)
         elif self.model == 'vgg16':
-            return vgg.VGG16
+            return partial(vgg.VGG16, self.num_classes, 1)
+        elif self.model == 'resnet18':
+            return partial(resnet.ResNet18, self.num_classes, 1)
         else:
             raise NotImplementedError
 
@@ -42,15 +42,12 @@ class Mnist(Task):
 
     @property
     def hyper_parameters(self) -> Hyperparameters:
-        model_hyper_parameters = None
-        if self.model == 'lenet5_dropout':
-            model_hyper_parameters = lenet5.Lenet5WithDropout.create_hyper_parameters()
         return Hyperparameters(
-            model= model_hyper_parameters,
+            model= None,
             optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),
-                'weight_decay': ContiniousHyperparameter(1e-9, 1e-2)
+                'weight_decay': ContiniousHyperparameter(1e-9, 1e-2),
             })
 
     @property

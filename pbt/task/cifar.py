@@ -8,16 +8,16 @@ from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
 from .task import Task
-from ..models import hypernet, vgg
+from ..models import hypernet, mlp, lenet5, vgg, resnet
 from ..utils.data import split, random_split, stratified_split
 from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
 from ..loss import Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
 class Cifar10(Task):
-    def __init__(self, vgg_name : str = 'VGG16'):
+    def __init__(self, model : str = 'VGG16'):
         super().__init__()
-        self.vgg_name = vgg_name
+        self.model = model
 
     @property
     def num_classes(self) -> int:
@@ -25,7 +25,16 @@ class Cifar10(Task):
     
     @property
     def model_class(self) -> hypernet.HyperNet:
-        return vgg.VGG
+        if self.model == 'lenet5':
+            return partial(lenet5.LeNet5, self.num_classes)
+        elif self.model == 'mlp':
+            return partial(mlp.MLP, self.num_classes)
+        elif self.model == 'vgg16':
+            return partial(vgg.VGG16, self.num_classes, 3)
+        elif self.model == 'resnet18':
+            return partial(resnet.ResNet18, self.num_classes, 3)
+        else:
+            raise NotImplementedError
 
     @property
     def optimizer_class(self) -> Optimizer:
@@ -34,6 +43,7 @@ class Cifar10(Task):
     @property
     def hyper_parameters(self) -> Hyperparameters:
         return Hyperparameters(
+            model= None,
             optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),

@@ -25,74 +25,96 @@ def import_task(task_name : str):
     # CREDIT CARD FRAUD
     if task_name == "creditfraud":
         return creditfraud.CreditCardFraud()
-    # CIFAR
+    # CIFAR 10
+    elif task_name == "cifar10_mlp":
+        return cifar.CIFAR10('mlp')
+    elif task_name == "cifar10_lenet5":
+        return cifar.CIFAR10('lenet5')
     elif task_name == "cifar10_vgg16":
-        return cifar.Cifar10('VGG16')
+        return cifar.CIFAR10('vgg16')
+    elif task_name == "cifar10_resnet18":
+        return cifar.CIFAR10('resnet18')
+    # CIFAR 100
+    elif task_name == "cifar100_mlp":
+        return cifar.CIFAR100('mlp')
+    elif task_name == "cifar100_lenet5":
+        return cifar.CIFAR100('lenet5')
     elif task_name == "cifar100_vgg16":
-        return cifar.Cifar100('VGG16')
+        return cifar.CIFAR100('vgg16')
+    elif task_name == "cifar100_resnet18":
+        return cifar.CIFAR100('resnet18')
     # MNIST
-    elif task_name == "mnist_lenet5_dropout":
-        return mnist.Mnist('lenet5_dropout')
-    elif task_name == "mnist_lenet5":
-        return mnist.Mnist('lenet5')
     elif task_name == "mnist_mlp":
         return mnist.Mnist('mlp')
+    elif task_name == "mnist_lenet5":
+        return mnist.Mnist('lenet5')
     elif task_name == "mnist_vgg16":
         return mnist.Mnist('vgg16')
-    elif task_name == "mnist_knowledge_sharing_lenet5":
-        return mnist.MnistKnowledgeSharing('lenet5')
-    elif task_name == "mnist_knowledge_sharing_mlp":
-        return mnist.MnistKnowledgeSharing('mlp')
-    # EMNIST
-    elif task_name == "emnist_byclass_lenet5_dropout":
-        return emnist.EMnist('lenet5_dropout', 'byclass')
-    elif task_name == "emnist_byclass_lenet5":
-        return emnist.EMnist('lenet5', 'byclass')
+    elif task_name == "mnist_resnet18":
+        return mnist.Mnist('resnet18')
+    # EMNIST byclass
     elif task_name == "emnist_byclass_mlp":
         return emnist.EMnist('mlp', 'byclass')
-    elif task_name == "emnist_bymerge_lenet5_dropout":
-        return emnist.EMnist('lenet5_dropout', 'bymerge')
-    elif task_name == "emnist_bymerge_lenet5":
-        return emnist.EMnist('lenet5', 'bymerge')
+    elif task_name == "emnist_byclass_lenet5":
+        return emnist.EMnist('lenet5', 'byclass')
+    elif task_name == "emnist_byclass_vgg16":
+        return emnist.EMnist('vgg16', 'byclass')
+    elif task_name == "emnist_byclass_resnet18":
+        return emnist.EMnist('resnet18', 'byclass')
+    # EMNIST bymerge
     elif task_name == "emnist_bymerge_mlp":
         return emnist.EMnist('mlp', 'bymerge')
-    elif task_name == "emnist_balanced_lenet5_dropout":
-        return emnist.EMnist('lenet5_dropout', 'balanced')
-    elif task_name == "emnist_balanced_lenet5":
-        return emnist.EMnist('lenet5', 'balanced')
+    elif task_name == "emnist_bymerge_lenet5":
+        return emnist.EMnist('lenet5', 'bymerge')
+    elif task_name == "emnist_bymerge_vgg16":
+        return emnist.EMnist('vgg16', 'bymerge')
+    elif task_name == "emnist_bymerge_resnet18":
+        return emnist.EMnist('resnet18', 'bymerge')
+    # EMNIST balanced
     elif task_name == "emnist_balanced_mlp":
         return emnist.EMnist('mlp', 'balanced')
-    elif task_name == "emnist_letters_lenet5_dropout":
-        return emnist.EMnist('lenet5_dropout', 'letters')
-    elif task_name == "emnist_letters_lenet5":
-        return emnist.EMnist('lenet5', 'letters')
+    elif task_name == "emnist_balanced_lenet5":
+        return emnist.EMnist('lenet5', 'balanced')
+    elif task_name == "emnist_balanced_vgg16":
+        return emnist.EMnist('vgg16', 'balanced')
+    elif task_name == "emnist_balanced_resnet18":
+        return emnist.EMnist('resnet18', 'balanced')
+    # EMNIST letters
     elif task_name == "emnist_letters_mlp":
         return emnist.EMnist('mlp', 'letters')
-    elif task_name == "emnist_digits_lenet5_dropout":
-        return emnist.EMnist('lenet5_dropout', 'digits')
-    elif task_name == "emnist_digits_lenet5":
-        return emnist.EMnist('lenet5', 'digits')
+    elif task_name == "emnist_letters_lenet5":
+        return emnist.EMnist('lenet5', 'letters')
+    elif task_name == "emnist_letters_vgg16":
+        return emnist.EMnist('vgg16', 'letters')
+    elif task_name == "emnist_letters_resnet18":
+        return emnist.EMnist('resnet18', 'letters')
+    # EMNIST digits
     elif task_name == "emnist_digits_mlp":
         return emnist.EMnist('mlp', 'digits')
-    elif task_name == "emnist_mnist_lenet5_dropout":
-        return emnist.EMnist('lenet5_dropout', 'mnist')
-    elif task_name == "emnist_mnist_lenet5":
-        return emnist.EMnist('lenet5', 'mnist')
+    elif task_name == "emnist_digits_lenet5":
+        return emnist.EMnist('lenet5', 'digits')
+    elif task_name == "emnist_digits_vgg16":
+        return emnist.EMnist('vgg16', 'digits')
+    elif task_name == "emnist_digits_resnet18":
+        return emnist.EMnist('resnet18', 'digits')
+    # EMNIST mnist
     elif task_name == "emnist_mnist_mlp":
         return emnist.EMnist('mlp', 'mnist')
+    elif task_name == "emnist_mnist_lenet5":
+        return emnist.EMnist('lenet5', 'mnist')
+    elif task_name == "emnist_mnist_vgg16":
+        return emnist.EMnist('vgg16', 'mnist')
+    elif task_name == "emnist_mnist_resnet18":
+        return emnist.EMnist('resnet18', 'mnist')
     # FashionMNIST
-    elif task_name == "fashionmnist_lenet5_dropout":
-        return fashionmnist.FashionMnist('lenet5_dropout')
-    elif task_name == "fashionmnist_lenet5":
-        return fashionmnist.FashionMnist('lenet5')
     elif task_name == "fashionmnist_mlp":
         return fashionmnist.FashionMnist('mlp')
+    elif task_name == "fashionmnist_lenet5":
+        return fashionmnist.FashionMnist('lenet5')
     elif task_name == "fashionmnist_vgg16":
         return fashionmnist.FashionMnist('vgg16')
-    elif task_name == "fashionmnist_knowledge_sharing_lenet5":
-        return fashionmnist.FashionMnistKnowledgeSharing('lenet5')
-    elif task_name == "fashionmnist_knowledge_sharing_mlp":
-        return fashionmnist.FashionMnistKnowledgeSharing('mlp')
+    elif task_name == "fashionmnist_resnet18":
+        return fashionmnist.FashionMnist('resnet18')
     else:
         raise NotImplementedError(f"Your requested task '{task_name}'' is not available.")
 
