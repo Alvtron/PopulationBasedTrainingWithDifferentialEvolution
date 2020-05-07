@@ -316,6 +316,11 @@ class SHADE(EvolveEngine):
         self.CR = dict()
         self.F = dict()
 
+    def __sample_r1_and_r2(self, member: MemberState, generation: Generation) -> Tuple[MemberState, MemberState]:
+        x_r1 = random_from_list(list(generation), k=1, exclude=(member,))
+        x_r2 = random_from_list(self.archive + list(generation), k=1, exclude=(member, x_r1))
+        return x_r1, x_r2
+
     def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
         """
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
@@ -327,7 +332,7 @@ class SHADE(EvolveEngine):
             # control parameter assignment
             self.CR[index], self.F[index] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
-            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=(member,))
+            x_r1, x_r2 = self.__sample_r1_and_r2(member, generation)
             # select random best member
             x_pbest = self.pbest_member(generation)
             # hyper-parameter dimension size
@@ -352,10 +357,9 @@ class SHADE(EvolveEngine):
         member, candidate = candidates
         if member <= candidate:
             logger(f"mutate member {member.id} (x {member.score():.4f} < u {candidate.score():.4f}).", member)
-            if member < candidate:
-                logger(f"adding parent member {member.id} to archive.", member)
-                self.archive.append(member.copy())
-                self.memory.record(self.CR[member.id], self.F[member.id], abs(candidate.score() - member.score()))
+            logger(f"adding parent member {member.id} to archive.", member)
+            self.archive.append(member.copy())
+            self.memory.record(self.CR[member.id], self.F[member.id], abs(candidate.score() - member.score()))
             return candidate
         else:
             logger(f"maintain member {member.id} (x {member.score():.4f} > u {candidate.score():.4f}).", member)
@@ -504,7 +508,7 @@ class LSHADEWithWeightSharing(LSHADE):
             # control parameter assignment
             self.CR[index], self.F[index] = self.get_control_parameters()
             # select random unique members from the union of the generation and archive
-            x_r1, x_r2 = random_from_list(self.archive + list(generation), k=2, exclude=(member,))
+            x_r1, x_r2 = self._SHADE__sample_r1_and_r2(member, generation)
             # select random best member
             x_pbest = self.pbest_member(generation)
             # hyper-parameter dimension size
