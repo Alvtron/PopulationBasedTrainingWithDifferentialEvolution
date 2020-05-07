@@ -395,7 +395,6 @@ class SHADE(EvolveEngine):
                 continue
             if F_i >= self.F_MAX:
                 F_i = self.F_MAX
-                break
             break
         return CR_i, F_i
         
