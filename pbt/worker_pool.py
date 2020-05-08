@@ -57,7 +57,7 @@ class WorkerPool(object):
     def _print(self, message : str) -> None:
         if self.verbose < 1:
             return
-        full_message = f"{self.__class__}: {message}"
+        full_message = f"{self.__class__.__name__}: {message}"
         print(full_message)
 
     def __print_gpu_memory_stats(self) -> None:
