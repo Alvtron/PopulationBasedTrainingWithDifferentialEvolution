@@ -306,6 +306,8 @@ class SHADE(EvolveEngine):
         self.p = p
         self.CR = dict()
         self.F = dict()
+        self.__F_averages = list()
+        self.__CR_averages = list()
         
     def on_spawn(self, member : MemberState, logger : Callable[[str], None]) -> None:
         """Called for each new member."""
@@ -367,8 +369,12 @@ class SHADE(EvolveEngine):
 
     def on_generation_end(self, generation : Generation, logger : Callable[[str], None]):
         self.memory.update()
-        logger(f"SHADE: Average F-values: {average(self.F.values())}")
-        logger(f"SHADE: Average Cr-values: {average(self.CR.values())}")
+        F_average = average(self.F.values())
+        CR_average = average(self.CR.values())
+        self.__CR_averages.append(CR_average)
+        self.__F_averages.append(F_average)
+        logger(f"SHADE: Average F-value this generation was {F_average:.3f}")
+        logger(f"SHADE: Average Cr-value this generation was {CR_average:.3f}")
 
     def get_control_parameters(self) -> Tuple[float, float]:
         """
