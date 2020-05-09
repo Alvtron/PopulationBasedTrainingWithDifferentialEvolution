@@ -19,7 +19,7 @@ class TestAnalyzer(unittest.TestCase):
         batch_size = 64
         device = 'cuda'
         data_path = 'tests/checkpoint/lshade_20200422231243'
-        task = FashionMnist()
+        task = FashionMnist(model='lenet5')
         tester = Evaluator(
             model_class=task.model_class,
             test_data=task.datasets.test,

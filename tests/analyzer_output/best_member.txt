@@ -1,2 +1,0 @@
-Best checkpoint: Member 013, epoch 000, step 23250: train_cce 0.17998, train_acc 93.61441, eval_cce 0.27606, eval_acc 89.80892, test_cce 0.27606, test_acc 89.80892
-

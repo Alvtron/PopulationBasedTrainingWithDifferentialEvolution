@@ -288,11 +288,11 @@ class Analyzer(object):
             # clear plot
             plt.clf()
 
-    def __create_color(self, score, worst_score, best_score, color_map, sensitivity = 20, epsilon = 1e-7):
-        score_decimal = (score - worst_score + epsilon) / (best_score - worst_score + epsilon)
-        adjusted_score_decimal = score_decimal# ** sensitivity
-        color_value = color_map(adjusted_score_decimal)
-        return color_value
+    def __create_color(self, score, worst_score, best_score, color_map):
+        if worst_score == best_score:
+            return color_map(0.5)
+        else:
+            return color_map((score - worst_score) / (best_score - worst_score))
 
     def create_hyper_parameter_plot_files(self, save_directory):
         self.__create_hyper_parameter_plot_files_v1(directory=save_directory, prefix='hp', suffix='dots', figsize=(10,7), save_csv=True)
@@ -328,7 +328,7 @@ class Analyzer(object):
             worst_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
             worst_score = score_df.max().max()
             best_score = score_df.min().min()
-        color_df = score_df.applymap(partial(self.__create_color, worst_score=worst_score, best_score=best_score, color_map=TAB_MAP, sensitivity=10))
+        color_df = score_df.clip(worst_score, best_score).applymap(partial(self.__create_color, worst_score=worst_score, best_score=best_score, color_map=TAB_MAP))
         # create hyper-parameter dataframe
         hp_df = self.__create_hp_dataframes()
         # plot data
@@ -344,6 +344,8 @@ class Analyzer(object):
             # plot colorbar
             sm = plt.cm.ScalarMappable(cmap=TAB_MAP, norm=plt.Normalize(vmin=0.0, vmax=1.0))
             colorbar = fig.colorbar(sm, ax=ax)
+            worst_score = score_df.max().max()
+            colorbar.ax.set_yticklabels([round(worst_score + x*(best_score-worst_score)/6, 1) for x in range(6)])
             colorbar.set_label('performance')
             # plot worst
             hp_df_with_worst=df[worst_member_id]

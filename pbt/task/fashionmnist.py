@@ -15,7 +15,7 @@ from ..loss import F1, Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
 class FashionMnist(Task):
-    def __init__(self, model : str = 'lenet5_dropout'):
+    def __init__(self, model : str = 'lenet5'):
         super().__init__()
         self.model = model
 
