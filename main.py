@@ -10,12 +10,14 @@ from torch.utils.tensorboard import SummaryWriter
 from main_helper import run
 
 def validate_arguments(args):
-    if (args.population_size < 0):
-        raise ValueError("Population size must be at least 1.")
+    if (args.population_size < 1):
+        raise ValueError("Population size must be at least 2.")
     if (args.batch_size < 0):
         raise ValueError("Batch size must be at least 1.")
     if (args.step_size < 0):
         raise ValueError("Step size must be at least 1.")
+    if (args.eval_steps < 0):
+        raise ValueError("Step size must satisfy 0 <= eval_steps < step_size.")
     if (args.step_size < 0):
         raise ValueError("Step size must be at least 1.")
     if any(device.startswith('cuda') for device in args.devices):
