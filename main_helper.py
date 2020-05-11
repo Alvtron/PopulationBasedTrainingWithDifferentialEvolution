@@ -172,7 +172,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     # prepare database
     print(f"Preparing database...")
     database = Database(
-        directory_path=f"{directory}/{'random_eval_subset' if eval_steps > 0 else 'full_eval_set'}_{task}_p{population_size}_steps{step_size}_batch{batch_size}_nfe{end_nfe}_{evolver}",
+        directory_path=f"{directory}/{task}_p{population_size}_steps{step_size}_evals{eval_steps}_batch{batch_size}_nfe{end_nfe}_{evolver}",
         read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
@@ -189,6 +189,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         f"Hyper-parameters: {len(_task.hyper_parameters)} {list(_task.hyper_parameters.keys())}",
         f"Batch size: {batch_size}",
         f"Step size: {step_size}",
+        f"Eval steps: {eval_steps}",
         f"End criterium - fitness evaluations: {end_nfe}",        
         f"End criterium - steps: {end_steps}",
         f"End criterium - score: {end_score}",
