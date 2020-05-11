@@ -164,7 +164,7 @@ def create_tensorboard(log_directory):
 def run(task : str, evolver : str, population_size : int, batch_size : int, step_size : int,
         end_nfe : int = None, end_steps : int = None, end_score : float = None, history : int = 2,
         directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
-        tensorboard : bool = False, detect_NaN : bool = False, eval_steps : bool = False,
+        tensorboard : bool = False, detect_NaN : bool = False, eval_steps : int = 0,
         verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
