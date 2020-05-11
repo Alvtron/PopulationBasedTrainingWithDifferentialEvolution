@@ -52,9 +52,9 @@ class Controller(object):
         self.hyper_parameters = hyper_parameters
         self.train_data = train_data
         self.eval_data = eval_data
-        self.partial_trainer = partial(Trainer, model_class=model_class, optimizer_class=optimizer_class, loss_functions=loss_functions, loss_metric=loss_metric, batch_size=batch_size, verbose=verbose > 4)
-        self.partial_evaluator = partial(Evaluator, model_class=model_class, loss_functions=loss_functions, batch_size=batch_size, loss_group = 'eval', verbose=verbose > 4)
-        self.tester = Evaluator(model_class=model_class, eval_data=test_data,  loss_functions=loss_functions, batch_size=batch_size, loss_group = 'test', verbose=verbose > 4) if test_data else None
+        self.partial_trainer = partial(Trainer, model_class=model_class, optimizer_class=optimizer_class, loss_functions=loss_functions, loss_metric=loss_metric, batch_size=batch_size, verbose=verbose > 3)
+        self.partial_evaluator = partial(Evaluator, model_class=model_class, loss_functions=loss_functions, batch_size=batch_size, loss_group = 'eval', verbose=verbose > 3)
+        self.tester = Evaluator(model_class=model_class, eval_data=test_data,  loss_functions=loss_functions, batch_size=batch_size, loss_group = 'test', verbose=verbose > 3) if test_data else None
         self.step_size = step_size
         self.batch_size = batch_size
         self.eval_steps = eval_steps

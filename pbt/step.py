@@ -18,7 +18,7 @@ class DeviceCallable(ABC):
 class Step(DeviceCallable):
     def __init__(self, train_callable, eval_callable, test_callable = None):
         self.train = train_callable
-        self.eval = train_callable
+        self.eval = eval_callable
         self.test = test_callable
 
     def __process(self, checkpoint: Checkpoint, device: str, logger: Callable[[str], None]):
