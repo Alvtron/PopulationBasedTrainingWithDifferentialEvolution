@@ -18,7 +18,7 @@ from multiprocessing.pool import ThreadPool
 import torch
 import torchvision
 import torch.utils.data
-from torch.utils.data import Dataset, Subset, DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
@@ -27,7 +27,6 @@ import pbt.member
 from pbt.worker_pool import WorkerPool
 from pbt.member import Checkpoint, Population, Generation
 from pbt.utils.date import get_datetime_string
-from pbt.utils.data import create_random_subset
 from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters
 from pbt.trainer import Trainer
 from pbt.evaluator import Evaluator
@@ -38,9 +37,9 @@ from pbt.step import Step
 
 class Controller(object):
     def __init__(
-            self, population_size: int, hyper_parameters: Hyperparameters, evolver: EvolveEngine, train_data : Dataset, eval_data : Dataset,
-            model_class, optimizer_class, loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, batch_size : int,
-            test_data : Dataset = None, step_size: int = 1, eval_steps: int = 0, end_criteria: dict = {'score': 100.0}, detect_NaN: bool = False, history_limit: int = None,
+            self, population_size: int, hyper_parameters: Hyperparameters, trainer: Trainer, evaluator: Evaluator, evolver: EvolveEngine,
+            loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, tester: Evaluator = None,
+            step_size: int = 1, eval_steps: int = 0, end_criteria: dict = {'score': 100.0}, detect_NaN: bool = False, history_limit: int = None,
             devices: List[str] = ['cpu'], n_jobs: int = -1, verbose: int = 1, logging: bool = True, tensorboard: SummaryWriter = None):
         if not isinstance(step_size, int) or step_size < 1: 
             raise Exception(f"step size must be of type {int} and 1 or higher.")
@@ -48,34 +47,30 @@ class Controller(object):
             raise Exception(f"eval steps must be of type {int} and lower than step size.")
         self.population_size = population_size
         self.population = Population()
+        self.database = database
+        self.trainer = trainer
+        self.evaluator = evaluator
+        self.tester = tester
         self.evolver = evolver
         self.hyper_parameters = hyper_parameters
-        self.train_data = train_data
-        self.eval_data = eval_data
-        self.partial_trainer = partial(Trainer, model_class=model_class, optimizer_class=optimizer_class, loss_functions=loss_functions, loss_metric=loss_metric, batch_size=batch_size, verbose=verbose > 3)
-        self.partial_evaluator = partial(Evaluator, model_class=model_class, loss_functions=loss_functions, batch_size=batch_size, loss_group = 'eval', verbose=verbose > 3)
-        self.tester = Evaluator(model_class=model_class, eval_data=test_data,  loss_functions=loss_functions, batch_size=batch_size, loss_group = 'test', verbose=verbose > 3) if test_data else None
+        self.worker_pool = WorkerPool(devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+        self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.step_size = step_size
-        self.batch_size = batch_size
         self.eval_steps = eval_steps
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
         self.loss_functions = loss_functions
         self.end_criteria = end_criteria
         self.detect_NaN = detect_NaN
-        self.database = database
-        self.worker_pool = WorkerPool(devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
-        self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.verbose = verbose
         self.logging = logging
-        self.__nfe = 0
-        self.__n_steps = 0
+        self.nfe = 0
         self.__tensorboard = tensorboard
 
     def __create_message(self, message : str, tag : str = None) -> str:
         time = get_datetime_string()
         generation = f"G{len(self.population.generations):03d}"
-        nfe = f"({self.__nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.__nfe
+        nfe = f"({self.nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.nfe
         return f"{time} {nfe} {generation}{f' {tag}' if tag else ''}: {message}"
 
     def __say(self, message : str, member : Checkpoint = None) -> None:
@@ -170,7 +165,7 @@ class Controller(object):
         With the end_criteria, check if the entire population is finished
         by inspecting the provided member.
         """
-        if 'nfe' in self.end_criteria and self.end_criteria['nfe'] and self.__nfe >= self.end_criteria['nfe']:
+        if 'nfe' in self.end_criteria and self.end_criteria['nfe'] and self.nfe >= self.end_criteria['nfe']:
             return True
         if 'score' in self.end_criteria and self.end_criteria['score'] and any(member >= self.end_criteria['score'] for member in self.population.current):
             return True
@@ -207,8 +202,7 @@ class Controller(object):
     def __on_start(self) -> None:
         """Resets class properties, starts training service and cleans up temporary files."""
         # reset class properties
-        self.__nfe = 0
-        self.__n_steps = 0
+        self.nfe = 0
         self.generations = 0
         self.population = Population()
         # start training service
@@ -218,26 +212,13 @@ class Controller(object):
         """Stops training service and cleans up temporary files."""
         # close training service
         self.worker_pool.stop()
-
-    def __create_subset(self, dataset, start_step : int, n_steps : int):
-        dataset_size = len(dataset)
-        start_index = (start_step * self.batch_size) % dataset_size
-        n_samples = n_steps * self.batch_size
-        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
-        return Subset(dataset, indices)
-
-    def __train(self, checkpoints : Iterable[Checkpoint], n_steps: int):
-        trainer = self.partial_trainer(train_data=self.__create_subset(dataset=self.train_data, start_step=self.__n_steps, n_steps=n_steps))
-        evaluator = self.partial_evaluator(eval_data=self.eval_data)
-        step = Step(train_callable=trainer, eval_callable=evaluator, test_callable=self.tester)
-        self.__n_steps += n_steps
+    
+    def __train(self, checkpoints : Iterable[Checkpoint], train_steps: int, train_shuffle: bool = False):
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, train_step_size=train_steps, eval_step_size=None, train_shuffle=train_shuffle, eval_shuffle=False)
         yield from self.worker_pool.imap(step, checkpoints)
 
-    def __eval(self, checkpoints: Iterable[Checkpoint], n_steps: int):
-        trainer = self.partial_trainer(train_data=self.__create_subset(dataset=self.train_data, start_step=self.__n_steps, n_steps=n_steps))
-        evaluator = self.partial_evaluator(eval_data=create_random_subset(self.eval_data, n_steps * self.batch_size))
-        step = Step(train_callable=trainer, eval_callable=evaluator, test_callable=self.tester)
-        self.__n_steps += n_steps
+    def __eval(self, checkpoints : Iterable[Checkpoint], eval_steps: int, train_shuffle: bool = False):
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester, train_step_size = eval_steps, eval_step_size=eval_steps, train_shuffle=train_shuffle, eval_shuffle=True)
         yield from self.worker_pool.imap(step, checkpoints)
 
     def __train_synchronously(self) -> List[Checkpoint]:
@@ -266,7 +247,7 @@ class Controller(object):
             # train new candidates
             for candidates in self.__train(new_candidates, self.step_size - self.eval_steps):
                 member = self.evolver.on_evaluate(candidates, self.__whisper) if self.eval_steps <= 0 else candidates
-                self.__nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
+                self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
                 self.__say(member.performance_details(), member)
                 # Save member to database directory.

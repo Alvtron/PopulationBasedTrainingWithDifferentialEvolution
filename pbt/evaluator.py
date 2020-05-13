@@ -7,13 +7,14 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
 
 from .hyperparameters import Hyperparameters
+from .utils.data import create_subset, create_subset_with_indices
 
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
-    def __init__(self, model_class : Module, eval_data : Dataset, batch_size : int, loss_functions : dict,
+    def __init__(self, model_class : Module, test_data : Dataset, batch_size : int, loss_functions : dict,
             loss_group : str = 'eval', verbose : bool = False):
         self.model_class = model_class
-        self.eval_data = eval_data
+        self.test_data = test_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
@@ -24,7 +25,7 @@ class Evaluator(object):
             return
         print(message, end=end)
 
-    def create_model(self, model_state = None, device: str = 'cpu'):
+    def create_model(self, model_state = None, device : str = 'cpu'):
         self._print("creating model...")
         model = self.model_class().to(device)
         if model_state:
@@ -32,13 +33,13 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, checkpoint : dict, device: str = 'cpu'):
+    def __call__(self, checkpoint : dict, step_size : int = None, device : str = 'cpu', shuffle : bool = False):
         """Evaluate model on the provided validation or test set."""
         start_eval_time_ns = time.time_ns()
         self._print("creating model...")
         model = self.create_model(checkpoint.model_state, device)
         self._print("creating batches...")
-        batches = DataLoader(dataset = self.eval_data, batch_size = self.batch_size)
+        batches = DataLoader(dataset = self.test_data, batch_size = self.batch_size, shuffle = shuffle)
         num_batches = len(batches)
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
@@ -57,6 +58,8 @@ class Evaluator(object):
                 del loss
             if self.verbose: print(end="\n")
             del output
+            if step_size is not None and batch_index + 1 == step_size:
+                break
         # clean GPU memory
         del model
         torch.cuda.empty_cache()

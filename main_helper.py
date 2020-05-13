@@ -211,6 +211,32 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     obj_info = "\n".join(obj_info)
     print("\n", obj_info, "\n")
     database.create_file(tag="info", file_name="information.txt").write_text(obj_info)
+    # create trainer, evaluator and tester
+    print(f"Creating trainer...")
+    TRAINER = Trainer(
+        model_class = _task.model_class,
+        optimizer_class = _task.optimizer_class,
+        train_data = _task.datasets.train,
+        loss_functions = _task.loss_functions,
+        loss_metric = _task.loss_metric,
+        batch_size = batch_size,
+        verbose=False)
+    print(f"Creating evaluator...")
+    EVALUATOR = Evaluator(
+        model_class = _task.model_class,
+        test_data = _task.datasets.eval,
+        loss_functions=_task.loss_functions,
+        batch_size = batch_size,
+        loss_group = 'eval',
+        verbose=False)
+    print(f"Creating tester...")
+    TESTER = Evaluator(
+        model_class = _task.model_class,
+        test_data = _task.datasets.test,
+        loss_functions=_task.loss_functions,
+        batch_size = batch_size,
+        loss_group = 'test',
+        verbose=False)
     # define controller
     print(f"Creating evolver...")
     EVOLVER = create_evolver(evolver, population_size, end_nfe)
@@ -219,13 +245,10 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     controller = Controller(
         population_size=population_size,
         hyper_parameters=_task.hyper_parameters,
+        trainer=TRAINER,
+        evaluator=EVALUATOR,
+        tester=TESTER,
         evolver=EVOLVER,
-        batch_size=batch_size,
-        train_data=_task.datasets.train,
-        eval_data=_task.datasets.eval,
-        test_data=_task.datasets.test,
-        model_class=_task.model_class,
-        optimizer_class=_task.optimizer_class,
         loss_metric=_task.loss_metric,
         eval_metric=_task.eval_metric,
         loss_functions=_task.loss_functions,
@@ -242,16 +265,14 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         logging=logging)
     # run controller
     print(f"Starting controller...")
-    generation = controller.start()
-    best = max(generation)
+    controller.start() 
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database, verbose=True)
-    # save top member to file
-    result = f"{best}: {best.performance_details()}"
-    with database.create_file("results", "best_member.txt").open('a+') as f:
-        f.write(f"{result}\n\n")
-    print(f"Best member: {result}")
+    analyzer.test(
+        evaluator=TESTER,
+        save_directory=database.create_file("results", "top_members.txt"),
+        device='cpu')
     print("Creating statistics...")
     analyzer.create_statistics(save_directory=database.create_folder("results/statistics"))
     print("Creating plot-files...")

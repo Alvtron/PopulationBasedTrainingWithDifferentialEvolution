@@ -1,12 +1,11 @@
-import itertools
 from abc import ABC
 from functools import partial
 from warnings import warn
 from typing import Callable, Union, Iterable
 
-from pbt.trainer import Trainer
-from pbt.evaluator import Evaluator
-from pbt.member import Checkpoint, MissingStateError
+from .trainer import Trainer
+from .evaluator import Evaluator
+from .member import Checkpoint, MissingStateError
 
 def empty_logger(arg):
     pass
@@ -16,10 +15,11 @@ class DeviceCallable(ABC):
         pass
 
 class Step(DeviceCallable):
-    def __init__(self, train_callable, eval_callable, test_callable = None):
-        self.train = train_callable
-        self.eval = eval_callable
-        self.test = test_callable
+    def __init__(self, trainer: Trainer, evaluator: Evaluator, train_step_size: int, eval_step_size: int = None,
+            train_shuffle: bool = False, eval_shuffle: bool = False, tester: Evaluator = None):
+        self.train = partial(trainer, step_size=train_step_size, shuffle=train_shuffle)
+        self.eval = partial(evaluator, step_size=eval_step_size, shuffle=eval_shuffle)
+        self.test = partial(tester, step_size=None, shuffle=False) if tester is not None else None
 
     def __process(self, checkpoint: Checkpoint, device: str, logger: Callable[[str], None]):
         # correct logger

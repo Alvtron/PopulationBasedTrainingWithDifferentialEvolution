@@ -13,6 +13,7 @@ from torch.optim import Optimizer
 from .member import Checkpoint
 from .hyperparameters import Hyperparameters
 from .models.hypernet import HyperNet
+from .utils.data import create_subset, create_subset_with_indices
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
@@ -32,7 +33,7 @@ class Trainer(object):
             return
         print(message, end=end)
 
-    def create_model(self, hyper_parameters : Hyperparameters = None, model_state = None, device: str = 'cpu'):
+    def create_model(self, hyper_parameters : Hyperparameters = None, model_state = None, device : str = 'cpu'):
         self._print("creating model...")
         model = self.model_class().to(device)
         if model_state is not None:
@@ -57,21 +58,30 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
-    def __call__(self, checkpoint : Checkpoint, device: str = 'cpu'):
+    def create_subset(self, start_step : int, end_step : int, shuffle : bool):
+        dataset_size = len(self.train_data)
+        start_index = (start_step * self.batch_size) % dataset_size
+        n_samples = (end_step - start_step) * self.batch_size
+        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
+        return create_subset_with_indices(dataset=self.train_data, indices=indices, shuffle=shuffle)
+
+    def __call__(self, checkpoint : Checkpoint, step_size : int = 1, device : str = 'cpu', shuffle : bool = False):
+        if step_size < 1:
+            raise ValueError("The number of steps must be at least one or higher.")
         start_train_time_ns = time.time_ns()
         # preparing model and optimizer
         self._print("creating model...")
         model = self.create_model(checkpoint.parameters, checkpoint.model_state, device)
         self._print("creating optimizer...")
         optimizer = self.create_optimizer(model, checkpoint.parameters, checkpoint.optimizer_state)
-        self._print("creating dataloader...")
-        batches = DataLoader(dataset = self.train_data, batch_size = self.batch_size, shuffle = False)
-        num_batches = len(batches)
+        self._print("creating dataset...")
+        subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + step_size, shuffle = shuffle)
+        dataloader = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
         self._print("Training...")
-        for batch_index, (x, y) in enumerate(batches):
-            self._print(f"({batch_index + 1}/{num_batches})", end=" ")
+        for batch_index, (x, y) in enumerate(dataloader):
+            self._print(f"({batch_index + 1}/{step_size})", end=" ")
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             # 1. Forward pass: compute predicted y by passing x to the model.
@@ -80,7 +90,7 @@ class Trainer(object):
                 if metric_type == self.loss_metric:
                     # 2. Compute loss and save loss.
                     loss = metric_function(output, y)
-                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(num_batches)
+                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(step_size)
                     # 3. Before the backward pass, use the optimizer object to zero all of the gradients
                     # for the variables it will update (which are the learnable weights of the model).
                     optimizer.zero_grad()
@@ -92,7 +102,7 @@ class Trainer(object):
                     # 2. Compute loss and save loss
                     with torch.no_grad():
                         loss = metric_function(output, y)
-                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(num_batches)
+                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(step_size)
                 self._print(f"{metric_type}: {loss.item():4f}", end=" ")
                 del loss
             del output
