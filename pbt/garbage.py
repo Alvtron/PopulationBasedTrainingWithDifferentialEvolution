@@ -14,7 +14,19 @@ class GarbageCollector:
             return
         print(f"GC: {message}")
 
-    def collect(self, generations : Sequence[Generation]) -> None:
+    def collect(self, generation: generation) -> None:
+        if self.history_limit is None:
+            return
+        for member in generation:
+            if not member.has_state():
+                # skipping the member as it has no state to delete
+                continue
+            self._log(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.4f}...")
+            member.delete_state()
+            # updating database
+            self.database.update(member.id, member.steps, member)
+
+    def collect_old(self, generations : Sequence[Generation]) -> None:
         if self.history_limit is None:
             return
         if len(generations) < self.history_limit + 1:

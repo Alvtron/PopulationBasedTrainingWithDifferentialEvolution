@@ -46,7 +46,6 @@ class Controller(object):
         if not isinstance(eval_steps, int) or eval_steps >= step_size:
             raise Exception(f"eval steps must be of type {int} and lower than step size.")
         self.population_size = population_size
-        self.population = Population()
         self.database = database
         self.trainer = trainer
         self.evaluator = evaluator
@@ -65,11 +64,12 @@ class Controller(object):
         self.verbose = verbose
         self.logging = logging
         self.nfe = 0
+        self.n_generations = 0
         self.__tensorboard = tensorboard
 
     def __create_message(self, message : str, tag : str = None) -> str:
         time = get_datetime_string()
-        generation = f"G{len(self.population.generations):03d}"
+        generation = f"G{len(self.n_generations):03d}"
         nfe = f"({self.nfe}/{self.end_criteria['nfe']})" if 'nfe' in self.end_criteria and self.end_criteria['nfe'] else self.nfe
         return f"{time} {nfe} {generation}{f' {tag}' if tag else ''}: {message}"
 
@@ -160,29 +160,22 @@ class Controller(object):
             return True
         return False
     
-    def __is_population_finished(self) -> bool:
+    def __is_population_finished(self, generation: Generation) -> bool:
         """
         With the end_criteria, check if the entire population is finished
         by inspecting the provided member.
         """
         if 'nfe' in self.end_criteria and self.end_criteria['nfe'] and self.nfe >= self.end_criteria['nfe']:
             return True
-        if 'score' in self.end_criteria and self.end_criteria['score'] and any(member >= self.end_criteria['score'] for member in self.population.current):
+        if 'score' in self.end_criteria and self.end_criteria['score'] and any(member >= self.end_criteria['score'] for member in generation):
             return True
-        if all(self.__is_member_finished(member) for member in self.population.current):
+        if all(self.__is_member_finished(member) for member in generation):
             return True
         return False
 
     def __create_initial_generation(self) -> Generation:
         new_members = self.__create_members(k=self.population_size)
-        generation = Generation()
-        for member in self.__train(new_members, self.step_size):
-            # log performance
-            self.__say(member.performance_details(), member)
-            # Save member to database directory.
-            self.__update_database(member)
-            generation.append(member)
-        return generation
+        return Generation(new_members)
 
     def start(self) -> List[Checkpoint]:
         """
@@ -203,8 +196,7 @@ class Controller(object):
         """Resets class properties, starts training service and cleans up temporary files."""
         # reset class properties
         self.nfe = 0
-        self.generations = 0
-        self.population = Population()
+        self.n_generations = 0
         # start training service
         self.worker_pool.start()
 
@@ -228,24 +220,15 @@ class Controller(object):
         but they are waiting for each other between each generation cycle.
         """
         self.__say("Training initial generation...")
-        self.population.append(self.__create_initial_generation())
-        while not self.__is_population_finished():
+        previous_generation = None
+        generation = self.__create_initial_generation()
+        while not self.__is_population_finished(generation):
             self.__whisper("on generation start")
-            self.evolver.on_generation_start(self.population.current, self.__whisper)
+            self.evolver.on_generation_start(generation, self.__whisper)
             # create new generation
             new_generation = Generation()
-            # 1. evolve, 2. train, 3. evaluate, 4. save
-            # generate new candidates
-            new_candidates = list(self.evolver.on_evolve(self.population.current, self.__whisper))
-            # test candidates with a smaller eval step
-            if self.eval_steps > 0:
-                best_candidates = list()
-                for candidates in self.__eval(new_candidates, self.eval_steps):
-                    member = self.evolver.on_evaluate(candidates, self.__whisper)
-                    best_candidates.append(member)
-                new_candidates = best_candidates
-            # train new candidates
-            for candidates in self.__train(new_candidates, self.step_size - self.eval_steps):
+            # train candidates for n steps
+            for candidates in self.__train(generation, self.step_size - self.eval_steps):
                 member = self.evolver.on_evaluate(candidates, self.__whisper) if self.eval_steps <= 0 else candidates
                 self.nfe += 1 #if isinstance(candidates, Checkpoint) else len(candidates)
                 # log performance
@@ -257,12 +240,29 @@ class Controller(object):
                 # Add member to generation.
                 new_generation.append(member)
                 self.__whisper("awaiting next trained member...")
+            # generate new candidates
+            new_candidates = self.evolver.on_evolve(new_generation, self.__whisper)
+            # test candidates with a smaller eval step
+            if self.eval_steps > 0:
+                best_candidates = list()
+                for candidates in self.__eval(new_candidates, self.eval_steps):
+                    member = self.evolver.on_evaluate(candidates, self.__whisper)
+                    best_candidates.append(member)
+                new_candidates = best_candidates
             self.__whisper("on generation end")
             self.evolver.on_generation_end(new_generation, self.__whisper)
             # add new generation
-            self.population.append(new_generation)
+            previous_generation = generation
+            generation = new_generation
             # perform garbage collection
             self.__whisper("performing garbage collection...")
-            self.garbage_collector.collect(self.population.generations)
+            self.garbage_collector.collect(previous_generation)
         self.__say(f"end criteria has been reached.")
-        return list(self.population.current)
+        return list(generation)
+
+        # step
+        # eval
+        # if ready do
+        # mutate
+        # eval
+        # update population

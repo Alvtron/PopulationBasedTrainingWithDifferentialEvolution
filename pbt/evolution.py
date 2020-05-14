@@ -235,7 +235,10 @@ class HistoricalMemory(object):
         self.weights = list()
         self.k = 0
 
-    def record(self, cr_i : float, f_i : float, delta_score : float) -> None:
+    def record(self, cr_i: float, f_i: float, delta_score: float) -> None:
+        assert 0.0 <= cr_i <= 1.0, "cr_i is not valid."
+        assert 0.0 <= f_i, "f_i is not valid."
+        assert 0.0 < delta_score, "delta score is not valid."
         self.s_cr.append(cr_i)
         self.s_f.append(f_i)
         self.weights.append(delta_score)
@@ -285,7 +288,7 @@ class SHADE(EvolveEngine):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0) -> None:
+    def __init__(self, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0, state_sharing: bool = False) -> None:
         if N_INIT < 4:
             raise ValueError("population size must be at least 4 or higher.")
         if round(N_INIT * p) < 1:
@@ -306,6 +309,7 @@ class SHADE(EvolveEngine):
         self.p = p
         self.CR = dict()
         self.F = dict()
+        self.__state_sharing = state_sharing
         self.__F_averages = list()
         self.__CR_averages = list()
         
@@ -343,6 +347,8 @@ class SHADE(EvolveEngine):
             j_rand = random.randrange(0, dimension_size)
             # make a copy of the member
             candidate = member.copy()
+            if self.__state_sharing:
+                candidate.copy_state(x_pbest)
             for j in range(dimension_size):
                 if random.uniform(0.0, 1.0) <= self.CR[index] or j == j_rand:
                     mutant = de_current_to_best_1(F = self.F[index], x_base = member[j],
@@ -389,6 +395,8 @@ class SHADE(EvolveEngine):
         r1 = random.randrange(0, self.memory.size)
         MF_i = self.memory.m_f[r1]
         MCR_i = self.memory.m_cr[r1]
+        assert not math.isnan(MF_i) , "MF_i is NaN."
+        assert not math.isnan(MCR_i) , "MCR_i is NaN."
         # generate MCR_i
         if MCR_i == None:
             CR_i = 0.0
@@ -397,9 +405,9 @@ class SHADE(EvolveEngine):
         # generate MF_i
         while True:
             F_i = randc(MF_i, 0.1)
-            if F_i <= self.F_MIN:
+            if F_i < self.F_MIN:
                 continue
-            if F_i >= self.F_MAX:
+            if F_i > self.F_MAX:
                 F_i = self.F_MAX
             break
         return CR_i, F_i
@@ -428,8 +436,8 @@ class LSHADE(SHADE):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0) -> None:
-        super().__init__(N_INIT, r_arc, p, memory_size, f_min, f_max)
+    def __init__(self, N_INIT : int, MAX_NFE : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0, state_sharing: bool = False) -> None:
+        super().__init__(N_INIT, r_arc, p, memory_size, f_min, f_max, state_sharing)
         self.N_MIN = 4
         self.MAX_NFE = MAX_NFE
         self._nfe = 0
@@ -499,40 +507,3 @@ class GuidedLSHADE(LSHADE):
     def get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super().get_control_parameters()
         return cr, self.guide_function(f, self._nfe, self.MAX_NFE)
-    
-class LSHADEWithWeightSharing(LSHADE):
-    def on_evolve(self, generation : Generation, logger : Callable[[str], None]) -> Tuple[MemberState, MemberState]:
-        """
-        Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
-        implementation of differential evolution, with adapted CR and F parameters. \n
-        Also copies the network model- and optimizer state of the pbest member.
-        """
-        if len(generation) < 4:
-            raise ValueError("generation size must be at least 4 or higher.")
-        for index, member in generation.entries():
-            # control parameter assignment
-            self.CR[index], self.F[index] = self.get_control_parameters()
-            # select random unique members from the union of the generation and archive
-            x_r1, x_r2 = self._SHADE__sample_r1_and_r2(member, generation)
-            # select random best member
-            x_pbest = self.pbest_member(generation)
-            # hyper-parameter dimension size
-            dimension_size = len(member.parameters)
-            # choose random parameter dimension
-            j_rand = random.randrange(0, dimension_size)
-            # make a copy of the member
-            candidate = member.copy()
-            for j in range(dimension_size):
-                if random.uniform(0.0, 1.0) <= self.CR[index] or j == j_rand:
-                    mutant = de_current_to_best_1(F = self.F[index], x_base = member[j], x_best = x_pbest[j],
-                        x_r1 = x_r1[j], x_r2 = x_r2[j])
-                    mutant = halving(base = member[j], mutant = mutant,
-                        lower_bounds = 0.0, upper_bounds = 1.0)
-                    candidate[j] = mutant
-                else:
-                    candidate[j] = member[j]
-            # copy weights from pbest
-            existing = member.copy()
-            existing.copy_state(x_pbest)
-            candidate.copy_state(x_pbest)
-            yield existing, candidate

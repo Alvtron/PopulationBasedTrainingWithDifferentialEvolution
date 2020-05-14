@@ -188,10 +188,12 @@ class Checkpoint(MemberState):
         if self == other:
             return
         # copy model state
-        if hasattr(other, 'model_state') and other.model_state is not None:
+        if hasattr(other, 'model_state'):
+            assert other.model_state is not None, "Attempted to copy empty model state"
             self.model_state = copy.deepcopy(other.model_state)
         # copy optimizer state
-        if hasattr(other, 'optimizer_state') and other.optimizer_state is not None:
+        if hasattr(other, 'optimizer_state'):
+            assert other.optimizer_state is not None, "Attempted to copy empty optimizer state"
             self.optimizer_state = copy.deepcopy(other.optimizer_state)
 
     def performance_details(self) -> str:
