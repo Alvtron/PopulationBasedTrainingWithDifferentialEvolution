@@ -44,7 +44,6 @@ def import_user_arguments():
     parser.add_argument("--devices", type=str, default=['cpu'], nargs='*', help="Set processor device ('cpu' or 'cuda:0'). GPU is not supported on windows for PyTorch multiproccessing. Default: 'cpu'.")
     parser.add_argument("--n_jobs", type=int, default=1, help="Number of training processes to perform at once.")
     parser.add_argument("--tensorboard", action='store_true', help="Wether to enable tensorboard 2.0 for real-time monitoring of the training process.")
-    parser.add_argument("--detect_NaN", action='store_true', help="Wether to enable NaN detection.")
     parser.add_argument("--logging", action='store_true', help="Wether to enable logging.")
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity level.")
     args = parser.parse_args()

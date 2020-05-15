@@ -52,6 +52,7 @@ class WorkerPool(object):
             for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
         self.__async_return_queue = None
+        self.__n_async_sent = 0
 
 
     def _print(self, message : str) -> None:
@@ -108,9 +109,10 @@ class WorkerPool(object):
         if self.__async_return_queue is None:
             self.__async_return_queue = self._manager.Queue()
         worker = next(self._workers_iterator)
-        self._print(f"queuing candidates for training...")
+        self._print(f"queuing parameter...")
         trial = Trial(return_queue=self.__async_return_queue, function=function, parameters=parameters)
         worker.receive_queue.put(trial)
+        self.__n_async_sent += 1
         
     def get(self) -> object:
         result = self.__async_return_queue.get()
@@ -118,20 +120,25 @@ class WorkerPool(object):
             self._on_fail_message(result)
             self.stop()
             raise Exception("worker failed.")
+        self.__n_async_sent -= 1
         return result
+    
+    def get_all(self) -> Generator[object, None, None]:
+        while(self.__n_async_sent != 0):
+            yield self.get()
 
     def imap(self, function: Callable[[object], object], parameter_map: Iterable[object]) -> Generator[object, None, None]:
         n_sent = 0
         n_returned = 0
         failed_workers = set()
         return_queue = self._manager.Queue()
-        self._print(f"queuing candidates for training...")
+        self._print(f"queuing parameters...")
         for parameters, worker in zip(parameter_map, self._workers_iterator):
             trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
             worker.receive_queue.put(trial)
             n_sent += 1
-        self._print(f"awaiting trained candidates...")
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
+            self._print("awaiting next result...")
             result = return_queue.get()
             if isinstance(result, FailMessage):
                 self._on_fail_message(result)

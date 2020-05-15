@@ -5,6 +5,7 @@ import copy
 import time
 from pathlib import Path
 from datetime import datetime
+from typing import Dict
 
 class ReadOnlyDatabase(object):
     def __init__(self, database_path, read_function=None, extension = "obj"):
@@ -32,11 +33,11 @@ class ReadOnlyDatabase(object):
         return self.create_entry_directoy_path(id).exists()
 
     def create_entry_file_name(self, key):
-        return f"{key:05d}.{self.extension}"
+        return f"{key}.{self.extension}"
 
     def create_entry_directoy_path(self, id):
         """ Creates a new entry directory file path. """
-        return Path(self.path, self.ENTRIES_TAG, f"{id:03d}")
+        return Path(self.path, self.ENTRIES_TAG, str(id))
 
     def create_entry_file_path(self, id, key):
         """ Creates and returns a new database entry file path in the appropriate entry directory. """
@@ -55,10 +56,6 @@ class ReadOnlyDatabase(object):
         for content in entry_directory.glob(f"*.{self.extension}"):
             yield self.read(content)
 
-    def last(self):
-        """ Iterate over all entry directories and yield the latest entry. """
-        raise NotImplementedError
-
     def entry_directories(self):
         entries_path = Path(self.path, self.ENTRIES_TAG)
         for content in entries_path.iterdir():
@@ -68,6 +65,15 @@ class ReadOnlyDatabase(object):
         """ Retrieve all entries made on the specified id. """
         for content in entry_directory_path.glob(f"*.{self.extension}"):
             yield self.read(content)
+
+    def identy_records(self) -> Dict[str, list]:
+        """ Returns a id/keys dictionary. """
+        result = dict()
+        for directory in self.entry_directories():
+            result[directory.name] = list()
+            for key_path in directory.glob("*"):
+                result[directory.name].append(key_path.stem)
+        return result
 
     def to_dict(self):
         """ Returns a the database converted to a dictionary grouped by id/filename/entry"""

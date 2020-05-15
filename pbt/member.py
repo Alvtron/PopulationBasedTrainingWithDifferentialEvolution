@@ -146,7 +146,7 @@ class Checkpoint(MemberState):
         return self.loss['test'][self.eval_metric] if 'test' in self.loss and self.eval_metric in self.loss['test'] else None
 
     def has_state(self) -> bool:
-        return self.model_state is not None and self.optimizer_state is not None
+        return hasattr(self, 'model_state') and self.model_state is not None and hasattr(self, 'optimizer_state') and self.optimizer_state is not None
 
     def load_state(self, device : str = 'cpu', missing_ok : bool = False):
         """Move all tensors in state to specified device. Call unload_state to move state back to cpu. Raises error if states are not available."""
@@ -265,24 +265,3 @@ class Generation(object):
 
     def clear(self):
         self._members = dict()
-
-class Population(object):
-    def __init__(self):
-        super().__init__()
-        self.generations : List[Generation] = list()
-
-    @property
-    def current(self) -> Generation:
-        return self.generations[-1]
-
-    @property
-    def members(self) -> List[MemberState]:
-        """ Return all members across all generations in the population."""
-        return list(chain.from_iterable(self.generations))
-
-    def append(self, generation : Generation):
-        if not isinstance(generation, Generation):
-            raise TypeError
-        if any(generation is existing for existing in self.generations):
-            raise ValueError("Attempting to add the same generation twice!")
-        self.generations.append(generation)

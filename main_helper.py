@@ -14,7 +14,7 @@ from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 
 import pbt.evolution
-from pbt.controller import Controller
+from pbt.controller import PBTController, DEController
 from pbt.task import mnist, emnist, fashionmnist, creditfraud, cifar
 from pbt.analyze import Analyzer
 from pbt.database import Database
@@ -125,8 +125,6 @@ def create_evolver(evolver_name, population_size, end_nfe):
         return pbt.evolution.ExploitAndExplore(exploit_factor = 0.2, explore_factors = (0.8, 1.2))
     if evolver_name == 'de':
         return pbt.evolution.DifferentialEvolution(F = 0.2, Cr = 0.8)
-    if evolver_name == 'de_blind':
-        return pbt.evolution.BlindDifferentialEvolution(exploit_factor = 0.2, F = 0.2, Cr = 0.8)
     if evolver_name == 'shade':
         return pbt.evolution.SHADE(N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
@@ -166,8 +164,7 @@ def create_tensorboard(log_directory):
 def run(task : str, evolver : str, population_size : int, batch_size : int, step_size : int,
         end_nfe : int = None, end_steps : int = None, end_score : float = None, history : int = 2,
         directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
-        tensorboard : bool = False, detect_NaN : bool = False, eval_steps : int = 0,
-        verbose : int = 1, logging : bool = True):
+        tensorboard : bool = False, eval_steps : int = 0, verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
     _task = import_task(task)
@@ -199,7 +196,6 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         f"Eval-metric: {_task.eval_metric}",
         f"Loss functions: {[loss.name for loss in _task.loss_functions.values()]}",
         f"History limit: {history}",
-        f"Detect NaN: {detect_NaN}",
         f"Training set length: {len(_task.datasets.train)}",
         f"Evaluation set length: {len(_task.datasets.eval)}",
         f"Testing set length: {len(_task.datasets.test)}",
@@ -243,28 +239,18 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     print(f"Creating evolver...")
     EVOLVER = create_evolver(evolver, population_size, end_nfe)
     # create controller
-    print(f"Creating controller...")
-    controller = Controller(
-        population_size=population_size,
-        hyper_parameters=_task.hyper_parameters,
-        trainer=TRAINER,
-        evaluator=EVALUATOR,
-        tester=TESTER,
-        evolver=EVOLVER,
-        loss_metric=_task.loss_metric,
-        eval_metric=_task.eval_metric,
-        loss_functions=_task.loss_functions,
-        database=database,
-        step_size=step_size,
-        eval_steps=eval_steps,
-        end_criteria={'nfe': end_nfe, 'steps': end_steps, 'score': end_score},
-        detect_NaN=detect_NaN,
-        devices=devices,
-        n_jobs=n_jobs,
-        history_limit=history,
-        tensorboard=tensorboard_writer,
-        verbose=verbose,
-        logging=logging)
+    if evolver == 'pbt':
+        print(f"Creating PBT controller...")
+        controller = PBTController(population_size=population_size, hyper_parameters=_task.hyper_parameters, trainer=TRAINER, evaluator=EVALUATOR, tester=TESTER,
+            evolver=EVOLVER, loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database,
+            step_size=step_size, end_criteria={'nfe': end_nfe, 'steps': end_steps, 'score': end_score}, devices=devices,
+            n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
+    else:
+        print(f"Creating DE controller...")
+        controller = DEController(population_size=population_size, hyper_parameters=_task.hyper_parameters, trainer=TRAINER, evaluator=EVALUATOR, tester=TESTER,
+            evolver=EVOLVER, loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database,
+            step_size=step_size, eval_steps=eval_steps, end_criteria={'nfe': end_nfe, 'steps': end_steps, 'score': end_score}, devices=devices,
+            n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     # run controller
     print(f"Starting controller...")
     controller.start() 
