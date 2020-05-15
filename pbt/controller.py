@@ -177,6 +177,9 @@ class Controller(object):
             return self.__train_synchronously()
         except KeyboardInterrupt:
             self._say("interupted.")
+        except Exception:
+            self._say("Exception not handled!")
+            raise
         finally:
             self._say("finished.")
             self.__on_stop()
@@ -193,10 +196,6 @@ class Controller(object):
         """Stops training service and cleans up temporary files."""
         # close training service
         self.worker_pool.stop()
-    
-    @abstractmethod
-    def _create_next_generation(self, generation):
-        raise NotImplementedError()
 
     def __train_synchronously(self) -> Generation:
         """
@@ -223,6 +222,10 @@ class Controller(object):
             self.n_generations += 1
         self._say(f"end criteria has been reached.")
         return generation
+
+    @abstractmethod
+    def _create_next_generation(self, generation):
+        raise NotImplementedError()
 
 class PBTController(Controller):
     def __init__(self, step_size: int, **kwargs):
@@ -303,7 +306,6 @@ class DEController(Controller):
             yield from checkpoints
     
     def _step(self, generation: Generation, n_steps: int):
-        self._whisper("training generation...")
         trained_members = Generation()
         for trained_member in self.__train(generation, n_steps):
             self._say(trained_member.performance_details(), trained_member)
