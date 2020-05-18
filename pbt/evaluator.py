@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
 
+from .member import Checkpoint
 from .hyperparameters import Hyperparameters
 from .utils.data import create_subset, create_subset_with_indices
 
@@ -33,9 +34,12 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, checkpoint : dict, step_size : int = None, device : str = 'cpu', shuffle : bool = False):
+    def __call__(self, checkpoint: dict, step_size: int = None, device: str = 'cpu', shuffle: bool = False) -> Checkpoint:
         """Evaluate model on the provided validation or test set."""
+        if step_size is not None and step_size < 1:
+            raise ValueError("The number of steps must be at least one or higher.")
         start_eval_time_ns = time.time_ns()
+        checkpoint = checkpoint.copy()
         self._print("creating model...")
         model = self.create_model(checkpoint.model_state, device)
         self._print("creating batches...")
@@ -65,3 +69,4 @@ class Evaluator(object):
         torch.cuda.empty_cache()
         # update checkpoint
         checkpoint.time[self.loss_group] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
+        return checkpoint

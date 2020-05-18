@@ -18,9 +18,14 @@ from .utils.iterable import modify_iterable
 
 def prepare_score(value):
     if hasattr(value, "score"):
-        return value.score() if not math.isnan(value.score()) and not math.isinf(value.score()) else None
-    elif isinstance(value, (float, int)):
-        return value if not math.isnan(value) and not math.isinf(value) else None
+        value = value.score()
+    if value is None:
+        return None
+    if isinstance(value, (float, int)):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        else:
+            return value
     else:
         raise NotImplementedError
 
@@ -254,8 +259,6 @@ class Generation(object):
     def update(self, member):
         if member.id not in self._members:
             raise IndexError
-        if member != self._members[member.id]:
-            raise ValueError(f"Member does not match existing member at id {member.id}.")
         self._members[member.id] = member
     
     def remove(self, member):

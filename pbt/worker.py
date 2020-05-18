@@ -45,8 +45,8 @@ class Trial:
         self.function = function
         self.parameters = parameters
 
-    def __call__(self, device: str = 'cpu', logger = None):
-        return self.function(self.parameters, device=device, logger=logger)
+    def __call__(self, device: str):
+        return self.function(self.parameters, device=device)
 
 @dataclass
 class FailMessage(object):
@@ -56,7 +56,7 @@ class FailMessage(object):
 
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
-    def __init__(self, id : int, end_event, receive_queue, device : str = 'cpu', random_seed : int = 0, verbose : bool = False):
+    def __init__(self, id: int, end_event, receive_queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
         super().__init__()
         self._id = id
         self.end_event = end_event
@@ -96,9 +96,9 @@ class Worker(CONTEXT.Process):
             try:
                 if self.cuda:
                     with torch.cuda.device(self.device):
-                        result = trial(self.device, self.__log)
+                        result = trial(self.device)
                 else:
-                    result = trial(self.device, self.__log)
+                    result = trial(self.device)
                 self.__log("returning trial result...")
                 trial.return_queue.put(result)
             except Exception:
