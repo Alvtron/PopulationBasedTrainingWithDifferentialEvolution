@@ -48,6 +48,7 @@ class Controller(object):
         self.evaluator = evaluator
         self.tester = tester
         self.evolver = evolver
+        self.evolver.logger = self._whisper
         self.hyper_parameters = hyper_parameters
         self.worker_pool = WorkerPool(devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
@@ -132,8 +133,6 @@ class Controller(object):
             loss_metric=self.loss_metric,
             eval_metric=self.eval_metric,
             minimize=self.loss_functions[self.eval_metric].minimize)
-        # process new member with evolver
-        self.evolver.on_spawn(member, self._whisper)
         return member
 
     def __create_members(self, k : int) -> List[Checkpoint]:
@@ -141,6 +140,12 @@ class Controller(object):
         for id in range(k):
             members.append(self.__create_member(id))
         return members
+
+    def __create_initial_generation(self) -> Generation:
+        new_members = self.__create_members(k=self.population_size)
+        # process new member with evolver
+        generation = self.evolver.spawn(new_members)
+        return generation
 
     def __update_database(self, member : Checkpoint) -> None:
         """Updates the database stored in files."""
@@ -163,10 +168,6 @@ class Controller(object):
         if all(self.__is_member_finished(member) for member in generation):
             return True
         return False
-
-    def __create_initial_generation(self) -> Generation:
-        new_members = self.__create_members(k=self.population_size)
-        return Generation(new_members)
 
     def start(self) -> Generation:
         """Start global training procedure. Ends when end_criteria is met."""
@@ -207,10 +208,10 @@ class Controller(object):
         generation = self.__create_initial_generation()
         while not self.__is_finished(generation):
             self._whisper("on generation start...")
-            self.evolver.on_generation_start(generation, self._whisper)
+            self.evolver.on_generation_start(generation)
             generation = self._create_next_generation(generation)
             self._whisper("on generation end...")
-            self.evolver.on_generation_end(generation, self._whisper)
+            self.evolver.on_generation_end(generation)
             # Save member to database directory.
             [self.__update_database(member) for member in generation]
             # write to tensorboard if enabled
@@ -246,8 +247,8 @@ class PBTController(Controller):
         # 2. EVOLVE: generate candidates
         self._whisper("evolving generation...")
         new_generation = Generation()
-        for trial_member in self.evolver.on_evolve(trained_members, self._whisper):
-            best_member = self.evolver.on_evaluate(trial_member, self._whisper)
+        for trial_member in self.evolver.on_evolve(trained_members):
+            best_member = self.evolver.on_evaluate(trial_member)
             new_generation.append(best_member)
             self.nfe += 1
         return new_generation
@@ -257,6 +258,21 @@ class PBTController(Controller):
         self._whisper(f"queing generation for training with {self.step_size} steps...")
         yield from self.worker_pool.imap(step, checkpoints)
 
+class DEProcedure:
+    def __init__(self, generation, train_function, eval_function, evolver: EvolveEngine):
+        self.generation = generation
+        self.train_function = train_function
+        self.eval_function = eval_function
+        self.evolver = evolver
+
+    def __call__(self, member: Checkpoint):
+        parent = self.train_function(member)
+        trial = self.evolver.mutate(member, generation)
+        evaluated_parent = self.eval_function(parent)
+        evaluated_trial = self.eval_function(trial)
+        best = self.evolver.select(evaluated_parent, evaluated_trial)
+        return best
+        
 class DEController(Controller):
     def __init__(self, step_size: int, eval_steps: int = 0, **kwargs):
         super().__init__(**kwargs)
@@ -269,46 +285,24 @@ class DEController(Controller):
         self.__has_pretrained = False
 
     def _create_next_generation(self, generation: Generation):
-        # 0. PRE-TRAIN
-        if not self.__has_pretrained:
-            self._whisper("pre-training generation...")
-            generation = self._step(generation, self.step_size)
-            self.__has_pretrained = True
-        # 1. ON EVOLVE
-        self._whisper("evolving generation...")
-        new_candidates = self.evolver.on_evolve(generation, self._whisper)
-        new_generation = Generation()
-        # 2. ON EVAL
-        self._whisper("evaluating generation...")
-        for candidates in self.__eval(new_candidates):
-            best_member = self.evolver.on_evaluate(candidates, self._whisper)
-            new_generation.append(best_member)
-            self.nfe += 1
-        # 3. ON TRAIN
-        self._whisper("training generation...")
-        trained_members = self._step(new_generation, self.step_size - self.eval_steps)
-        return trained_members
+        procedure = DEProcedure(
+            generation=generation,
+            train_function=Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester, train_step_size=self.step_size - self.eval_steps, eval_step_size=None, train_shuffle=False, eval_shuffle=False),
+            eval_function=Step(trainer=self.trainer, evaluator=self.evaluator, train_step_size = self.eval_steps, eval_step_size=self.eval_steps, train_shuffle=False, eval_shuffle=True),
+            evolver=self.evolver)
+        for member in self.worker_pool.imap(procedure, generation):
+            print(member)
+            continue
+        return None
 
-    def __train(self, checkpoints: Iterable[Tuple[Checkpoint]], n_steps: int):
-        if n_steps > 0:
-            step = Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester, train_step_size=n_steps, eval_step_size=None, train_shuffle=False, eval_shuffle=False)
-            self._whisper(f"queing generation for training with {n_steps} steps...")
-            yield from self.worker_pool.imap(step, checkpoints)
-        else:
-            yield from checkpoints
+    def __train(self, checkpoints: Iterable[Tuple[Checkpoint]]):
+        train_steps = self.step_size - self.eval_steps
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, tester=self.tester, train_step_size=train_steps, eval_step_size=None, train_shuffle=False, eval_shuffle=False)
+        self._whisper(f"queing generation for training with {train_steps} steps...")
+        yield from self.worker_pool.imap(step, checkpoints)
 
     def __eval(self, checkpoints: Iterable[Tuple[Checkpoint]]):
-        if self.eval_steps > 0:
-            step = Step(trainer=self.trainer, evaluator=self.evaluator, train_step_size = self.eval_steps, eval_step_size=self.eval_steps, train_shuffle=False, eval_shuffle=True)
-            self._whisper(f"queing generation for evaluation with {self.eval_steps} steps...")
-            yield from self.worker_pool.imap(step, checkpoints)
-        else:
-            yield from checkpoints
-    
-    def _step(self, generation: Generation, n_steps: int):
-        trained_members = Generation()
-        for trained_member in self.__train(generation, n_steps):
-            self._say(trained_member.performance_details(), trained_member)
-            trained_members.append(trained_member)
-        return trained_members
+        step = Step(trainer=self.trainer, evaluator=self.evaluator, train_step_size = self.eval_steps, eval_step_size=self.eval_steps, train_shuffle=False, eval_shuffle=True)
+        self._whisper(f"queing generation for evaluation with {self.eval_steps} steps...")
+        yield from self.worker_pool.imap(step, checkpoints)
 

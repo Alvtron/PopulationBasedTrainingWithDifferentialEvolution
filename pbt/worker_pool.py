@@ -45,15 +45,14 @@ class WorkerPool(object):
         self._cuda = any(device.startswith('cuda') for device in devices)
         self._context = torch.multiprocessing.get_context('spawn')
         self._manager = self._context.Manager()
-        self._end_event = self._context.Event()
-        send_queues = [self._context.Queue() for _ in devices]
+        self._end_event = self._manager.Event()
+        send_queues = [self._manager.Queue() for _ in devices]
         self._workers : List[Worker] = [
             Worker(id=id, end_event=self._end_event, receive_queue=send_queue, device=device, random_seed=id, verbose=verbose > 1)
             for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
         self.__async_return_queue = None
         self.__n_async_sent = 0
-
 
     def _print(self, message : str) -> None:
         if self.verbose < 1:
@@ -135,11 +134,19 @@ class WorkerPool(object):
         self._print(f"queuing parameters...")
         for parameters, worker in zip(parameter_map, self._workers_iterator):
             trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
-            worker.receive_queue.put(trial)
+            try:
+                worker.receive_queue.put(trial)
+            except:
+                self._print(f"failed to queue task.")
+                raise
             n_sent += 1
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
             self._print("awaiting next result...")
-            result = return_queue.get()
+            try:
+                result = return_queue.get()
+            except:
+                self._print(f"failed to receive task.")
+                raise
             if isinstance(result, FailMessage):
                 self._on_fail_message(result)
                 failed_workers.add(result.sender_id)
