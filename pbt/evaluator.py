@@ -1,14 +1,15 @@
 import time
+import itertools
+import random
 from copy import deepcopy
 
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, Subset, DataLoader
 from torch.nn import Module
 
 from .member import Checkpoint
 from .hyperparameters import Hyperparameters
-from .utils.data import create_subset, create_subset_with_indices
 
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
@@ -44,12 +45,12 @@ class Evaluator(object):
         model = self.create_model(checkpoint.model_state, device)
         self._print("creating batches...")
         batches = DataLoader(dataset = self.test_data, batch_size = self.batch_size, shuffle = shuffle)
-        num_batches = len(batches)
+        num_batches = len(batches) if step_size is None else step_size
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
         self._print("evaluating...")
-        for batch_index, (x, y) in enumerate(batches):
-            if self.verbose: print(f"({batch_index + 1}/{num_batches})", end=" ")
+        for batch_index, (x, y) in enumerate(batches, 1):
+            if self.verbose: print(f"({batch_index}/{num_batches})", end=" ")
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             with torch.no_grad():
@@ -62,7 +63,7 @@ class Evaluator(object):
                 del loss
             if self.verbose: print(end="\n")
             del output
-            if step_size is not None and batch_index + 1 == step_size:
+            if batch_index == num_batches:
                 break
         # clean GPU memory
         del model

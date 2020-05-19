@@ -23,11 +23,6 @@ def create_subset(dataset : Dataset, start : int, end : int = None) -> Subset:
     end = dataset_length if not end else end
     return Subset(dataset, list(range(start, end)))
 
-def create_subset_with_indices(dataset : Dataset, indices : Sequence[int], shuffle : bool = False) -> Subset:
-    if not indices:
-        raise ValueError("indice-sequence is empty.")
-    return Subset(dataset, random.sample(indices, len(indices)) if shuffle else indices)
-
 def split(dataset : Dataset, fraction : float) -> (Subset, Subset):
     assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"
     dataset_length = len(dataset)

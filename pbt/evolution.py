@@ -21,7 +21,12 @@ class EvolveEngine(object):
     Base class for all evolvers.
     """
 
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+
     def logger(self, text: str) -> None:
+        if not self.verbose:
+            return
         print(text)
         
     @abstractmethod
@@ -53,8 +58,8 @@ class ExploitAndExplore(EvolveEngine):
     """
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """
-    def __init__(self, exploit_factor: float = 0.2, explore_factors: Tuple[float, ...] = (0.8, 1.2), perturb_method: str = 'choice') -> None:
-        super().__init__()
+    def __init__(self, exploit_factor: float = 0.2, explore_factors: Tuple[float, ...] = (0.8, 1.2), perturb_method: str = 'choice', **kwargs) -> None:
+        super().__init__(**kwargs)
         assert isinstance(exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
         assert isinstance(explore_factors, (float, list, tuple)), f"Explore factors must be of type {float}, {tuple} or {list}."
         self.exploit_factor = exploit_factor
@@ -124,8 +129,8 @@ class DifferentialEvolution(EvolveEngine):
     """
     A general, modifiable implementation of Differential Evolution (DE)
     """
-    def __init__(self, F: float = 0.2, Cr: float = 0.8) -> None:
-        super().__init__()
+    def __init__(self, F: float = 0.2, Cr: float = 0.8, **kwargs) -> None:
+        super().__init__(**kwargs)
         self.F = F
         self.Cr = Cr
 
@@ -233,7 +238,8 @@ class SHADE(EvolveEngine):
         p: control parameter for DE/current-to-pbest/1/. Small p, more greedily {0.05, 0.06, ..., 0.15}.
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
-    def __init__(self, manager, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0, state_sharing: bool = False) -> None:
+    def __init__(self, manager, N_INIT : int, r_arc : float = 2.0, p : float = 0.1, memory_size : int = 5, f_min : float = 0.0, f_max : float = 1.0, state_sharing: bool = False, **kwargs) -> None:
+        super().__init__(**kwargs)
         if N_INIT < 4:
             raise ValueError("population size must be at least 4 or higher.")
         if round(N_INIT * p) < 1:
@@ -244,7 +250,6 @@ class SHADE(EvolveEngine):
             raise ValueError("f_max cannot be negative.")
         if f_max < f_min:
             raise ValueError("f_max cannot be less than f_min.")
-        super().__init__()
         self.archive = ExternalArchive(manager=manager, size=round(N_INIT * r_arc))
         self.memory = HistoricalMemory(manager=manager, size=memory_size, default=(f_max - f_min) / 2.0)
         self.F_MIN = f_min
@@ -384,9 +389,9 @@ class LSHADE(SHADE):
         self.MAX_NFE = MAX_NFE
         self._nfe = 0
 
-    def _select(self, parent: MemberState, trial: MemberState) -> MemberState:
+    def _select(self, parent: MemberState, trial: MemberState, CR_i: float, F_i: float) -> MemberState:
         self._nfe += 1 # increment the number of fitness evaluations
-        return super()._select(parent, trial)
+        return super()._select(parent, trial, CR_i, F_i)
 
     def on_generation_end(self, generation : Generation):
         self._adjust_generation_size(generation)
@@ -427,7 +432,7 @@ class DecayingLSHADE(LSHADE):
             raise NotImplementedError(f"'{decay_type}' is not implemented.'")
 
     def _get_control_parameters(self) -> Tuple[float, float]:
-        cr, f = super().get_control_parameters()
+        cr, f = super()._get_control_parameters()
         return cr, self.decay_function(f, self._nfe, self.MAX_NFE)
 
 class GuidedLSHADE(LSHADE):
@@ -447,5 +452,5 @@ class GuidedLSHADE(LSHADE):
             raise NotImplementedError(f"'{guide_type}' is not implemented.'")
 
     def _get_control_parameters(self) -> Tuple[float, float]:
-        cr, f = super().get_control_parameters()
+        cr, f = super()._get_control_parameters()
         return cr, self.guide_function(f, self._nfe, self.MAX_NFE)

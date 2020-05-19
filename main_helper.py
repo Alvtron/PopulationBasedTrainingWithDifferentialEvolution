@@ -128,29 +128,29 @@ def create_evolver(manager, evolver_name, population_size, end_nfe):
     if evolver_name == 'shade':
         return pbt.evolution.SHADE(manager=manager, N_INIT = population_size, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
-        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
+        return pbt.evolution.LSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade_conservative':
-        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5)
+        return pbt.evolution.LSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5)
     if evolver_name == 'lshade_very_conservative':
-        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.1)
+        return pbt.evolution.LSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.1)
     if evolver_name == 'lshade_explorative':
-        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=2.0)
+        return pbt.evolution.LSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=2.0)
     if evolver_name == 'lshade_decay_linear':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='linear')
+        return pbt.evolution.DecayingLSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='linear')
     if evolver_name == 'lshade_decay_curve':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='curve')
+        return pbt.evolution.DecayingLSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='curve')
     if evolver_name == 'lshade_decay_logistic':
-        return pbt.evolution.DecayingLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='logistic')
+        return pbt.evolution.DecayingLSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, decay_type='logistic')
     if evolver_name == 'lshade_guide_linear':
-        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='linear', strength=0.5)
+        return pbt.evolution.GuidedLSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='linear', strength=0.5)
     if evolver_name == 'lshade_guide_curve':
-        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='curve', strength=0.5)
+        return pbt.evolution.GuidedLSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='curve', strength=0.5)
     if evolver_name == 'lshade_guide_logistic':
-        return pbt.evolution.GuidedLSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='logistic', strength=0.5)
+        return pbt.evolution.GuidedLSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, guide_type='logistic', strength=0.5)
     if evolver_name == 'lshade_state_sharing':
-        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, state_sharing=True)
+        return pbt.evolution.LSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, state_sharing=True)
     if evolver_name == 'lshade_state_sharing_conservative':
-        return pbt.evolution.LSHADE(N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5, state_sharing=True)
+        return pbt.evolution.LSHADE(manager=manager, N_INIT = population_size, MAX_NFE=end_nfe, r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5, state_sharing=True)
     else:
         raise NotImplementedError(f"Your evolver request '{evolver_name}'' is not available.")
 
@@ -256,7 +256,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
             n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     # run controller
     print(f"Starting controller...")
-    controller.start() 
+    generation = controller.start() 
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database, verbose=True)

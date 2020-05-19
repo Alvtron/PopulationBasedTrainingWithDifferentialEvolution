@@ -45,6 +45,7 @@ class Controller(object):
         self.population_size = population_size
         self.database = database
         self.evolver = evolver
+        self.evolver.verbose = verbose > 1
         self.hyper_parameters = hyper_parameters
         self.worker_pool = WorkerPool(manager=manager, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
@@ -219,22 +220,24 @@ class Controller(object):
         while not self.__is_finished(generation):
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
+            new_generation = Generation()
             for member in self.worker_pool.imap(self.create_procedure(generation), generation):
                 self.__n_steps += 1
                 self._say(member.performance_details(), member)
-                generation.update(member)
+                new_generation.append(member)
                 # Save member to database directory.
                 self.__update_database(member)
                 # write to tensorboard if enabled
                 self.__update_tensorboard(member)
                 continue
             self._whisper("on generation end...")
-            self.evolver.on_generation_end(generation)
+            self.evolver.on_generation_end(new_generation)
             # perform garbage collection
             self._whisper("performing garbage collection...")
             self.garbage_collector.collect()
             # increment number of generations
             self.__n_generations += 1
+            generation = new_generation
         self._say(f"end criteria has been reached.")
         return generation
 
@@ -256,7 +259,7 @@ class PBTProcedure:
         return new_member
         
 class PBTController(Controller):
-    def __init__(self, trainer: Trainer, evaluator: Evaluator, step_size: int, tester: Evaluator = None, **kwargs):
+    def __init__(self, step_size: int, trainer: Trainer, evaluator: Evaluator, tester: Evaluator = None, **kwargs):
         super().__init__(**kwargs)
         if not isinstance(step_size, int) or step_size < 0: 
             raise Exception(f"step size must be of type {int} and 1 or higher.")
@@ -285,31 +288,33 @@ class DEProcedure:
             generation=self.generation,
             fitness_function=partial(self.fitness_function, device=device))
         # add loss
-        for group in new_member.loss:
-            new_member.loss[group] = {k: (v + new_member.loss[group][k])/2.0 for k, v in trained_member.loss[group].items()}
+        for loss_group, loss_dict in new_member.loss.items():
+            for loss_type, loss_value in loss_dict.items():
+                new_member.loss[loss_group][loss_type] = (loss_value + trained_member.loss[loss_group][loss_type]) / 2.0
         # measure test set performance if available
         if self.test_function is not None:
-            self.test_function(new_member, device)
+            new_member = self.test_function(new_member, device)
         return new_member
         
 class DEController(Controller):
-    def __init__(self, trainer: Trainer, evaluator: Evaluator, step_size: int, eval_steps: int, tester: Evaluator = None, **kwargs):
+    def __init__(self, step_size: int, eval_steps: int, trainer: Trainer, evaluator: Evaluator, tester: Evaluator = None, **kwargs):
         super().__init__(**kwargs)
         if not isinstance(step_size, int) or step_size < 0: 
             raise Exception(f"step size must be of type {int} and 1 or higher.")
         if not isinstance(eval_steps, int) or not(0 < eval_steps <= step_size):
             raise Exception(f"eval steps must be of type {int} and equal or lower than zero.")
+        verbose = self.verbose > 3
         self.train_step = Step(
             train_function=partial(trainer, step_size=step_size - eval_steps),
             eval_function=evaluator,
-            verbose=self.verbose > 3)
+            verbose=verbose)
         self.fitness_step = Step(
             train_function=partial(trainer, step_size=eval_steps),
             eval_function=partial(evaluator, step_size=eval_steps, shuffle=True),
-            verbose=self.verbose > 3)
+            verbose=verbose)
         self.test_step = Step(
             test_function=tester,
-            verbose=self.verbose > 3) if tester else None
+            verbose=verbose) if tester else None
 
     def create_procedure(self, generation: Generation):
         return DEProcedure(generation=generation, evolver=self.evolver, train_function=self.train_step, fitness_function=self.fitness_step, test_function=self.test_step)

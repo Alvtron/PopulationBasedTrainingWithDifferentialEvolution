@@ -1,5 +1,6 @@
 import time
 import itertools
+import random
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
@@ -13,7 +14,6 @@ from torch.optim import Optimizer
 from .member import Checkpoint
 from .hyperparameters import Hyperparameters
 from .models.hypernet import HyperNet
-from .utils.data import create_subset, create_subset_with_indices
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
@@ -63,7 +63,7 @@ class Trainer(object):
         start_index = (start_step * self.batch_size) % dataset_size
         n_samples = (end_step - start_step) * self.batch_size
         indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
-        return create_subset_with_indices(dataset=self.train_data, indices=indices, shuffle=shuffle)
+        return Subset(self.train_data, random.shuffle(indices) if shuffle else indices)
 
     def __call__(self, checkpoint: Checkpoint, step_size: int = 1, device: str = 'cpu', shuffle: bool = False) -> Checkpoint:
         if step_size < 1:
@@ -82,8 +82,8 @@ class Trainer(object):
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
         self._print("Training...")
-        for batch_index, (x, y) in enumerate(batches):
-            self._print(f"({batch_index + 1}/{num_batches})", end=" ")
+        for batch_index, (x, y) in enumerate(batches, 1):
+            self._print(f"({batch_index}/{num_batches})", end=" ")
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             # 1. Forward pass: compute predicted y by passing x to the model.

@@ -101,7 +101,7 @@ class Analyzer(object):
         self.__print(f"Finding best member in population...")
         best = self.__get_best_member()
         self.__print(f"Testing {best}...")
-        evaluator(best, device)
+        evaluator(checkpoint=best, device=device)
         # save top members to file
         result = f"Best checkpoint: {best}: {best.performance_details()}"
         with Path(save_directory).open('a+') as f:
