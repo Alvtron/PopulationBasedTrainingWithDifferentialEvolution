@@ -45,7 +45,7 @@ class Controller(object):
         self.population_size = population_size
         self.database = database
         self.evolver = evolver
-        self.evolver.verbose = verbose > 1
+        self.evolver.verbose = verbose > 2
         self.hyper_parameters = hyper_parameters
         self.worker_pool = WorkerPool(manager=manager, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)

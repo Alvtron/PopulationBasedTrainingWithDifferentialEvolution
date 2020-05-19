@@ -6,6 +6,8 @@ import collections
 from abc import abstractmethod
 from typing import Tuple, List, Dict, Iterable, Sequence, Callable, Generator
 
+from pbt.utils.multiprocessing import Counter
+
 from .member import MemberState, Generation
 from .hyperparameters import Hyperparameters
 from .de.mutation import de_rand_1, de_current_to_best_1
@@ -186,10 +188,11 @@ class HistoricalMemory(object):
         self.m_f = [default] * size
         self.s_cr = manager.list()
         self.s_f = manager.list()
-        self.weights = manager.list()
+        self.s_w = manager.list()
         self.k = 0
 
     def record(self, cr_i: float, f_i: float, delta_score: float) -> None:
+        """Save control parameters and delta score (weight) to historical memory."""
         assert 0.0 <= cr_i <= 1.0, "cr_i is not valid."
         assert 0.0 <= f_i, "f_i is not valid."
         if delta_score == 0.0 or math.isnan(delta_score):
@@ -197,21 +200,23 @@ class HistoricalMemory(object):
             delta_score = 1e-9
         self.s_cr.append(cr_i)
         self.s_f.append(f_i)
-        self.weights.append(delta_score)
+        self.s_w.append(delta_score)
     
     def reset(self) -> None:
-        self.s_cr = list()
-        self.s_f = list()
-        self.weights = list()
+        """Reset S_CR, S_F and weights to empty lists."""
+        self.s_cr[:] = []
+        self.s_f[:] = []
+        self.s_w[:] = []
 
     def update(self) -> None:
-        if not self.s_cr or not self.s_f or not self.weights:
+        assert len(self.s_cr) == len(self.s_f) == len(self.s_w), "the length of s_cr, s_f and s_weights is not equal."
+        if len(self.s_cr) == 0:
             return
         if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
             self.m_cr[self.k] = None
         else:
-            self.m_cr[self.k] = mean_wl(self.s_cr, self.weights)
-        self.m_f[self.k] = mean_wl(self.s_f, self.weights)
+            self.m_cr[self.k] = mean_wl(self.s_cr, self.s_w)
+        self.m_f[self.k] = mean_wl(self.s_f, self.s_w)
         self.k = 0 if self.k >= self.size - 1 else self.k + 1
 
 class ExternalArchive():
@@ -383,14 +388,14 @@ class LSHADE(SHADE):
         MAX_NFE: The maximum number of fitness evaluations to peform.
         + SHADE parameters
     """
-    def __init__(self, MAX_NFE : int, **kwargs) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, MAX_NFE : int, manager, **kwargs) -> None:
+        super().__init__(manager, **kwargs)
         self.N_MIN = 4
         self.MAX_NFE = MAX_NFE
-        self._nfe = 0
+        self._nfe = Counter(manager=manager, value=0)
 
     def _select(self, parent: MemberState, trial: MemberState, CR_i: float, F_i: float) -> MemberState:
-        self._nfe += 1 # increment the number of fitness evaluations
+        self._nfe.increment() # increment the number of fitness evaluations
         return super()._select(parent, trial, CR_i, F_i)
 
     def on_generation_end(self, generation : Generation):
@@ -398,7 +403,7 @@ class LSHADE(SHADE):
         super().on_generation_end(generation)
 
     def _adjust_generation_size(self, generation : Generation):
-        new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self._nfe + self.N_INIT)
+        new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self._nfe.value + self.N_INIT)
         if new_size >= len(generation):
             return
         self.logger(f"adjusting generation size {len(generation)} --> {new_size}")
@@ -433,7 +438,7 @@ class DecayingLSHADE(LSHADE):
 
     def _get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super()._get_control_parameters()
-        return cr, self.decay_function(f, self._nfe, self.MAX_NFE)
+        return cr, self.decay_function(f, self._nfe.value, self.MAX_NFE)
 
 class GuidedLSHADE(LSHADE):
     """
@@ -453,4 +458,4 @@ class GuidedLSHADE(LSHADE):
 
     def _get_control_parameters(self) -> Tuple[float, float]:
         cr, f = super()._get_control_parameters()
-        return cr, self.guide_function(f, self._nfe, self.MAX_NFE)
+        return cr, self.guide_function(f, self._nfe.value, self.MAX_NFE)
