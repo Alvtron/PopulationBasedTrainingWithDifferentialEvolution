@@ -209,7 +209,7 @@ class HistoricalMemory(object):
         self.s_w[:] = []
 
     def update(self) -> None:
-        assert len(self.s_cr) == len(self.s_f) == len(self.s_w), "the length of s_cr, s_f and s_weights is not equal."
+        assert len(self.s_cr) == len(self.s_f) == len(self.s_w), "the lengths of s_cr, s_f and s_weights are not equal."
         if len(self.s_cr) == 0:
             return
         if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:

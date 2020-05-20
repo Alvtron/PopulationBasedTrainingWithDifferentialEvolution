@@ -149,7 +149,8 @@ class Controller(object):
     def __create_initial_generation(self) -> Generation:
         new_members = self.__create_members(k=self.population_size)
         # process new member with evolver
-        generation = self.evolver.spawn(new_members)
+        new_members = self.evolver.spawn(new_members)
+        generation = Generation(dict_constructor=self.manager.dict, members=new_members)
         return generation
 
     def __update_database(self, member : Checkpoint) -> None:
@@ -221,24 +222,25 @@ class Controller(object):
         while not self.__is_finished(generation):
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
-            new_generation = Generation()
             for member in self.worker_pool.imap(self.create_procedure(generation), generation):
+                # update generation
+                generation.update(member)
+                # increment n steps
                 self.__n_steps += 1
+                # report member performance
                 self._say(member.performance_details(), member)
-                new_generation.append(member)
                 # Save member to database directory.
                 self.__update_database(member)
                 # write to tensorboard if enabled
                 self.__update_tensorboard(member)
                 continue
             self._whisper("on generation end...")
-            self.evolver.on_generation_end(new_generation)
+            self.evolver.on_generation_end(generation)
             # perform garbage collection
             self._whisper("performing garbage collection...")
             self.garbage_collector.collect()
             # increment number of generations
             self.__n_generations += 1
-            generation = new_generation
         self._say(f"end criteria has been reached.")
         return generation
 

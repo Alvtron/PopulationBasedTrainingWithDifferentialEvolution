@@ -228,9 +228,9 @@ class MemberAlreadyExistsError(Exception):
     pass
 
 class Generation(object):
-    def __init__(self, members : Iterator[MemberState] = None):
+    def __init__(self, dict_constructor = dict, members : Iterator[MemberState] = None):
         super().__init__()
-        self._members : Dict[MemberState] = dict()
+        self._members = dict_constructor()
         if members is None:
             return
         for member in members:
