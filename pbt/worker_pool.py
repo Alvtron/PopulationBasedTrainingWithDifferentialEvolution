@@ -96,13 +96,16 @@ class WorkerPool(object):
         [worker.start() for worker in self._workers]
 
     def stop(self) -> None:
-        if not any(worker.is_alive() for worker in self._workers):
-            warnings.warn("service is not running.")
-            return
         self._end_event.set()
-        [worker.receive_queue.put(STOP_FLAG) for worker in self._workers]
-        [worker.join() for worker in self._workers]
-        [worker.close() for worker in self._workers]
+        try:
+            if not any(worker.is_alive() for worker in self._workers):
+                warnings.warn("service is not running.")
+                return
+            [worker.receive_queue.put(STOP_FLAG) for worker in self._workers]
+            [worker.join() for worker in self._workers]
+            [worker.close() for worker in self._workers]
+        except ValueError:
+            warnings.warn("one or more members are not running.")
 
     def apply_async(self, function: Callable[[object], object], parameters: object) -> None:
         if self.__async_return_queue is None:
@@ -144,14 +147,11 @@ class WorkerPool(object):
             self.stop()
             raise Exception("return queue is not empty.")
         elif len(failed_workers) == len(self._workers):
-            self.stop()
             raise Exception("all workers failed.")
         elif n_returned < n_sent:
             if failed_workers:
-                self.stop()
                 raise Exception(f"{len(failed_workers)} workers failed.")
             else:
-                self.stop()
                 raise Exception(f"{n_sent - n_returned} one or more parameters failed.")
         elif failed_workers:
             self._respawn(failed_workers)

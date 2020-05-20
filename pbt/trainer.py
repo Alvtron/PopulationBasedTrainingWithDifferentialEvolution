@@ -62,8 +62,11 @@ class Trainer(object):
         dataset_size = len(self.train_data)
         start_index = (start_step * self.batch_size) % dataset_size
         n_samples = (end_step - start_step) * self.batch_size
-        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
-        return Subset(self.train_data, random.shuffle(indices) if shuffle else indices)
+        indices = list(range(dataset_size))
+        if shuffle:
+            random.shuffle(indices)
+        selected_indices = list(itertools.islice(itertools.cycle(indices), start_index, start_index + n_samples))
+        return Subset(self.train_data, selected_indices)
 
     def __call__(self, checkpoint: Checkpoint, step_size: int = 1, device: str = 'cpu', shuffle: bool = False) -> Checkpoint:
         if step_size < 1:
@@ -75,9 +78,9 @@ class Trainer(object):
         model = self.create_model(checkpoint.parameters, checkpoint.model_state, device)
         self._print("creating optimizer...")
         optimizer = self.create_optimizer(model, checkpoint.parameters, checkpoint.optimizer_state)
-        self._print("creating dataset...")
+        self._print("creating batches...")
         subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + step_size, shuffle = shuffle)
-        batches = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
+        batches = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = shuffle)
         num_batches = len(batches)
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)

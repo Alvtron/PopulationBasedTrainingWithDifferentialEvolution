@@ -35,6 +35,16 @@ class Evaluator(object):
         model.eval()
         return model
 
+    def create_subset(self, start_step : int, end_step : int, shuffle : bool):
+        dataset_size = len(self.test_data)
+        start_index = (start_step * self.batch_size) % dataset_size
+        n_samples = (end_step - start_step) * self.batch_size
+        indices = list(range(dataset_size))
+        if shuffle:
+            random.shuffle(indices)
+        selected_indices = list(itertools.islice(itertools.cycle(indices), start_index, start_index + n_samples))
+        return Subset(self.test_data, selected_indices)
+
     def __call__(self, checkpoint: dict, step_size: int = None, device: str = 'cpu', shuffle: bool = False) -> Checkpoint:
         """Evaluate model on the provided validation or test set."""
         if step_size is not None and step_size < 1:
@@ -44,8 +54,12 @@ class Evaluator(object):
         self._print("creating model...")
         model = self.create_model(checkpoint.model_state, device)
         self._print("creating batches...")
-        batches = DataLoader(dataset = self.test_data, batch_size = self.batch_size, shuffle = shuffle)
-        num_batches = len(batches) if step_size is None else step_size
+        if step_size is not None:
+            subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + step_size, shuffle = shuffle)
+        else:
+            subset = self.test_data
+        batches = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = shuffle)
+        num_batches = len(batches)
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
         self._print("evaluating...")
@@ -63,8 +77,6 @@ class Evaluator(object):
                 del loss
             if self.verbose: print(end="\n")
             del output
-            if batch_index == num_batches:
-                break
         # clean GPU memory
         del model
         torch.cuda.empty_cache()

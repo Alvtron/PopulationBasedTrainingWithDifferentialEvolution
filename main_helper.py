@@ -161,10 +161,10 @@ def create_tensorboard(log_directory):
     url = tb.launch()
     return SummaryWriter(tensorboard_log_path), url
 
-def run(task : str, evolver : str, population_size : int, batch_size : int, step_size : int,
+def run(task : str, evolver : str, population_size : int, batch_size : int, train_steps : int,
         end_steps : int = None, end_time : int = None, end_score : float = None, history : int = 2,
         directory : str = 'checkpoints', devices : List[str] = ['cpu'], n_jobs : int = 1,
-        tensorboard : bool = False, eval_steps : int = 0, verbose : int = 1, logging : bool = True):
+        tensorboard : bool = False, fitness_steps : int = 0, verbose : int = 1, logging : bool = True):
     # prepare objective
     print(f"Importing task...")
     _task = import_task(task)
@@ -174,7 +174,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
     # prepare database
     print(f"Preparing database...")
     database = Database(
-        directory_path=f"{directory}/{task}_p{population_size}_steps{step_size}_evals{eval_steps}_batch{batch_size}_{evolver}",
+        directory_path=f"{directory}/{task}_p{population_size}_train{train_steps}_fitness{fitness_steps}_batch{batch_size}_{evolver}",
         read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
@@ -190,8 +190,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         f"Population size: {population_size}",
         f"Hyper-parameters: {len(_task.hyper_parameters)} {list(_task.hyper_parameters.keys())}",
         f"Batch size: {batch_size}",
-        f"Step size: {step_size}",
-        f"Eval steps: {eval_steps}",    
+        f"Train steps: {train_steps}",
+        f"Fitness steps: {fitness_steps}",    
         f"End criterium - steps: {end_steps}",
         f"End criterium - score: {end_score}",
         f"End criterium - time (in minutes): {end_time}",
@@ -246,13 +246,13 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, step
         print(f"Creating PBT controller...")
         controller = PBTController(manager=manager, population_size=population_size, hyper_parameters=_task.hyper_parameters, trainer=TRAINER, evaluator=EVALUATOR, tester=TESTER,
             evolver=EVOLVER, loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database,
-            step_size=step_size, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score}, devices=devices,
+            step_size=train_steps, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score}, devices=devices,
             n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     else:
         print(f"Creating DE controller...")
         controller = DEController(manager=manager, population_size=population_size, hyper_parameters=_task.hyper_parameters, trainer=TRAINER, evaluator=EVALUATOR, tester=TESTER,
             evolver=EVOLVER, loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database,
-            step_size=step_size, eval_steps=eval_steps, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score}, devices=devices,
+            train_steps=train_steps, fitness_steps=fitness_steps, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score}, devices=devices,
             n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     # run controller
     print(f"Starting controller...")

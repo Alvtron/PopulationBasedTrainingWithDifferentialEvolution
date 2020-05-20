@@ -42,6 +42,7 @@ class Controller(object):
             self, manager, population_size: int, hyper_parameters: Hyperparameters, evolver: EvolveEngine,
             loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, end_criteria: dict = {'score': 100.0}, history_limit: int = None,
             devices: List[str] = ['cpu'], n_jobs: int = -1, verbose: int = 1, logging: bool = True, tensorboard: SummaryWriter = None):
+        self.manager = manager
         self.population_size = population_size
         self.database = database
         self.evolver = evolver
@@ -274,7 +275,7 @@ class PBTController(Controller):
         return PBTProcedure(generation=generation, evolver=self.evolver, train_function=self.train_step)
 
 class DEProcedure:
-    def __init__(self, generation: Generation, evolver: EvolveEngine, train_function, fitness_function, test_function=None):
+    def __init__(self, generation: Generation, evolver: EvolveEngine, fitness_function, train_function = None, test_function=None):
         self.generation = generation
         self.train_function = train_function
         self.fitness_function = fitness_function
@@ -282,7 +283,7 @@ class DEProcedure:
         self.evolver = evolver
 
     def __call__(self, member: Checkpoint, device: str):
-        trained_member = self.train_function(member, device=device)
+        trained_member = self.train_function(member, device=device) if self.train_function else member
         new_member = self.evolver.mutate(
             parent=trained_member,
             generation=self.generation,
@@ -297,26 +298,27 @@ class DEProcedure:
         return new_member
         
 class DEController(Controller):
-    def __init__(self, step_size: int, eval_steps: int, trainer: Trainer, evaluator: Evaluator, tester: Evaluator = None, **kwargs):
+    def __init__(self, train_steps: int, fitness_steps: int, trainer: Trainer, evaluator: Evaluator, tester: Evaluator = None, **kwargs):
         super().__init__(**kwargs)
-        if not isinstance(step_size, int) or step_size < 0: 
-            raise Exception(f"step size must be of type {int} and 1 or higher.")
-        if not isinstance(eval_steps, int) or not(0 < eval_steps <= step_size):
-            raise Exception(f"eval steps must be of type {int} and equal or lower than zero.")
+        if not isinstance(train_steps, int) or train_steps < 0: 
+            raise Exception(f"train_steps must be of type {int} and 0 or higher.")
+        if not isinstance(fitness_steps, int) or fitness_steps < 1:
+            raise Exception(f"fitness_steps must be of type {int} and equal or lower than zero.")
         verbose = self.verbose > 3
         self.train_step = Step(
-            train_function=partial(trainer, step_size=step_size - eval_steps),
-            eval_function=evaluator,
-            verbose=verbose)
-        self.fitness_step = Step(
-            train_function=partial(trainer, step_size=eval_steps),
-            eval_function=partial(evaluator, step_size=eval_steps, shuffle=True),
+            train_function=partial(trainer, step_size=train_steps, shuffle=False),
+            eval_function=partial(evaluator, step_size=None, shuffle=False),
+            verbose=verbose) if train_steps > 0 else None
+        # Random Fitness Approximation (RFA)
+        self.fitness_function = Step(
+            train_function=partial(trainer, step_size=fitness_steps, shuffle=False),
+            eval_function=partial(evaluator, step_size=fitness_steps, shuffle=True),
             verbose=verbose)
         self.test_step = Step(
-            test_function=tester,
+            test_function=partial(tester, step_size=None, shuffle=False),
             verbose=verbose) if tester else None
 
     def create_procedure(self, generation: Generation):
-        return DEProcedure(generation=generation, evolver=self.evolver, train_function=self.train_step, fitness_function=self.fitness_step, test_function=self.test_step)
+        return DEProcedure(generation=generation, evolver=self.evolver, fitness_function=self.fitness_function, train_function=self.train_step, test_function=self.test_step)
 
 

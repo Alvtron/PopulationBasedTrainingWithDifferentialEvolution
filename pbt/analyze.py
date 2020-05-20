@@ -45,7 +45,7 @@ def ylim_from_df(df, strength = 1.5):
         return data_min + (data_min - upper) * 0.1, upper
 
 def is_increasing(df, order=1):
-    df_no_nan = df.dropna(inplace=False, how='any')
+    df_no_nan = df.dropna(inplace=False, axis=1, how='any')
     slopes = df_no_nan.apply(lambda x: np.polyfit(df.index, x, 1)[0])
     mean = slopes.values.mean()
     return mean >= 0
