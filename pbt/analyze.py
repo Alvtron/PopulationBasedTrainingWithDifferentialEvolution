@@ -45,13 +45,10 @@ def ylim_from_df(df, strength = 1.5):
         return data_min + (data_min - upper) * 0.1, upper
 
 def is_increasing(df, order=1):
-    average_slope = 0.0
-    for column_name in df:
-        column = df[column_name].dropna(inplace=False, how='any')
-        coeffs = np.polyfit(column.index.values, column, order)
-        slope = coeffs[-2]
-        average_slope += float(slope)
-    return average_slope >= 0
+    df_no_nan = df.dropna(inplace=False, how='any')
+    slopes = df_no_nan.apply(lambda x: np.polyfit(df.index, x, 1)[0])
+    mean = slopes.values.mean()
+    return mean >= 0
 
 def save_figure_to_files(figure, directory, filename : str):
     figure.savefig(fname=Path(directory, f"{filename}.png"), format='png', transparent=False)
@@ -71,31 +68,18 @@ class Analyzer(object):
             return member.minimize
         raise Exception
 
+    def __get_latest_members(self):
+        for uid, keys in self.database.identy_records().items():
+            end_steps = max(int(key) for key in keys)
+            yield self.database.entry(uid, end_steps)
+
     def __get_best_member(self):
-        best = None
-        for member in self.database:
-            if best is None:
-                best = member
-                continue
-            if member.steps < best.steps:
-                continue
-            if member.steps == best.steps and member < best:
-                continue
-            best = member
-        return best
+        get_best = min if self.__minimize_score() else max
+        return get_best(self.__get_latest_members(), key=lambda x: x.test_score() if x.test_score() is not None else x.eval_score())
 
     def __get_worst_member(self):
-        worst = None
-        for member in self.database:
-            if worst is None:
-                worst = member
-                continue
-            if member.steps < worst.steps:
-                continue
-            if member.steps == worst.steps and member > worst:
-                continue
-            worst = member
-        return worst
+        get_worst = max if self.__minimize_score() else min
+        return get_worst(self.__get_latest_members(), key=lambda x: x.test_score() if x.test_score() else x.eval_score())
 
     def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu'):
         self.__print(f"Finding best member in population...")

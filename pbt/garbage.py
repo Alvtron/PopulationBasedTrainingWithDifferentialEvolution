@@ -28,7 +28,7 @@ class GarbageCollector:
                 if not member.has_state():
                     # skipping the member as it has no state to delete
                     continue
-                self._log(f"deleting the state from member {member.id} at step {member.steps} with score {member.score():.4f}...")
+                self._log(f"deleting the state from member {member.id} at step {member.steps} with score {member.eval_score():.4f}...")
                 member.delete_state()
                 # updating database
                 self.database.update(member.id, member.steps, member)

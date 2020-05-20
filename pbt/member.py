@@ -17,15 +17,10 @@ from .hyperparameters import ContiniousHyperparameter, _Hyperparameter, Hyperpar
 from .utils.iterable import modify_iterable
 
 def prepare_score(value):
-    if hasattr(value, "score"):
-        value = value.score()
-    if value is None:
-        return None
     if isinstance(value, (float, int)):
-        if math.isnan(value) or math.isinf(value):
-            return None
-        else:
-            return value
+        return value
+    elif hasattr(value, "eval_score"):
+        return value.eval_score()
     else:
         raise NotImplementedError
 
@@ -40,7 +35,7 @@ class MemberState(object):
         self.minimize = minimize
 
     @abstractmethod
-    def score(self):
+    def eval_score(self):
         raise NotImplementedError
 
     def __getitem__(self, index : int) -> float:
@@ -141,14 +136,32 @@ class Checkpoint(MemberState):
             return True
         return self.id != other.id or self.steps != other.steps
 
-    def score(self) -> float:
-        return self.loss['eval'][self.eval_metric] if 'eval' in self.loss and self.eval_metric in self.loss['eval'] else None
-
     def train_score(self) -> float:
-        return self.loss['train'][self.eval_metric] if 'train' in self.loss and self.eval_metric in self.loss['train'] else None
+        group = 'train'
+        if group not in self.loss or self.eval_metric not in self.loss[group]:
+            return None
+        score = self.loss[group][self.eval_metric]
+        if not math.isfinite(score):
+            return None
+        return score
+
+    def eval_score(self) -> float:
+        group = 'eval'
+        if group not in self.loss or self.eval_metric not in self.loss[group]:
+            return None
+        score = self.loss[group][self.eval_metric]
+        if not math.isfinite(score):
+            return None
+        return score
 
     def test_score(self) -> float:
-        return self.loss['test'][self.eval_metric] if 'test' in self.loss and self.eval_metric in self.loss['test'] else None
+        group = 'test'
+        if group not in self.loss or self.eval_metric not in self.loss[group]:
+            return None
+        score = self.loss[group][self.eval_metric]
+        if not math.isfinite(score):
+            return None
+        return score
 
     def has_state(self) -> bool:
         return hasattr(self, 'model_state') and self.model_state is not None and hasattr(self, 'optimizer_state') and self.optimizer_state is not None

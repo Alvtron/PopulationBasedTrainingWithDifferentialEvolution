@@ -175,10 +175,10 @@ class DifferentialEvolution(EvolveEngine):
     def _select(self, parent: MemberState, trial: MemberState) -> MemberState:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         if parent <= trial :
-            self.logger(f"mutate member {parent.id} (x {parent.score():.4f} <= u {trial.score():.4f}).")
+            self.logger(f"mutate member {parent.id} (x {parent.eval_score():.4f} <= u {trial.eval_score():.4f}).")
             return trial
         else:
-            self.logger(f"maintain member {parent.id} (x {parent.score():.4f} > u {trial.score():.4f}).")
+            self.logger(f"maintain member {parent.id} (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
             return parent
 
 class HistoricalMemory(object):
@@ -320,13 +320,13 @@ class SHADE(EvolveEngine):
         if parent <= trial:
             self.logger(f"For member {parent.id}: adding parent member {parent.id} to archive.")
             self.archive.append(parent.copy())
-            delta_score = abs(trial.score() - parent.score())
+            delta_score = abs(trial.eval_score() - parent.eval_score())
             self.logger(f"For member {parent.id}: recording CR_i {CR_i:.3f} and F_i {F_i:.3f} with delta score {delta_score:.3f} to historical memory.")
             self.memory.record(CR_i, F_i, delta_score)
-            self.logger(f"mutate member {parent.id} (x {parent.score():.4f} < u {trial.score():.4f}).")
+            self.logger(f"mutate member {parent.id} (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
             return trial
         else:
-            self.logger(f"maintain member {parent.id} (x {parent.score():.4f} > u {trial.score():.4f}).")
+            self.logger(f"maintain member {parent.id} (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
             return parent
 
     def on_generation_end(self, generation: Generation):
@@ -412,7 +412,7 @@ class LSHADE(SHADE):
         size_delta = len(generation) - new_size
         for worst in sorted(generation)[:size_delta]:
             generation.remove(worst)
-            self.logger(f"member {worst.id} with score {worst.score():.4f} was removed from the generation.")
+            self.logger(f"member {worst.id} with score {worst.eval_score():.4f} was removed from the generation.")
 
 def logistic(x : float, k : float = 20) -> float:
     return 1 / (1 + math.exp(-k * (x - 0.5)))
