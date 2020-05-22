@@ -222,9 +222,11 @@ class Controller(object):
         while not self.__is_finished(generation):
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
+            new_members = list()
             for member in self.worker_pool.imap(self.create_procedure(generation), generation):
                 # update generation
-                generation.update(member)
+                #generation.update(member)
+                new_members.append(member)
                 # increment n steps
                 self.__n_steps += 1
                 # report member performance
@@ -233,6 +235,8 @@ class Controller(object):
                 self.__update_database(member)
                 # write to tensorboard if enabled
                 self.__update_tensorboard(member)
+            for member in new_members:
+                generation.update(member)
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
             # perform garbage collection
