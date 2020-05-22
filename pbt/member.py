@@ -18,7 +18,10 @@ from .utils.iterable import modify_iterable
 
 def prepare_score(value):
     if isinstance(value, (float, int)):
-        return value
+        if math.isfinite(value):
+            return value
+        else:
+            return None
     elif hasattr(value, "eval_score"):
         return value.eval_score()
     else:
@@ -129,39 +132,30 @@ class Checkpoint(MemberState):
     def __eq__(self, other) -> bool:
         if other is None:
             return False
-        return self.id == other.id and self.steps == other.steps
+        return self.id == other.id
 
     def __ne__(self, other) -> bool:
         if other is None:
             return True
-        return self.id != other.id or self.steps != other.steps
+        return self.id != other.id
 
     def train_score(self) -> float:
         group = 'train'
         if group not in self.loss or self.eval_metric not in self.loss[group]:
             return None
-        score = self.loss[group][self.eval_metric]
-        if not math.isfinite(score):
-            return None
-        return score
+        return self.loss[group][self.eval_metric]
 
     def eval_score(self) -> float:
         group = 'eval'
         if group not in self.loss or self.eval_metric not in self.loss[group]:
             return None
-        score = self.loss[group][self.eval_metric]
-        if not math.isfinite(score):
-            return None
-        return score
+        return self.loss[group][self.eval_metric]
 
     def test_score(self) -> float:
         group = 'test'
         if group not in self.loss or self.eval_metric not in self.loss[group]:
             return None
-        score = self.loss[group][self.eval_metric]
-        if not math.isfinite(score):
-            return None
-        return score
+        return self.loss[group][self.eval_metric]
 
     def has_state(self) -> bool:
         return hasattr(self, 'model_state') and self.model_state is not None and hasattr(self, 'optimizer_state') and self.optimizer_state is not None

@@ -83,10 +83,6 @@ class ExploitAndExplore(EvolveEngine):
         A fraction of the bottom performing members exploit the top performing members.
         If member exploits, the hyper-parameters are parturbed.
         """
-        if member.steps == 0:
-            # just train if initial generation
-            self.logger(f"training initial member {member.id}...")
-            return train_function(member)
         # train, exploit and explore
         self.logger(f"training member {member.id}...")
         member = train_function(member)
@@ -100,6 +96,9 @@ class ExploitAndExplore(EvolveEngine):
         # exploit if member is not elitist
         if member not in elitists:
             elitist = random.choice(elitists)
+            if not elitist.has_state():
+                self.logger(f"member {member.id} remains itself; elitist {elitist.id} does not have state to share.")
+                return member.copy()
             exploiter = member.copy()
             self.logger(f"member {exploiter.id} exploits member {elitist.id}...")
             exploiter.copy_parameters(elitist)
@@ -308,11 +307,11 @@ class SHADE(EvolveEngine):
             else:
                 trial[j] = parent[j]
         # measure fitness
-        self.logger(f"measuring fitness score of parent- and trial member {parent.id}")
+        self.logger(f"measuring fitness score of parent/trial member {parent.id}")
         parent = fitness_function(parent)
         trial = fitness_function(trial)
         # select
-        self.logger(f"selecting between evaluated parent- and trial member {parent.id}")
+        self.logger(f"selecting between measured parent/trial member {parent.id}")
         return self._select(parent, trial, CR_i, F_i)
 
     def _select(self, parent: MemberState, trial: MemberState, CR_i: float, F_i: float) -> MemberState:
