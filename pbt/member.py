@@ -246,6 +246,9 @@ class Generation(object):
     def __iter__(self):
         return iter(self._members.values())
 
+    def __contains__(self, other):
+        return other.id in self._members
+
     def __getitem__(self, id):
         return self._members[id]
 

@@ -68,11 +68,10 @@ class Trainer(object):
         selected_indices = list(itertools.islice(itertools.cycle(indices), start_index, start_index + n_samples))
         return Subset(self.train_data, selected_indices)
 
-    def __call__(self, checkpoint: Checkpoint, step_size: int = 1, device: str = 'cpu', shuffle: bool = False) -> Checkpoint:
+    def __call__(self, checkpoint: Checkpoint, step_size: int = 1, device: str = 'cpu', shuffle: bool = False):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
         start_train_time_ns = time.time_ns()
-        checkpoint = checkpoint.copy()
         # preparing model and optimizer
         self._print("creating model...")
         model = self.create_model(checkpoint.parameters, checkpoint.model_state, device)
@@ -121,4 +120,3 @@ class Trainer(object):
         del optimizer
         torch.cuda.empty_cache()
         checkpoint.time[self.LOSS_GROUP] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
-        return checkpoint

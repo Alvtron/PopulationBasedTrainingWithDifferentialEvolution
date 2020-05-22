@@ -119,7 +119,6 @@ class WorkerPool(object):
         result = self.__async_return_queue.get()
         if isinstance(result, FailMessage):
             self._on_fail_message(result)
-            self.stop()
             raise Exception("worker failed.")
         return result
 
@@ -144,7 +143,6 @@ class WorkerPool(object):
             yield result
         # check if all processes were successful
         if not return_queue.empty():
-            self.stop()
             raise Exception("return queue is not empty.")
         elif len(failed_workers) == len(self._workers):
             raise Exception("all workers failed.")

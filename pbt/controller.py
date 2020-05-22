@@ -233,7 +233,6 @@ class Controller(object):
                 self.__update_database(member)
                 # write to tensorboard if enabled
                 self.__update_tensorboard(member)
-                continue
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
             # perform garbage collection

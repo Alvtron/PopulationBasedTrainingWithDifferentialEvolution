@@ -69,9 +69,12 @@ class Analyzer(object):
         raise Exception
 
     def __get_latest_members(self):
+        max_steps = max(max(int(key) for key in keys) for keys in self.database.identy_records().values())
         for uid, keys in self.database.identy_records().items():
-            end_steps = max(int(key) for key in keys)
-            yield self.database.entry(uid, end_steps)
+            max_key = max(int(key) for key in keys)
+            if max_key < max_steps:
+                continue
+            yield self.database.entry(uid, max_key)
 
     def __get_best_member(self):
         get_best = min if self.__minimize_score() else max
