@@ -32,27 +32,22 @@ class EvolveEngine(object):
         print(text)
         
     @abstractmethod
-    def spawn(self, members : Iterable[MemberState]) -> Generation:
+    def spawn(self, members : Iterable[MemberState], **kwargs) -> Generation:
         """Create initial generation."""
         pass
     
     @abstractmethod
-    def on_generation_start(self, generation : Generation) -> None:
+    def on_generation_start(self, generation : Generation, **kwargs) -> None:
         """Called before each generation."""
         pass
     
     @abstractmethod
-    def mutate(self, member: MemberState) -> Candidates:
+    def mutate(self, member: MemberState, **kwargs) -> MemberState:
         """Called for each member in generation. Returns one candidate or multiple candidates."""
         pass
 
     @abstractmethod
-    def select(self, candidates: Candidates) -> MemberState:
-        """Returns the determined 'best' member between the candidates."""
-        pass
-
-    @abstractmethod
-    def on_generation_end(self, generation : Generation) -> None:
+    def on_generation_end(self, generation : Generation, **kwargs) -> None:
         """Called at the end of each generation."""
         pass
 
@@ -76,20 +71,13 @@ class ExploitAndExplore(EvolveEngine):
             [hp.sample_uniform() for hp in member.parameters]
             generation.append(member)
         return generation
-
-    def mutate(self, member: MemberState, generation: Generation, train_function: Callable[[MemberState], MemberState]) -> MemberState:
+    
+    def mutate(self, member: MemberState, generation:Generation) -> MemberState:
         """
         Exploit best peforming members and explores all search spaces with random perturbation.
         A fraction of the bottom performing members exploit the top performing members.
         If member exploits, the hyper-parameters are parturbed.
         """
-        # train, exploit and explore
-        self.logger(f"training member {member.id}...")
-        member = train_function(member)
-        # exploit and explore
-        return self.__exploit_and_explore(member, generation)
-    
-    def __exploit_and_explore(self, member: MemberState, generation:Generation) -> MemberState:
         n_elitists = max(1, round(len(generation) * self.exploit_factor))
         sorted_members = sorted(generation, reverse=True)
         elitists = sorted_members[:n_elitists]
@@ -103,6 +91,7 @@ class ExploitAndExplore(EvolveEngine):
             self.logger(f"member {exploiter.id} exploits member {elitist.id}...")
             exploiter.copy_parameters(elitist)
             exploiter.copy_state(elitist)
+            exploiter.copy_score(elitist)
             self.logger(f"member {exploiter.id} explores member {elitist.id}...")
             return self.__explore(exploiter)
         else:
@@ -144,7 +133,7 @@ class DifferentialEvolution(EvolveEngine):
             generation.append(member)
         return generation
 
-    def mutate(self, parent: MemberState, generation : Generation, fitness_function: Callable[[MemberState], MemberState]) -> Tuple[MemberState, MemberState]:
+    def mutate(self, parent: MemberState, generation : Generation, fitness_function: Callable[[MemberState], None]) -> MemberState:
         """
         Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
         implementation of differential evolution.
@@ -165,8 +154,8 @@ class DifferentialEvolution(EvolveEngine):
                 trial[j] = parent[j]
         # measure fitness
         self.logger(f"measuring fitness score of parent- and trial member {parent.id}")
-        parent = fitness_function(parent)
-        trial = fitness_function(trial)
+        fitness_function(parent)
+        fitness_function(trial)
         # select best
         self.logger(f"selecting between evaluated parent- and trial member {parent.id}")
         return self._select(parent, trial)
@@ -275,7 +264,7 @@ class SHADE(EvolveEngine):
     def on_generation_start(self, generation: Generation) -> None:
         self.memory.reset()
 
-    def mutate(self, parent: MemberState, generation: Generation, fitness_function: Callable[[MemberState], MemberState]) -> Iterable[Candidates]:
+    def mutate(self, parent: MemberState, generation: Generation, fitness_function: Callable[[MemberState], None]) -> MemberState:
         """
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
         implementation of differential evolution, with adapted CR and F parameters.
@@ -308,8 +297,8 @@ class SHADE(EvolveEngine):
                 trial[j] = parent[j]
         # measure fitness
         self.logger(f"measuring fitness score of parent/trial member {parent.id}")
-        parent = fitness_function(parent)
-        trial = fitness_function(trial)
+        fitness_function(parent)
+        fitness_function(trial)
         # select
         self.logger(f"selecting between measured parent/trial member {parent.id}")
         return self._select(parent, trial, CR_i, F_i)

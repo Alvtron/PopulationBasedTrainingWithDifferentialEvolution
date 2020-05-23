@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import time
+import dill
 import random
 import copy
 import pickle
@@ -26,16 +27,15 @@ from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
 
 import pbt.member
+from pbt.worker import DeviceCallable
 from pbt.worker_pool import WorkerPool
 from pbt.member import Checkpoint, Generation
 from pbt.utils.date import get_datetime_string
 from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters
-from pbt.trainer import Trainer
-from pbt.evaluator import Evaluator
+from pbt.nn import Trainer, Evaluator, RandomFitnessApproximation
 from pbt.evolution import EvolveEngine
 from pbt.database import Database
 from pbt.garbage import GarbageCollector
-from pbt.step import Step
 
 class Controller(object):
     def __init__(
@@ -247,79 +247,98 @@ class Controller(object):
     def create_procedure(self, generation) -> Callable[[Generation], Checkpoint]:
         raise NotImplementedError()
 
-class PBTProcedure:
-    def __init__(self, generation: Generation, evolver: EvolveEngine, train_function):
-        self.generation = generation
-        self.evolver = evolver
-        self.train_function = train_function
-
-    def __call__(self, member: Checkpoint, device: str):
-        new_member = self.evolver.mutate(
-            member=member,
-            generation=self.generation,
-            train_function=partial(self.train_function, device=device))
-        return new_member
-        
 class PBTController(Controller):
-    def __init__(self, step_size: int, trainer: Trainer, evaluator: Evaluator, tester: Evaluator = None, **kwargs):
+    def __init__(self, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, **kwargs):
         super().__init__(**kwargs)
-        if not isinstance(step_size, int) or step_size < 0: 
-            raise Exception(f"step size must be of type {int} and 1 or higher.")
-        self.train_step = Step(
-            train_function=partial(trainer, step_size=step_size),
-            eval_function=evaluator,
-            verbose=self.verbose > 3)
-        if tester is not None:
-            self.train_step.functions['test_function'] = tester
+        # create training function
+        self.train_function = Trainer(
+            model_class = model_class, optimizer_class = optimizer_class, train_data = datasets.train,
+            loss_functions = self.loss_functions, loss_metric = self.loss_metric,
+            batch_size = batch_size, step_size=train_steps, verbose=self.verbose > 5)
+        # create evaluation function
+        self.eval_function = Evaluator(
+            model_class = model_class, test_data = datasets.eval, loss_functions=self.loss_functions,
+            batch_size = batch_size, loss_group = 'eval', verbose=self.verbose > 5)
+        # creating test function if test set is provided
+        self.test_function = Evaluator(
+            model_class = model_class, test_data = datasets.test, loss_functions=self.loss_functions,
+            batch_size = batch_size, loss_group = 'test', verbose=self.verbose > 5) if datasets.test else None
 
     def create_procedure(self, generation: Generation):
-        return PBTProcedure(generation=generation, evolver=self.evolver, train_function=self.train_step)
+        return PBTProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
+            test_function=self.test_function, verbose=self.verbose > 3)
+        
 
-class DEProcedure:
-    def __init__(self, generation: Generation, evolver: EvolveEngine, fitness_function, train_function = None, test_function=None):
+class PBTProcedure(DeviceCallable):
+    def __init__(self, generation: Generation, evolver: EvolveEngine, train_function, eval_function, test_function=None, verbose: bool = False):
+        super().__init__(verbose)
         self.generation = generation
-        self.train_function = train_function
-        self.fitness_function = fitness_function
-        self.test_function = test_function
         self.evolver = evolver
+        self.train_function = train_function
+        self.eval_function = eval_function
+        self.test_function = test_function
 
-    def __call__(self, member: Checkpoint, device: str):
-        trained_member = self.train_function(member, device=device) if self.train_function else member
-        new_member = self.evolver.mutate(
-            parent=trained_member,
-            generation=self.generation,
-            fitness_function=partial(self.fitness_function, device=device))
-        # add loss
-        for loss_group, loss_dict in new_member.loss.items():
-            for loss_type, loss_value in loss_dict.items():
-                new_member.loss[loss_group][loss_type] = (loss_value + trained_member.loss[loss_group][loss_type]) / 2.0
+    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+        self._print(f"training member {member.id}...")
+        self.train_function(member, device)
+        self._print(f"evaluating member {member.id}...")
+        self.eval_function(member, device)
+        self.generation.update(member)
+        # exploit and explore
+        self._print(f"mutating member {member.id}...")
+        member = self.evolver.mutate(member=member, generation=self.generation)
         # measure test set performance if available
         if self.test_function is not None:
-            new_member = self.test_function(new_member, device)
-        return new_member
-        
+            self._print(f"testing member {member.id}...")
+            self.test_function(member, device)
+        return member
+
 class DEController(Controller):
-    def __init__(self, train_steps: int, fitness_steps: int, trainer: Trainer, evaluator: Evaluator, tester: Evaluator = None, **kwargs):
+    def __init__(self, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, fitness_steps: int, **kwargs):
         super().__init__(**kwargs)
-        if not isinstance(train_steps, int) or train_steps < 0: 
-            raise Exception(f"train_steps must be of type {int} and 0 or higher.")
-        if not isinstance(fitness_steps, int) or fitness_steps < 1:
-            raise Exception(f"fitness_steps must be of type {int} and equal or lower than zero.")
-        verbose = self.verbose > 3
-        self.train_step = Step(
-            train_function=partial(trainer, step_size=train_steps, shuffle=False),
-            eval_function=partial(evaluator, step_size=None, shuffle=False),
-            verbose=verbose) if train_steps > 0 else None
-        # Random Fitness Approximation (RFA)
-        self.fitness_function = Step(
-            train_function=partial(trainer, step_size=fitness_steps, shuffle=False),
-            eval_function=partial(evaluator, step_size=fitness_steps, shuffle=True),
-            verbose=verbose)
-        self.test_step = Step(
-            test_function=partial(tester, step_size=None, shuffle=False),
-            verbose=verbose) if tester else None
+        # create training function
+        self.train_function = Trainer(
+            model_class = model_class, optimizer_class = optimizer_class, train_data = datasets.train,
+            loss_functions = self.loss_functions, loss_metric = self.loss_metric,
+            batch_size = batch_size, step_size=train_steps, verbose=self.verbose > 5)
+        # create evaluation function
+        self.eval_function = Evaluator(
+            model_class = model_class, test_data = datasets.eval, loss_functions=self.loss_functions,
+            batch_size = batch_size, loss_group = 'eval', verbose=self.verbose > 5)
+        # creating fitness function
+        self.fitness_function = RandomFitnessApproximation(model_class=model_class, optimizer_class=optimizer_class, train_data=datasets.train, test_data=datasets.eval,
+            loss_functions=self.loss_functions, loss_metric=self.loss_metric, batch_size=batch_size, batches=fitness_steps, verbose=self.verbose > 5)
+        # creating test function if test set is provided
+        self.test_function = Evaluator(
+            model_class = model_class, test_data = datasets.test, loss_functions=self.loss_functions,
+            batch_size = batch_size, loss_group = 'test', verbose=self.verbose > 5) if datasets.test else None
 
     def create_procedure(self, generation: Generation):
-        return DEProcedure(generation=generation, evolver=self.evolver, fitness_function=self.fitness_function, train_function=self.train_step, test_function=self.test_step)
+        return DEProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
+            fitness_function=self.fitness_function, test_function=self.test_function, verbose=self.verbose > 3)
 
+class DEProcedure(DeviceCallable):
+    def __init__(self, generation: Generation, evolver: EvolveEngine, train_function, eval_function, fitness_function, test_function=None, verbose: bool = False):
+        super().__init__(verbose)
+        self.generation = generation
+        self.evolver = evolver
+        self.train_function = train_function
+        self.eval_function = eval_function
+        self.fitness_function = fitness_function
+        self.test_function = test_function
 
+    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+        self._print(f"training member {member.id}...")
+        self.train_function(member, device)
+        self._print(f"evaluating member {member.id}...")
+        self.eval_function(member, device)
+        self._print(f"mutating member {member.id}...")
+        new_member = self.evolver.mutate(
+            parent=member,
+            generation=self.generation,
+            fitness_function=partial(self.fitness_function, device=device))
+        # measure test set performance if available
+        if self.test_function is not None:
+            self._print(f"testing member {member.id}...")
+            self.test_function(member, device)
+        return member

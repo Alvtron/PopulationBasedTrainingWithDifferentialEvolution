@@ -7,32 +7,13 @@ import math
 import random
 import warnings
 import itertools
-from functools import partial
-from typing import List, Dict, Tuple, Sequence, Iterable, Callable, Union, Generator
-from functools import partial
-from dataclasses import dataclass
-from multiprocessing.context import BaseContext
-from multiprocessing.pool import ThreadPool
+from typing import List, Sequence, Iterable, Callable, Generator
 
 import torch
-import numpy as np
 
-import pbt.member
-from .trainer import Trainer
-from .evaluator import Evaluator
-from .member import Checkpoint, MissingStateError
 from .worker import STOP_FLAG, FailMessage, Trial, Worker
 from .utils.cuda import get_gpu_memory_stats
 
-# various settings for reproducibility
-# set random state 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
-# set torch settings
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 

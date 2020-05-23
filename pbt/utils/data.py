@@ -1,6 +1,7 @@
 import random
 import math
 import copy
+import itertools
 from collections import defaultdict
 from typing import Iterable, Dict, Sequence
 
@@ -16,12 +17,24 @@ def display_class_balance(labels : Sequence[object]):
     for unique, counts in zip(*np.unique(labels, return_counts=True)):
         print(f"{unique}: {counts} ({counts/len(labels)*100.0:.2f}%)")
 
-def create_subset(dataset : Dataset, start : int, end : int = None) -> Subset:
-    dataset_length = len(dataset)
-    if end is not None and end > dataset_length:
-        raise ValueError("end index is larger than dataset length.")
-    end = dataset_length if not end else end
-    return Subset(dataset, list(range(start, end)))
+def create_subset(dataset: Dataset, start: int, end: int = None, shuffle: bool = False) -> Subset:
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    if shuffle:
+        random.shuffle(indices)
+    selected_indices = list(itertools.islice(itertools.cycle(indices), start, end))
+    return Subset(dataset, selected_indices)
+
+def create_subset_by_size(dataset: Dataset, n_samples: int, shuffle : bool) -> Subset:
+    dataset_size = len(dataset)
+    if n_samples > dataset_size:
+        raise ValueError("the number of samples exceeds the dataset size.")
+    indices = list(range(dataset_size))
+    if shuffle:
+        indices = random.sample(indices, n_samples) if shuffle else indices[n_samples:]
+    else:
+        indices = indices[:n_samples]
+    return Subset(dataset, indices)
 
 def split(dataset : Dataset, fraction : float) -> (Subset, Subset):
     assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"

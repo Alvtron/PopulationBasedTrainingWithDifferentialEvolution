@@ -157,6 +157,10 @@ class Checkpoint(MemberState):
             return None
         return self.loss[group][self.eval_metric]
 
+    def copy_score(self, other) -> None:
+        """Replace own score with score from the other member."""
+        self.loss = copy.deepcopy(other.loss)
+
     def has_state(self) -> bool:
         return hasattr(self, 'model_state') and self.model_state is not None and hasattr(self, 'optimizer_state') and self.optimizer_state is not None
 

@@ -14,7 +14,7 @@ from torchvision.datasets.vision import StandardTransform
 from .hyperparameters import ContiniousHyperparameter, Hyperparameters
 
 class Datasets(object):
-    def __init__(self, train_data, eval_data, test_data):
+    def __init__(self, train_data: Dataset, eval_data: Dataset, test_data: Dataset = None):
         self.train = train_data
         self.eval = eval_data
         self.test = test_data

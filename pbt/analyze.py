@@ -14,11 +14,11 @@ import matplotlib.pyplot as plt
 import matplotlib.colors
 from mpl_toolkits.mplot3d import Axes3D
 
-from .database import ReadOnlyDatabase
-from .evaluator import Evaluator
-from .hyperparameters import ContiniousHyperparameter, Hyperparameters
-from .utils.constraint import clip
-from .utils.iterable import flatten_dict
+from pbt.database import ReadOnlyDatabase
+from pbt.nn import Evaluator
+from pbt.hyperparameters import ContiniousHyperparameter, Hyperparameters
+from pbt.utils.constraint import clip
+from pbt.utils.iterable import flatten_dict
 
 def remove_outliers_from_dataframe(df, stdev_proximity = 3):
     z_scores = stats.zscore(df)

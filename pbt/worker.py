@@ -8,6 +8,7 @@ import uuid
 import random
 import warnings
 import itertools
+from abc import abstractmethod
 from functools import partial
 from typing import List, Dict, Tuple, Sequence, Callable
 from functools import partial
@@ -17,12 +18,6 @@ from multiprocessing.pool import ThreadPool
 
 import torch
 import numpy as np
-
-from pbt.step import DeviceCallable
-from pbt.step import Step
-from pbt.trainer import Trainer
-from pbt.evaluator import Evaluator
-from pbt.member import Checkpoint, MissingStateError
 
 # various settings for reproducibility
 # set random state 
@@ -39,11 +34,25 @@ CONTEXT = torch.multiprocessing.get_context("spawn")
 
 STOP_FLAG = None
 
+class DeviceCallable(object):
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+
+    def _print(self, message : str):
+        if not self.verbose:
+            return
+        full_message = f"PID-{os.getpid()}: {message}"
+        print(full_message)
+
+    @abstractmethod
+    def __call__(self, checkpoint: object, device: str, **kwargs) -> object:
+        raise NotImplementedError()
+
 class Trial:
     def __init__(self, return_queue, function: DeviceCallable, parameters: object):
         self.return_queue = return_queue
         self.function = function
-        self.parameters = parameters
+        self.parameters: DeviceCallable = parameters
 
     def __call__(self, device: str):
         return self.function(self.parameters, device=device)

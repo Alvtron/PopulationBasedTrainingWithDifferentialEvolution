@@ -18,8 +18,7 @@ from pbt.controller import PBTController, DEController
 from pbt.task import mnist, emnist, fashionmnist, creditfraud, cifar
 from pbt.analyze import Analyzer
 from pbt.database import Database
-from pbt.evaluator import Evaluator
-from pbt.trainer import Trainer
+from pbt.nn import Trainer, Evaluator, RandomFitnessApproximation
 
 def import_task(task_name : str):
     # CREDIT CARD FRAUD
@@ -212,56 +211,31 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, trai
     obj_info = "\n".join(obj_info)
     print("\n", obj_info, "\n")
     database.create_file(tag="info", file_name="information.txt").write_text(obj_info)
-    # create trainer, evaluator and tester
-    print(f"Creating trainer...")
-    TRAINER = Trainer(
-        model_class = _task.model_class,
-        optimizer_class = _task.optimizer_class,
-        train_data = _task.datasets.train,
-        loss_functions = _task.loss_functions,
-        loss_metric = _task.loss_metric,
-        batch_size = batch_size,
-        verbose=False)
-    print(f"Creating evaluator...")
-    EVALUATOR = Evaluator(
-        model_class = _task.model_class,
-        test_data = _task.datasets.eval,
-        loss_functions=_task.loss_functions,
-        batch_size = batch_size,
-        loss_group = 'eval',
-        verbose=False)
-    print(f"Creating tester...")
-    TESTER = Evaluator(
-        model_class = _task.model_class,
-        test_data = _task.datasets.test,
-        loss_functions=_task.loss_functions,
-        batch_size = batch_size,
-        loss_group = 'test',
-        verbose=False)
     # define controller
     print(f"Creating evolver...")
     EVOLVER = create_evolver(manager, evolver, population_size, end_steps)
     # create controller
     if evolver == 'pbt':
         print(f"Creating PBT controller...")
-        controller = PBTController(manager=manager, population_size=population_size, hyper_parameters=_task.hyper_parameters, trainer=TRAINER, evaluator=EVALUATOR, tester=TESTER,
-            evolver=EVOLVER, loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database,
-            step_size=train_steps, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score}, devices=devices,
-            n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
+        controller = PBTController(manager=manager, population_size=population_size, hyper_parameters=_task.hyper_parameters, evolver=EVOLVER,
+            loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score},
+            model_class=_task.model_class, optimizer_class=_task.optimizer_class, datasets=_task.datasets, batch_size=batch_size, train_steps=train_steps,
+            devices=devices, n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     else:
         print(f"Creating DE controller...")
-        controller = DEController(manager=manager, population_size=population_size, hyper_parameters=_task.hyper_parameters, trainer=TRAINER, evaluator=EVALUATOR, tester=TESTER,
-            evolver=EVOLVER, loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database,
-            train_steps=train_steps, fitness_steps=fitness_steps, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score}, devices=devices,
-            n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
+        controller = DEController(manager=manager, population_size=population_size, hyper_parameters=_task.hyper_parameters, evolver=EVOLVER,
+            loss_metric=_task.loss_metric, eval_metric=_task.eval_metric, loss_functions=_task.loss_functions, database=database, end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score},
+            model_class=_task.model_class, optimizer_class=_task.optimizer_class, datasets=_task.datasets, batch_size=batch_size, train_steps=train_steps, fitness_steps=fitness_steps,
+            devices=devices, n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     # run controller
     print(f"Starting controller...")
     generation = controller.start() 
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database, verbose=True)
+    tester = Evaluator(model_class = _task.model_class, test_data = _task.datasets.test, loss_functions=_task.loss_functions, batch_size = batch_size, loss_group = 'test', verbose=False)
     analyzer.test(
-        evaluator=TESTER,
+        evaluator=tester,
         save_directory=database.create_file("results", "top_members.txt"),
         device='cpu')
     print("Creating statistics...")
