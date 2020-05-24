@@ -41,18 +41,18 @@ class Controller(object):
     def __init__(
             self, manager, population_size: int, hyper_parameters: Hyperparameters, loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, end_criteria: dict = {'score': 100.0}, history_limit: int = None,
             devices: List[str] = ['cpu'], n_jobs: int = -1, verbose: int = 1, logging: bool = True, tensorboard: SummaryWriter = None):
-        self.manager = manager
         self.population_size = population_size
         self.database = database
         self.hyper_parameters = hyper_parameters
-        self.worker_pool = WorkerPool(manager=manager, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
-        self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.loss_metric = loss_metric
         self.eval_metric = eval_metric
         self.loss_functions = loss_functions
         self.end_criteria = end_criteria
         self.verbose = verbose
         self.logging = logging
+        self._manager = manager
+        self._worker_pool = WorkerPool(manager=manager, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+        self.__garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
         self.__n_generations = 0
         self.__start_time = None
         self.__tensorboard = tensorboard
@@ -63,10 +63,15 @@ class Controller(object):
             return None
         return self.__start_time + timedelta(minutes=self.end_criteria['time'])
 
+    @abstractmethod
+    def _print_prefix(self) -> str:
+        raise NotImplementedError
+
     def __create_message(self, message : str, tag : str = None) -> str:
         time = get_datetime_string()
         generation = f"G{self.__n_generations:03d}"
-        return f"{time} {generation}{f' {tag}' if tag else ''}: {message}"
+        prefixes = ' '.join(prefix for prefix in (time, generation, self._create_prefix(), tag) if prefix is not None)
+        return f"{prefixes}: {message}"
 
     def _say(self, message : str, member : Checkpoint = None) -> None:
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 0."""
@@ -171,7 +176,7 @@ class Controller(object):
             return True
         return False
 
-    def start(self) -> Generation:
+    def start(self) -> Checkpoint:
         """Start global training procedure. Ends when end_criteria is met."""
         try:
             self._on_start()
@@ -193,12 +198,12 @@ class Controller(object):
         self.__start_time = datetime.now()
         self.__n_generations = 0
         # start training service
-        self.worker_pool.start()
+        self._worker_pool.start()
 
     def _on_stop(self) -> None:
         """Stops training service and cleans up temporary files."""
         # close training service
-        self.worker_pool.stop()
+        self._worker_pool.stop()
 
     def __train_synchronously(self) -> Generation:
         """
@@ -216,11 +221,11 @@ class Controller(object):
             [self.__update_tensorboard(member) for member in generation]
             # perform garbage collection
             self._whisper("performing garbage collection...")
-            self.garbage_collector.collect()
+            self.__garbage_collector.collect()
             # increment number of generations
             self.__n_generations += 1
         self._say(f"end criteria has been reached.")
-        return generation
+        return max(generation)
 
     @abstractmethod
     def _train(self, initial: Iterable[Checkpoint]) -> Generator[List[Checkpoint], None, None]:
@@ -247,9 +252,15 @@ class PBTController(Controller):
             batch_size = batch_size, loss_group = 'test', verbose=self.verbose > 5) if datasets.test else None
         self.__n_steps = 0
 
+    def _print_prefix(self) -> str:
+        if self.end_criteria['steps']:
+            return f"({self.__n_steps}/{self.end_criteria['steps']})"
+        else:
+            return ""
+
     def _on_start(self) -> None:
-        super()._on_start()
         self.__n_steps = 0
+        super()._on_start()
 
     def __is_steps_end(self):
         return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
@@ -269,20 +280,21 @@ class PBTController(Controller):
         generation = Generation(dict_constructor=self.manager.dict, members=spawned_members)
         # create and start procedure
         procedure = self.create_procedure(generation)
-        [self.worker_pool.apply_async(procedure, member) for member in generation]
+        [self._worker_pool.apply_async(procedure, member) for member in generation]
         # loop until finished
         while not self._is_finished(generation):
             # get member and update generation
-            member = self.worker_pool.get()
-            # report member performance
-            self._say(member.performance_details(), member)
+            member = self._worker_pool.get()
             # increment steps
             self.__n_steps += 1
+            # report member performance
+            self._say(member.performance_details(), member)
+            # queue member for next training
+            self._worker_pool.apply_async()
             # yield generation if N members has been processed
             if self.__n_steps % len(generation) == 0:
                 yield list(generation)
-            # queue member for next training
-            self.worker_pool.apply_async()
+        yield list(generation)
 
     def create_procedure(self, generation: Generation):
         return PBTProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
@@ -330,7 +342,7 @@ class DEController(Controller):
             model_class = model_class, test_data = datasets.eval, loss_functions=self.loss_functions,
             batch_size = batch_size, loss_group = 'eval', verbose=self.verbose > 5)
         # creating fitness function
-        self.fitness_function = RandomFitnessApproximation(model_class=model_class, optimizer_class=optimizer_class, train_data=datasets.train, test_data=datasets.eval,
+        self.partial_fitness_function = partial(RandomFitnessApproximation, model_class=model_class, optimizer_class=optimizer_class, train_data=datasets.train, test_data=datasets.eval,
             loss_functions=self.loss_functions, loss_metric=self.loss_metric, batch_size=batch_size, batches=fitness_steps, verbose=self.verbose > 5)
         # creating test function if test set is provided
         self.test_function = Evaluator(
@@ -338,9 +350,15 @@ class DEController(Controller):
             batch_size = batch_size, loss_group = 'test', verbose=self.verbose > 5) if datasets.test else None
         self.__n_steps = 0
 
+    def _print_prefix(self) -> str:
+        if self.end_criteria['steps']:
+            return f"({self.__n_steps}/{self.end_criteria['steps']})"
+        else:
+            return ""
+
     def _on_start(self) -> None:
-        super()._on_start()
         self.__n_steps = 0
+        super()._on_start()
 
     def __is_steps_end(self):
         return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
@@ -372,8 +390,8 @@ class DEController(Controller):
 
     def __mutate_asynchronously(self, generation: Generation):
         procedure = DEProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
-            fitness_function=self.fitness_function, test_function=self.test_function, verbose=self.verbose > 3)
-        yield from self.worker_pool.imap(procedure, generation)
+            fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
+        yield from self._worker_pool.imap(procedure, generation)
 
 class DEProcedure(DeviceCallable):
     def __init__(self, generation: Generation, evolver: DifferentialEvolveEngine, train_function, eval_function, fitness_function, test_function=None, verbose: bool = False):

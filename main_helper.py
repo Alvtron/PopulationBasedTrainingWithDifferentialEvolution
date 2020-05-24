@@ -229,7 +229,7 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, trai
             devices=devices, n_jobs=n_jobs, history_limit=history, tensorboard=tensorboard_writer, verbose=verbose, logging=logging)
     # run controller
     print(f"Starting controller...")
-    generation = controller.start() 
+    best = controller.start() 
     # analyze results stored in database
     print("Analyzing population...")
     analyzer = Analyzer(database, verbose=True)
