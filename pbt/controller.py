@@ -277,7 +277,7 @@ class PBTController(Controller):
         # spawn members
         spawned_members = self.evolver.spawn(initial)
         # create generation
-        generation = Generation(dict_constructor=self.manager.dict, members=spawned_members)
+        generation = Generation(dict_constructor=self._manager.dict, members=spawned_members)
         # create and start procedure
         procedure = self.create_procedure(generation)
         [self._worker_pool.apply_async(procedure, member) for member in generation]
@@ -375,7 +375,7 @@ class DEController(Controller):
         # spawn members
         spawned_members = self.evolver.spawn(initial)
         # create generation
-        generation = Generation(dict_constructor=self.manager.dict, members=spawned_members)
+        generation = Generation(dict_constructor=self._manager.dict, members=spawned_members)
         while not self._is_finished(generation):
             # increment n steps
             self._whisper("on generation start...")
