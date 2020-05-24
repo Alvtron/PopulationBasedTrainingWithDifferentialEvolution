@@ -70,7 +70,7 @@ class Controller(object):
     def __create_message(self, message : str, tag : str = None) -> str:
         time = get_datetime_string()
         generation = f"G{self.__n_generations:03d}"
-        prefixes = ' '.join(prefix for prefix in (time, generation, self._create_prefix(), tag) if prefix is not None)
+        prefixes = ' '.join(prefix for prefix in (time, generation, self._print_prefix(), tag) if prefix is not None)
         return f"{prefixes}: {message}"
 
     def _say(self, message : str, member : Checkpoint = None) -> None:
