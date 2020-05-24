@@ -32,22 +32,40 @@ class EvolveEngine(object):
         print(text)
         
     @abstractmethod
-    def spawn(self, members : Iterable[MemberState], **kwargs) -> Generation:
+    def spawn(self, members : Iterable[MemberState]) -> Generation:
         """Create initial generation."""
         pass
     
     @abstractmethod
-    def on_generation_start(self, generation : Generation, **kwargs) -> None:
+    def mutate(self, member: MemberState, generation: Generation, **kwargs) -> MemberState:
+        """Called for each member in generation. Returns one candidate or multiple candidates."""
+        pass
+
+class DifferentialEvolveEngine(EvolveEngine):
+    """
+    Base class for all evolvers.
+    """
+
+    def __init__(self, verbose: bool = False):
+        super().__init__(verbose)
+        
+    @abstractmethod
+    def spawn(self, members : Iterable[MemberState]) -> Generation:
+        """Create initial generation."""
+        pass
+    
+    @abstractmethod
+    def on_generation_start(self, generation : Generation) -> None:
         """Called before each generation."""
         pass
     
     @abstractmethod
-    def mutate(self, member: MemberState, **kwargs) -> MemberState:
+    def mutate(self, member: MemberState, generation: Generation, fitness_function: Callable[[MemberState], None]) -> MemberState:
         """Called for each member in generation. Returns one candidate or multiple candidates."""
         pass
 
     @abstractmethod
-    def on_generation_end(self, generation : Generation, **kwargs) -> None:
+    def on_generation_end(self, generation : Generation) -> None:
         """Called at the end of each generation."""
         pass
 
@@ -115,7 +133,7 @@ class ExploitAndExplore(EvolveEngine):
             raise NotImplementedError()
 
 
-class DifferentialEvolution(EvolveEngine):
+class DifferentialEvolution(DifferentialEvolveEngine):
     """
     A general, modifiable implementation of Differential Evolution (DE)
     """
@@ -218,7 +236,7 @@ class ExternalArchive():
             self.records.remove(random_value)
         self.records.append(parent)
 
-class SHADE(EvolveEngine):
+class SHADE(DifferentialEvolveEngine):
     """
     A general, modifiable implementation of Success-History based Adaptive Differential Evolution (SHADE).
 

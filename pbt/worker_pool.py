@@ -97,6 +97,8 @@ class WorkerPool(object):
         worker.receive_queue.put(trial)
         
     def get(self) -> object:
+        if self.__async_return_queue is None:
+            raise Exception("'apply_async' must be called at least once before 'get'.")
         result = self.__async_return_queue.get()
         if isinstance(result, FailMessage):
             self._on_fail_message(result)

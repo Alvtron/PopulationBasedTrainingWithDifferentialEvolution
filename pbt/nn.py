@@ -1,6 +1,7 @@
 import time
-import itertools
 import random
+import itertools
+import collections
 from copy import deepcopy
 from warnings import warn
 
@@ -203,10 +204,19 @@ class RandomFitnessApproximation():
         # n random batches for evaluation
         self.evaluator = Evaluator(model_class=model_class, test_data=test_data, batches=batches,
             batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True, verbose=verbose)
+        self.weight = (batches * batch_size) / len(test_data)
+
+    def __adjust_loss(self, previous_loss: dict, fitness_loss: dict) -> dict:
+        new_loss = collections.defaultdict(dict)
+        for loss_group in fitness_loss:
+            for loss_type in fitness_loss[loss_group]:
+                previous_loss_value = previous_loss[loss_group][loss_type]
+                fitness_loss_value = fitness_loss[loss_group][loss_type]
+                new_loss[loss_group][loss_type] = (previous_loss_value * (1 - self.weight)) + (fitness_loss_value * self.weight)
+        return new_loss
 
     def __call__(self, checkpoint: Checkpoint, device: str):
+        old_loss = deepcopy(checkpoint.loss)
         self.trainer(checkpoint, device)
         self.evaluator(checkpoint, device)
-        for loss_group, loss_dict in checkpoint.loss.items():
-            for loss_type, loss_value in loss_dict.items():
-                checkpoint.loss[loss_group][loss_type] = (loss_value + checkpoint.loss[loss_group][loss_type]) / 2.0
+        checkpoint.loss = self.__adjust_loss(old_loss, checkpoint.loss)

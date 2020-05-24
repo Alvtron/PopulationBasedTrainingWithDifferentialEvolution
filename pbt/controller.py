@@ -11,7 +11,7 @@ import warnings
 import itertools
 from datetime import datetime, timedelta
 from abc import abstractmethod
-from typing import List, Dict, Sequence, Iterator, Iterable, Tuple, Callable
+from typing import List, Dict, Sequence, Iterator, Iterable, Tuple, Callable, Generator
 from functools import partial 
 from collections import defaultdict
 from multiprocessing.context import BaseContext
@@ -33,20 +33,17 @@ from pbt.member import Checkpoint, Generation
 from pbt.utils.date import get_datetime_string
 from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters
 from pbt.nn import Trainer, Evaluator, RandomFitnessApproximation
-from pbt.evolution import EvolveEngine
+from pbt.evolution import ExploitAndExplore, DifferentialEvolveEngine
 from pbt.database import Database
 from pbt.garbage import GarbageCollector
 
 class Controller(object):
     def __init__(
-            self, manager, population_size: int, hyper_parameters: Hyperparameters, evolver: EvolveEngine,
-            loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, end_criteria: dict = {'score': 100.0}, history_limit: int = None,
+            self, manager, population_size: int, hyper_parameters: Hyperparameters, loss_metric: str, eval_metric: str, loss_functions: dict, database : Database, end_criteria: dict = {'score': 100.0}, history_limit: int = None,
             devices: List[str] = ['cpu'], n_jobs: int = -1, verbose: int = 1, logging: bool = True, tensorboard: SummaryWriter = None):
         self.manager = manager
         self.population_size = population_size
         self.database = database
-        self.evolver = evolver
-        self.evolver.verbose = verbose > 2
         self.hyper_parameters = hyper_parameters
         self.worker_pool = WorkerPool(manager=manager, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
         self.garbage_collector = GarbageCollector(database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
@@ -56,7 +53,6 @@ class Controller(object):
         self.end_criteria = end_criteria
         self.verbose = verbose
         self.logging = logging
-        self.__n_steps = 0
         self.__n_generations = 0
         self.__start_time = None
         self.__tensorboard = tensorboard
@@ -70,8 +66,7 @@ class Controller(object):
     def __create_message(self, message : str, tag : str = None) -> str:
         time = get_datetime_string()
         generation = f"G{self.__n_generations:03d}"
-        n_steps = f"({self.__n_steps}/{self.end_criteria['steps']})" if 'steps' in self.end_criteria and self.end_criteria['steps'] else self.__n_steps
-        return f"{time} {n_steps} {generation}{f' {tag}' if tag else ''}: {message}"
+        return f"{time} {generation}{f' {tag}' if tag else ''}: {message}"
 
     def _say(self, message : str, member : Checkpoint = None) -> None:
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 0."""
@@ -148,43 +143,38 @@ class Controller(object):
 
     def __create_initial_generation(self) -> Generation:
         new_members = self.__create_members(k=self.population_size)
-        # process new member with evolver
-        new_members = self.evolver.spawn(new_members)
-        generation = Generation(dict_constructor=self.manager.dict, members=new_members)
-        return generation
+        return new_members
 
     def __update_database(self, member : Checkpoint) -> None:
         """Updates the database stored in files."""
-        self._whisper(f"updating member {member.id} in database...")
         self.database.update(member.id, member.steps, member)
     
     def __is_score_end(self, generation):
         return 'score' in self.end_criteria and self.end_criteria['score'] and any(member >= self.end_criteria['score'] for member in generation)
 
-    def __is_steps_end(self):
-        return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
-
     def __is_time_end(self):
         return 'time' in self.end_criteria and self.end_criteria['time'] and datetime.now() >= self.end_time
 
-    def __is_finished(self, generation: Generation) -> bool:
+    def __is_n_generations_end(self):
+        return 'generations' in self.end_criteria and self.end_criteria['generations'] and self.__n_generations >= self.end_criteria['generations']
+
+    def _is_finished(self, generation: Generation) -> bool:
         """With the end_criteria, check if the generation is finished by inspecting the provided member."""
-        is_met = False
         if self.__is_score_end(generation):
             self._say("Score criterium has been met!")
-            is_met = True
-        if self.__is_steps_end():
-            self._say("Step criterium has been met!")
-            is_met = True
+            return True
         if self.__is_time_end():
             self._say("Time criterium has been met!")
-            is_met = True
-        return is_met
+            return True
+        if self.__is_n_generations_end():
+            self._say("Number of generations criterium has been met!")
+            return True
+        return False
 
     def start(self) -> Generation:
         """Start global training procedure. Ends when end_criteria is met."""
         try:
-            self.__on_start()
+            self._on_start()
             # start controller loop
             self._say("Starting training procedure...")
             return self.__train_synchronously()
@@ -195,18 +185,17 @@ class Controller(object):
             raise
         finally:
             self._say("finished.")
-            self.__on_stop()
+            self._on_stop()
 
-    def __on_start(self) -> None:
+    def _on_start(self) -> None:
         """Resets class properties, starts training service and cleans up temporary files."""
         # reset class properties
         self.__start_time = datetime.now()
-        self.__n_steps = 0
         self.__n_generations = 0
         # start training service
         self.worker_pool.start()
 
-    def __on_stop(self) -> None:
+    def _on_stop(self) -> None:
         """Stops training service and cleans up temporary files."""
         # close training service
         self.worker_pool.stop()
@@ -218,23 +207,13 @@ class Controller(object):
         but they are waiting for each other between each generation cycle.
         """
         self._say("Creating initial generation...")
-        generation = self.__create_initial_generation()
-        while not self.__is_finished(generation):
-            self._whisper("on generation start...")
-            self.evolver.on_generation_start(generation)
-            for member in self.worker_pool.imap(self.create_procedure(generation), generation):
-                # update generation
-                generation.update(member)
-                # increment n steps
-                self.__n_steps += 1
-                # report member performance
-                self._say(member.performance_details(), member)
-                # Save member to database directory.
-                self.__update_database(member)
-                # write to tensorboard if enabled
-                self.__update_tensorboard(member)
-            self._whisper("on generation end...")
-            self.evolver.on_generation_end(generation)
+        initial_members = self.__create_initial_generation()
+        for generation in self._train(initial_members):
+            # Save member to database directory.
+            self._whisper(f"saving members to database...")
+            [self.__update_database(member) for member in generation]
+            # write to tensorboard if enabled
+            [self.__update_tensorboard(member) for member in generation]
             # perform garbage collection
             self._whisper("performing garbage collection...")
             self.garbage_collector.collect()
@@ -244,12 +223,15 @@ class Controller(object):
         return generation
 
     @abstractmethod
-    def create_procedure(self, generation) -> Callable[[Generation], Checkpoint]:
+    def _train(self, initial: Iterable[Checkpoint]) -> Generator[List[Checkpoint], None, None]:
         raise NotImplementedError()
 
 class PBTController(Controller):
-    def __init__(self, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, **kwargs):
+    def __init__(self, evolver: ExploitAndExplore, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, **kwargs):
         super().__init__(**kwargs)
+        # evolver
+        self.evolver = evolver
+        self.evolver.verbose = self.verbose > 2
         # create training function
         self.train_function = Trainer(
             model_class = model_class, optimizer_class = optimizer_class, train_data = datasets.train,
@@ -263,14 +245,51 @@ class PBTController(Controller):
         self.test_function = Evaluator(
             model_class = model_class, test_data = datasets.test, loss_functions=self.loss_functions,
             batch_size = batch_size, loss_group = 'test', verbose=self.verbose > 5) if datasets.test else None
+        self.__n_steps = 0
+
+    def _on_start(self) -> None:
+        super()._on_start()
+        self.__n_steps = 0
+
+    def __is_steps_end(self):
+        return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
+
+    def _is_finished(self, generation: Generation):
+        if super()._is_finished(generation):
+            return True
+        if self.__is_steps_end():
+            self._say("Step criterium has been met!")
+            return True
+        return False
+
+    def _train(self, initial: Iterable[Checkpoint]) -> Generator[List[Checkpoint], None, None]:
+        # spawn members
+        spawned_members = self.evolver.spawn(initial)
+        # create generation
+        generation = Generation(dict_constructor=self.manager.dict, members=spawned_members)
+        # create and start procedure
+        procedure = self.create_procedure(generation)
+        [self.worker_pool.apply_async(procedure, member) for member in generation]
+        # loop until finished
+        while not self._is_finished(generation):
+            # get member and update generation
+            member = self.worker_pool.get()
+            # report member performance
+            self._say(member.performance_details(), member)
+            # increment steps
+            self.__n_steps += 1
+            # yield generation if N members has been processed
+            if self.__n_steps % len(generation) == 0:
+                yield list(generation)
+            # queue member for next training
+            self.worker_pool.apply_async()
 
     def create_procedure(self, generation: Generation):
         return PBTProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
             test_function=self.test_function, verbose=self.verbose > 3)
-        
 
 class PBTProcedure(DeviceCallable):
-    def __init__(self, generation: Generation, evolver: EvolveEngine, train_function, eval_function, test_function=None, verbose: bool = False):
+    def __init__(self, generation: Generation, evolver: ExploitAndExplore, train_function, eval_function, test_function=None, verbose: bool = False):
         super().__init__(verbose)
         self.generation = generation
         self.evolver = evolver
@@ -291,11 +310,16 @@ class PBTProcedure(DeviceCallable):
         if self.test_function is not None:
             self._print(f"testing member {member.id}...")
             self.test_function(member, device)
+        # update generation
+        self.generation.update(member)
         return member
 
 class DEController(Controller):
-    def __init__(self, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, fitness_steps: int, **kwargs):
+    def __init__(self, evolver: DifferentialEvolveEngine, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, fitness_steps: int, **kwargs):
         super().__init__(**kwargs)
+        # evolver
+        self.evolver = evolver
+        self.evolver.verbose = self.verbose > 2
         # create training function
         self.train_function = Trainer(
             model_class = model_class, optimizer_class = optimizer_class, train_data = datasets.train,
@@ -312,13 +336,47 @@ class DEController(Controller):
         self.test_function = Evaluator(
             model_class = model_class, test_data = datasets.test, loss_functions=self.loss_functions,
             batch_size = batch_size, loss_group = 'test', verbose=self.verbose > 5) if datasets.test else None
+        self.__n_steps = 0
 
-    def create_procedure(self, generation: Generation):
-        return DEProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
+    def _on_start(self) -> None:
+        super()._on_start()
+        self.__n_steps = 0
+
+    def __is_steps_end(self):
+        return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
+
+    def _is_finished(self, generation: Generation):
+        if super()._is_finished(generation):
+            return True
+        if self.__is_steps_end():
+            self._say("Step criterium has been met!")
+            return True
+        return False
+
+    def _train(self, initial: Iterable[Checkpoint]) -> Generator[List[Checkpoint], None, None]:
+        # spawn members
+        spawned_members = self.evolver.spawn(initial)
+        # create generation
+        generation = Generation(dict_constructor=self.manager.dict, members=spawned_members)
+        while not self._is_finished(generation):
+            # increment n steps
+            self._whisper("on generation start...")
+            self.evolver.on_generation_start(generation)
+            for member in self.__mutate_asynchronously(generation):
+                # report member performance
+                self._say(member.performance_details(), member)
+                self.__n_steps += 1
+            self._whisper("on generation end...")
+            self.evolver.on_generation_end(generation)
+            yield list(generation)
+
+    def __mutate_asynchronously(self, generation: Generation):
+        procedure = DEProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
             fitness_function=self.fitness_function, test_function=self.test_function, verbose=self.verbose > 3)
+        yield from self.worker_pool.imap(procedure, generation)
 
 class DEProcedure(DeviceCallable):
-    def __init__(self, generation: Generation, evolver: EvolveEngine, train_function, eval_function, fitness_function, test_function=None, verbose: bool = False):
+    def __init__(self, generation: Generation, evolver: DifferentialEvolveEngine, train_function, eval_function, fitness_function, test_function=None, verbose: bool = False):
         super().__init__(verbose)
         self.generation = generation
         self.evolver = evolver
@@ -341,4 +399,6 @@ class DEProcedure(DeviceCallable):
         if self.test_function is not None:
             self._print(f"testing member {member.id}...")
             self.test_function(member, device)
+        # update generation
+        self.generation.update(member)
         return member
