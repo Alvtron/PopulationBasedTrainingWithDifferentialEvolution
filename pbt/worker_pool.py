@@ -92,7 +92,7 @@ class WorkerPool(object):
         if self.__async_return_queue is None:
             self.__async_return_queue = self._manager.Queue()
         worker = next(self._workers_iterator)
-        self._print(f"queuing candidates for training...")
+        self._print(f"pushing job to worker receive queue...")
         trial = Trial(return_queue=self.__async_return_queue, function=function, parameters=parameters)
         worker.receive_queue.put(trial)
         
@@ -110,12 +110,12 @@ class WorkerPool(object):
         n_returned = 0
         failed_workers = set()
         return_queue = self._manager.Queue()
-        self._print(f"queuing candidates for training...")
+        self._print(f"queuing parameters...")
         for parameters, worker in zip(parameter_map, self._workers_iterator):
             trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
             worker.receive_queue.put(trial)
             n_sent += 1
-        self._print(f"awaiting trained candidates...")
+        self._print(f"awaiting results...")
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
             result = return_queue.get()
             if isinstance(result, FailMessage):

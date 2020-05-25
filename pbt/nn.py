@@ -135,6 +135,7 @@ class Evaluator(object):
             raise ValueError("The number of batches must be at least one or higher.")
         if batches is not None:
             self.test_data = create_subset_by_size(dataset=test_data, n_samples = batches * batch_size, shuffle = shuffle)
+            print(min(self.test_data.indices), "-->", max(self.test_data.indices), ", n =", len(self.test_data.indices), ", distinct:", len(self.test_data.indices)==len(set(self.test_data.indices)))
         else:
             self.test_data = test_data
         self.batch_size = batch_size

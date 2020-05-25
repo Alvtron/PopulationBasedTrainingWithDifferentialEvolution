@@ -67,28 +67,27 @@ class Controller(object):
     def _print_prefix(self) -> str:
         raise NotImplementedError
 
-    def __create_message(self, message : str, tag : str = None) -> str:
+    def __create_message(self, message : str) -> str:
         time = get_datetime_string()
         generation = f"G{self.__n_generations:03d}"
-        prefixes = ' '.join(prefix for prefix in (time, generation, self._print_prefix(), tag) if prefix is not None)
+        prefixes = ' '.join(prefix for prefix in (time, generation, self._print_prefix()) if prefix is not None)
         return f"{prefixes}: {message}"
 
-    def _say(self, message : str, member : Checkpoint = None) -> None:
+    def _say(self, message : str) -> None:
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 0."""
-        self.__register(message=message, verbosity=0, member=member)
+        self.__register(message=message, verbosity=0)
 
-    def _whisper(self, message : str, member = None) -> None:
+    def _whisper(self, message : str) -> None:
         """Prints the provided controller message in the appropriate syntax if verbosity level is above 1."""
-        self.__register(message=message, verbosity=1, member=member)
+        self.__register(message=message, verbosity=1)
 
-    def __register(self, message : str, verbosity : int, member : Checkpoint = None) -> None:
+    def __register(self, message : str, verbosity : int) -> None:
         """Logs and prints the provided message in the appropriate syntax. If a member is provided, the message is attached to that member."""
-        print_tag = member if member else self.__class__.__name__
-        file_tag = f"member_{member.id}" if member else self.__class__.__name__
-        full_message = self.__create_message(message, tag=print_tag)
+        file_tag = self.__class__.__name__
+        full_message = self.__create_message(message)
         self.__print(message=full_message, verbosity=verbosity)
         self.__log_to_file(message=full_message, tag=file_tag)
-        self.__log_to_tensorboard(message=full_message, tag=file_tag, global_steps=member.steps if member else None)
+        self.__log_to_tensorboard(message=full_message, tag=file_tag, global_steps=self.__n_generations)
     
     def __print(self, message : str, verbosity : int) -> None:
         if self.verbose > verbosity:
@@ -288,16 +287,17 @@ class PBTController(Controller):
             # increment steps
             self.__n_steps += 1
             # report member performance
-            self._say(member.performance_details(), member)
+            self._say(f"member {member.id} score: {member.performance_details()}")
             # queue member for next training
-            self._worker_pool.apply_async()
+            self._worker_pool.apply_async(procedure, member)
             # yield generation if N members has been processed
             if self.__n_steps % len(generation) == 0:
                 yield list(generation)
         yield list(generation)
 
     def create_procedure(self, generation: Generation):
-        return PBTProcedure(generation=generation, evolver=self.evolver, train_function=self.train_function, eval_function=self.eval_function,
+        return PBTProcedure(generation=generation, evolver=self.evolver,
+            train_function=self.train_function, eval_function=self.eval_function,
             test_function=self.test_function, verbose=self.verbose > 3)
 
 class PBTProcedure(DeviceCallable):
@@ -318,6 +318,7 @@ class PBTProcedure(DeviceCallable):
         # exploit and explore
         self._print(f"mutating member {member.id}...")
         member = self.evolver.mutate(member=member, generation=self.generation)
+        self.generation.update(member)
         # measure test set performance if available
         if self.test_function is not None:
             self._print(f"testing member {member.id}...")
@@ -382,7 +383,7 @@ class DEController(Controller):
             self.evolver.on_generation_start(generation)
             for member in self.__mutate_asynchronously(generation):
                 # report member performance
-                self._say(member.performance_details(), member)
+                self._say(f"member {member.id} score: {member.performance_details()}")
                 self.__n_steps += 1
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
@@ -409,7 +410,7 @@ class DEProcedure(DeviceCallable):
         self._print(f"evaluating member {member.id}...")
         self.eval_function(member, device)
         self._print(f"mutating member {member.id}...")
-        new_member = self.evolver.mutate(
+        member = self.evolver.mutate(
             parent=member,
             generation=self.generation,
             fitness_function=partial(self.fitness_function, device=device))

@@ -70,7 +70,6 @@ class Worker(CONTEXT.Process):
         self._id = id
         self.end_event = end_event
         self.receive_queue = receive_queue
-        self.cuda = device.startswith('cuda')
         self.device = device
         self.random_seed = random_seed
         self.verbose = verbose
@@ -85,6 +84,13 @@ class Worker(CONTEXT.Process):
         prefix = f"Worker {self._id} (PID {os.getpid()})"
         full_message = f"{prefix}: {message}"
         print(full_message)
+
+    def __process_trial(self, trial: Trial):
+        if self.device.startswith('cuda'):
+            with torch.cuda.device(self.device):
+                return trial(self.device)
+        else:
+            return trial(self.device)
 
     def run(self):
         self.__log("running...")
@@ -103,11 +109,8 @@ class Worker(CONTEXT.Process):
                 self.__log("Received wrong trial-type.")
                 raise TypeError('received wrong trial-type.')
             try:
-                if self.cuda:
-                    with torch.cuda.device(self.device):
-                        result = trial(self.device)
-                else:
-                    result = trial(self.device)
+                self.__log("running trial...")
+                result = self.__process_trial(trial)
                 self.__log("returning trial result...")
                 trial.return_queue.put(result)
             except Exception:
