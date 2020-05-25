@@ -7,7 +7,7 @@ from warnings import warn
 
 import torch
 import torchvision
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, Subset, DataLoader
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
 from torch.optim import Optimizer
@@ -16,6 +16,11 @@ from .member import Checkpoint, MissingStateError
 from .hyperparameters import Hyperparameters
 from .models.hypernet import HyperNet
 from pbt.utils.data import create_subset, create_subset_by_size
+
+def create_subset_with_indices(dataset : Dataset, indices : Sequence[int], shuffle : bool = False) -> Subset:
+    if not indices:
+        raise ValueError("indice-sequence is empty.")
+    return Subset(dataset, random.sample(indices, len(indices)) if shuffle else indices)
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
@@ -40,7 +45,6 @@ class Trainer(object):
         print(message, end=end)
 
     def create_model(self, hyper_parameters: Hyperparameters = None, model_state: dict = None, device: str = 'cpu'):
-        self._print("creating model...")
         model = self.model_class().to(device)
         if model_state is not None:
             self._print("loading model state...")
@@ -52,7 +56,6 @@ class Trainer(object):
         return model
 
     def create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict  = None):
-        self._print("creating optimizer...")
         get_value_dict = {hp_name:hp_value.value for hp_name, hp_value in hyper_parameters.optimizer.items()}
         optimizer = self.optimizer_class(model.parameters(), **get_value_dict)
         if optimizer_state:
@@ -63,6 +66,13 @@ class Trainer(object):
                 for param_group in optimizer.param_groups:
                     param_group[param_name] = param_value.value
         return optimizer        
+
+    def create_subset(self, start_step : int, end_step : int, shuffle : bool):
+        dataset_size = len(self.train_data)
+        start_index = (start_step * self.batch_size) % dataset_size
+        n_samples = (end_step - start_step) * self.batch_size
+        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
+        return create_subset_with_indices(dataset=self.train_data, indices=indices, shuffle=shuffle)
 
     def __call__(self, checkpoint: Checkpoint, device: str = 'cpu'):
         start_train_time_ns = time.time_ns()
@@ -79,7 +89,8 @@ class Trainer(object):
         optimizer = self.create_optimizer(model, checkpoint.parameters, checkpoint.optimizer_state)
         # prepare batches
         self._print("creating batches...")
-        subset = create_subset(dataset=self.train_data, start=checkpoint.steps * self.batch_size, end=(checkpoint.steps + self.step_size) * self.batch_size, shuffle=self.shuffle)
+        #subset = create_subset(dataset=self.train_data, start=checkpoint.steps * self.batch_size, end=(checkpoint.steps + self.step_size) * self.batch_size, shuffle=self.shuffle)
+        subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + self.step_size, shuffle = False)
         batches = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
         num_batches = len(batches)
         # reset loss dict
@@ -135,7 +146,6 @@ class Evaluator(object):
             raise ValueError("The number of batches must be at least one or higher.")
         if batches is not None:
             self.test_data = create_subset_by_size(dataset=test_data, n_samples = batches * batch_size, shuffle = shuffle)
-            print(min(self.test_data.indices), "-->", max(self.test_data.indices), ", n =", len(self.test_data.indices), ", distinct:", len(self.test_data.indices)==len(set(self.test_data.indices)))
         else:
             self.test_data = test_data
         self.batch_size = batch_size
@@ -150,15 +160,13 @@ class Evaluator(object):
         print(message, end=end)
 
     def create_model(self, model_state: dict, device: str):
-        self._print("creating model...")
         model = self.model_class().to(device)
-        if model_state:
-            model.load_state_dict(model_state)
+        model.load_state_dict(model_state)
         model.eval()
         return model
 
     def __call__(self, checkpoint: dict, device: str):
-        """Evaluate model on the provided validation or test set."""
+        """Evaluate checkpoint model."""
         start_eval_time_ns = time.time_ns()
         # load checkpoint state
         self._print(f"loading state of checkpoint {checkpoint.id}...")

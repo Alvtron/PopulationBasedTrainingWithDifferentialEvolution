@@ -206,8 +206,8 @@ def run(task : str, evolver : str, population_size : int, batch_size : int, trai
         f"Logging: {logging}",
         f"Devices: {devices}",
         f"Number of processes: {n_jobs}"]
-    #if devices == "cuda":
-    #    obj_info.append(f"Number of GPUs: {torch.cuda.device_count()}")
+    if any(device.startswith('cuda') for device in devices):
+        obj_info.append(f"Number of GPUs: {torch.cuda.device_count()}")
     obj_info = "\n".join(obj_info)
     print("\n", obj_info, "\n")
     database.create_file(tag="info", file_name="information.txt").write_text(obj_info)
