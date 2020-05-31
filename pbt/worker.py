@@ -19,8 +19,10 @@ from multiprocessing.pool import ThreadPool
 import torch
 import numpy as np
 
+from pbt.nn import DeviceCallable
+
 # various settings for reproducibility
-# set random state 
+# set random state
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
@@ -34,37 +36,27 @@ CONTEXT = torch.multiprocessing.get_context("spawn")
 
 STOP_FLAG = None
 
-class DeviceCallable(object):
-    def __init__(self, verbose: bool = False):
-        self.verbose = verbose
-
-    def _print(self, message : str):
-        if not self.verbose:
-            return
-        full_message = f"PID-{os.getpid()}: {message}"
-        print(full_message)
-
-    @abstractmethod
-    def __call__(self, checkpoint: object, device: str, **kwargs) -> object:
-        raise NotImplementedError()
 
 class Trial:
     def __init__(self, return_queue, function: DeviceCallable, parameters: object):
         self.return_queue = return_queue
-        self.function = function
-        self.parameters: DeviceCallable = parameters
+        self.function: DeviceCallable = function
+        self.parameters = parameters
 
     def __call__(self, device: str):
         return self.function(self.parameters, device=device)
 
+
 @dataclass
 class FailMessage(object):
-    sender_id : int
-    text : str
-    exception : str = None
+    sender_id: int
+    text: str
+    exception: str = None
+
 
 class Worker(CONTEXT.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
+
     def __init__(self, id: int, end_event, receive_queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
         super().__init__()
         self._id = id
@@ -78,7 +70,7 @@ class Worker(CONTEXT.Process):
     def id(self):
         return self._id
 
-    def __log(self, message : str):
+    def __log(self, message: str):
         if not self.verbose:
             return
         prefix = f"Worker {self._id} (PID {os.getpid()})"
@@ -118,7 +110,8 @@ class Worker(CONTEXT.Process):
                 self.__log("trial excecution failed! Exception:")
                 traceback_stacktrace = traceback.format_exc()
                 self.__log(str(traceback_stacktrace))
-                fail_message = FailMessage(self._id, "trial excecution failed!", str(traceback_stacktrace))
+                fail_message = FailMessage(
+                    self._id, "trial excecution failed!", str(traceback_stacktrace))
                 trial.return_queue.put(fail_message)
                 # delete failed trial
                 del trial

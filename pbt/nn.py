@@ -1,10 +1,13 @@
+import os
 import time
 import random
 import itertools
 import collections
+from abc import abstractmethod
 from copy import deepcopy
 from warnings import warn
 
+import numpy as np
 import torch
 import torchvision
 from torch.utils.data import Dataset, Subset, DataLoader
@@ -17,15 +20,28 @@ from .hyperparameters import Hyperparameters
 from .models.hypernet import HyperNet
 from pbt.utils.data import create_subset, create_subset_by_size
 
-def create_subset_with_indices(dataset : Dataset, indices : Sequence[int], shuffle : bool = False) -> Subset:
-    if not indices:
-        raise ValueError("indice-sequence is empty.")
-    return Subset(dataset, random.sample(indices, len(indices)) if shuffle else indices)
+
+class DeviceCallable(object):
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+
+    def _print(self, message: str):
+        if not self.verbose:
+            return
+        full_message = f"PID-{os.getpid()}: {message}"
+        print(full_message)
+
+    @abstractmethod
+    def __call__(self, checkpoint: object, device: str, **kwargs) -> object:
+        raise NotImplementedError
+
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
-    def __init__(self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, batch_size: int,
-            loss_functions: dict, loss_metric : str, step_size: int = 1, shuffle: bool = False, verbose: bool = False):
+
+    def __init__(
+        self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, batch_size: int,
+        loss_functions: dict, loss_metric: str, step_size: int = 1, shuffle: bool = False):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
         self.LOSS_GROUP = 'train'
@@ -37,67 +53,47 @@ class Trainer(object):
         self.loss_functions = loss_functions
         self.loss_metric = loss_metric
         self.shuffle = shuffle
-        self.verbose = verbose
 
-    def _print(self, message: str = None, end: str = '\n'):
-        if not self.verbose:
-            return
-        print(message, end=end)
-
-    def create_model(self, hyper_parameters: Hyperparameters = None, model_state: dict = None, device: str = 'cpu'):
+    def create_model(self, hyper_parameters: Hyperparameters, device: str, model_state: dict = None):
         model = self.model_class().to(device)
         if model_state is not None:
-            self._print("loading model state...")
+            # loading model state
             model.load_state_dict(model_state)
-        if isinstance(model, HyperNet) and hyper_parameters is not None and hasattr(hyper_parameters, 'model'):
-            self._print("applying hyper-parameters...")
+        if isinstance(model, HyperNet) and hasattr(hyper_parameters, 'model'):
+            # applying hyper-parameters
             model.apply_hyper_parameters(hyper_parameters.model, device)
         model.train()
         return model
 
-    def create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict  = None):
-        get_value_dict = {hp_name:hp_value.value for hp_name, hp_value in hyper_parameters.optimizer.items()}
-        optimizer = self.optimizer_class(model.parameters(), **get_value_dict)
-        if optimizer_state:
-            self._print("loading optimizer state...")
+    def create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict = None):
+        hp_value_dict = {hp_name: hp_value.value for hp_name, hp_value in hyper_parameters.optimizer.items()}
+        optimizer = self.optimizer_class(model.parameters(), **hp_value_dict)
+        if optimizer_state is not None:
+            # loading optimizer state
             optimizer.load_state_dict(optimizer_state)
-            self._print("applying hyper-parameters...")
+            # applying hyper-parameters
             for param_name, param_value in hyper_parameters.optimizer.items():
                 for param_group in optimizer.param_groups:
                     param_group[param_name] = param_value.value
-        return optimizer        
+        return optimizer
 
-    def create_subset(self, start_step : int, end_step : int, shuffle : bool):
-        dataset_size = len(self.train_data)
-        start_index = (start_step * self.batch_size) % dataset_size
-        n_samples = (end_step - start_step) * self.batch_size
-        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
-        return create_subset_with_indices(dataset=self.train_data, indices=indices, shuffle=shuffle)
-
-    def __call__(self, checkpoint: Checkpoint, device: str = 'cpu'):
+    def __call__(self, checkpoint: Checkpoint, device: str):
         start_train_time_ns = time.time_ns()
-        # load checkpoint state
-        self._print(f"loading state of checkpoint {checkpoint.id}...")
-        try:
-            checkpoint.load_state(device=device, missing_ok=checkpoint.steps == 0)
-        except MissingStateError:
-            warn(f"checkpoint {checkpoint.id} at step {checkpoint.steps} with missing state-files.")
         # preparing model and optimizer
-        self._print("creating model...")
-        model = self.create_model(checkpoint.parameters, checkpoint.model_state, device)
-        self._print("creating optimizer...")
-        optimizer = self.create_optimizer(model, checkpoint.parameters, checkpoint.optimizer_state)
+        model = self.create_model(
+            hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
+        optimizer = self.create_optimizer(
+            model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
         # prepare batches
-        self._print("creating batches...")
-        #subset = create_subset(dataset=self.train_data, start=checkpoint.steps * self.batch_size, end=(checkpoint.steps + self.step_size) * self.batch_size, shuffle=self.shuffle)
-        subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + self.step_size, shuffle = False)
-        batches = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
+        subset = create_subset(
+            dataset=self.train_data, start=checkpoint.steps * self.batch_size, end=(checkpoint.steps + self.step_size) * self.batch_size, shuffle=self.shuffle)
+        batches = DataLoader(
+            dataset=subset, batch_size=self.batch_size, shuffle=False, drop_last=False)
         num_batches = len(batches)
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
-        self._print("Training...")
-        for batch_index, (x, y) in enumerate(batches, 1):
-            self._print(f"({batch_index}/{num_batches})", end=" ")
+        # train
+        for x, y in batches:
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             # 1. Forward pass: compute predicted y by passing x to the model.
@@ -119,11 +115,9 @@ class Trainer(object):
                     with torch.no_grad():
                         loss = metric_function(output, y)
                     checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(num_batches)
-                self._print(f"{metric_type}: {loss.item():4f}", end=" ")
                 del loss
             del output
-            checkpoint.steps += 1
-            self._print(end="\n")
+            checkpoint.steps += len(x)
         # set new state
         checkpoint.model_state = model.state_dict()
         checkpoint.optimizer_state = optimizer.state_dict()
@@ -131,33 +125,26 @@ class Trainer(object):
         del model
         del optimizer
         torch.cuda.empty_cache()
-        # unload checkpoint state
-        self._print(f"unloading state of checkpoint {checkpoint.id}...")
-        checkpoint.unload_state()
         # save time
         checkpoint.time[self.LOSS_GROUP] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
 
+
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
-    def __init__(self, model_class: HyperNet, test_data: Dataset, batch_size: int, loss_functions: dict, loss_group: str = 'eval',
-            batches: int = None, shuffle: bool = False, verbose: bool = False):
+
+    def __init__(self, model_class: HyperNet, test_data: Dataset, batch_size: int, loss_functions: dict, loss_group: str = 'eval', batches: int = None, shuffle: bool = False):
         self.model_class = model_class
         if batches is not None and batches < 1:
             raise ValueError("The number of batches must be at least one or higher.")
         if batches is not None:
-            self.test_data = create_subset_by_size(dataset=test_data, n_samples = batches * batch_size, shuffle = shuffle)
+            self.test_data = create_subset_by_size(
+                dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle)
         else:
             self.test_data = test_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
         self.shuffle = shuffle
-        self.verbose = verbose
-
-    def _print(self, message: str = None, end: str = '\n'):
-        if not self.verbose:
-            return
-        print(message, end=end)
 
     def create_model(self, model_state: dict, device: str):
         model = self.model_class().to(device)
@@ -168,21 +155,15 @@ class Evaluator(object):
     def __call__(self, checkpoint: dict, device: str):
         """Evaluate checkpoint model."""
         start_eval_time_ns = time.time_ns()
-        # load checkpoint state
-        self._print(f"loading state of checkpoint {checkpoint.id}...")
-        checkpoint.load_state(device=device, missing_ok=False)
         # preparing model
-        self._print("creating model...")
-        model = self.create_model(checkpoint.model_state, device)
+        model = self.create_model(model_state=checkpoint.model_state, device=device)
         # prepare batches
-        self._print("creating batches...")
-        batches = DataLoader(dataset = self.test_data, batch_size = self.batch_size, shuffle = False)
+        batches = DataLoader(dataset=self.test_data, batch_size=self.batch_size, shuffle=False, drop_last=False)
         num_batches = len(batches)
-        self._print("evaluating...")
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
-        for batch_index, (x, y) in enumerate(batches, 1):
-            if self.verbose: print(f"({batch_index}/{num_batches})", end=" ")
+        # evaluate
+        for x, y in batches:
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             with torch.no_grad():
@@ -191,28 +172,47 @@ class Evaluator(object):
                 with torch.no_grad():
                     loss = metric_function(output, y)
                 checkpoint.loss[self.loss_group][metric_type] += loss.item() / float(num_batches)
-                if self.verbose: print(f"{metric_type}: {loss.item():4f}", end=" ")
                 del loss
-            if self.verbose: print(end="\n")
             del output
         # clean GPU memory
         del model
         torch.cuda.empty_cache()
-        # unload checkpoint state
-        self._print(f"unloading state of checkpoint {checkpoint.id}...")
-        checkpoint.unload_state()
         # save time
         checkpoint.time[self.loss_group] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
 
-class RandomFitnessApproximation():
-    def __init__(self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, test_data: Dataset, batches: int, batch_size : int,
-            loss_functions: dict, loss_metric: str, verbose: bool = False):
+
+class Step():
+    def __init__(self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, test_data: Dataset, step_size: int, batch_size: int,
+                 loss_functions: dict, loss_metric: str):
         # n batches for training
-        self.trainer = Trainer(model_class=model_class, optimizer_class=optimizer_class, train_data=train_data, step_size=batches,
-            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric, shuffle=False, verbose=verbose)
+        self.trainer = Trainer(
+            model_class=model_class, optimizer_class=optimizer_class, train_data=train_data, step_size=step_size,
+            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric, shuffle=False)
         # n random batches for evaluation
-        self.evaluator = Evaluator(model_class=model_class, test_data=test_data, batches=batches,
-            batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True, verbose=verbose)
+        self.evaluator = Evaluator(
+            model_class=model_class, test_data=test_data, batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
+
+    def __call__(self, checkpoint: Checkpoint, device: str):
+        # load checkpoint state
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps == 0)
+        # train and evaluate
+        self.trainer(checkpoint, device)
+        self.evaluator(checkpoint, device)
+        # unload checkpoint state
+        checkpoint.unload_state()
+
+
+class RandomFitnessApproximation():
+    def __init__(self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, test_data: Dataset, batches: int, batch_size: int,
+                 loss_functions: dict, loss_metric: str, verbose: bool = False):
+        # n batches for training
+        self.trainer = Trainer(
+            model_class=model_class, optimizer_class=optimizer_class, train_data=train_data, step_size=batches,
+            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric, shuffle=False)
+        # n random batches for evaluation
+        self.evaluator = Evaluator(
+            model_class=model_class, test_data=test_data, batches=batches,
+            batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
         self.weight = (batches * batch_size) / len(test_data)
 
     def __adjust_loss(self, previous_loss: dict, fitness_loss: dict) -> dict:
@@ -221,11 +221,19 @@ class RandomFitnessApproximation():
             for loss_type in fitness_loss[loss_group]:
                 previous_loss_value = previous_loss[loss_group][loss_type]
                 fitness_loss_value = fitness_loss[loss_group][loss_type]
-                new_loss[loss_group][loss_type] = (previous_loss_value * (1 - self.weight)) + (fitness_loss_value * self.weight)
+                new_loss[loss_group][loss_type] = (
+                    previous_loss_value * (1 - self.weight)) + (fitness_loss_value * self.weight)
         return new_loss
 
     def __call__(self, checkpoint: Checkpoint, device: str):
+        # copy old loss
         old_loss = deepcopy(checkpoint.loss)
+        # load checkpoint state
+        checkpoint.load_state(device=device, missing_ok=checkpoint.steps == 0)
+        # train and evaluate
         self.trainer(checkpoint, device)
         self.evaluator(checkpoint, device)
+        # unload checkpoint state
+        checkpoint.unload_state()
+        # correct loss
         checkpoint.loss = self.__adjust_loss(old_loss, checkpoint.loss)

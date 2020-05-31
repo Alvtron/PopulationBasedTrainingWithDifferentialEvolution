@@ -1,0 +1,16 @@
+Problem:
+
+Hyper-parameters steep too low too fast
+
+Shared between components:
+
+Checked:
+Hyper-parameters
+Shared memory
+
+Unchecked:
+Controller
+Training
+    subset
+Evaluation
+    random_subset

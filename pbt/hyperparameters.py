@@ -56,7 +56,7 @@ class _Hyperparameter(object):
         
 
     def __str__(self) -> str:
-        return f"v: {self.value}, n: {self.normalized:.3f} U({self.lower_bound},{self.upper_bound})"
+        return f"v: {self.value}, n: {self.normalized:.4E} U({self.lower_bound},{self.upper_bound})"
 
     @property
     def normalized(self) -> float:
@@ -481,3 +481,16 @@ class Hyperparameters(object):
         for group_name, group_dict in self.__dict__.items():
             for hp_name, hp_value in group_dict.items():
                 yield (f"{group_name}/{hp_name}", hp_value)
+
+def hyper_parameter_change_details(old_hps: Hyperparameters, new_hps: Hyperparameters) -> str:
+    entries = list()
+    for key in old_hps.keys():
+        old_value = old_hps[key].value
+        new_value = new_hps[key].value
+        change = new_value - old_value
+        if change != 0.0:
+            change_symbol = f'+' if change > 0.0 else ''
+            entries.append(f"{key}: {new_value:.2E} ({change_symbol}{change:.2E})")
+        else:
+            entries.append(f"{key}: {new_value:.2E}")
+    return ", ".join(entries)
