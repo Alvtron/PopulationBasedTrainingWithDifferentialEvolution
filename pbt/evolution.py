@@ -361,7 +361,7 @@ class SHADE(DifferentialEvolveEngine):
         if f_max < f_min:
             raise ValueError("f_max cannot be less than f_min.")
         self.archive = ExternalArchive(
-            manager=manager, size=round(N_INIT * r_arc), verbose=True)
+            manager=manager, size=round(N_INIT * r_arc), verbose=self.verbose)
         self.memory = HistoricalMemory(
             manager=manager, size=memory_size, default=(f_max - f_min) / 2.0)
         self.F_MIN = f_min
