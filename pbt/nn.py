@@ -146,7 +146,7 @@ class Evaluator(object):
         model = self.create_model(model_state=checkpoint.model_state, device=device)
         # prepare batches
         batches = DataLoader(dataset=self.test_data, batch_size=self.batch_size, shuffle=self.shuffle, drop_last=False)
-        num_batches = len(batches)
+        num_batches = len(batches) if self.n_batches is None else self.n_batches
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
         # evaluate
@@ -161,7 +161,7 @@ class Evaluator(object):
                 checkpoint.loss[self.loss_group][metric_type] += loss.item() / float(num_batches)
                 del loss
             del output
-            if self.n_batches is not None and self.index == self.n_batches:
+            if index == num_batches:
                 break
         # clean GPU memory
         del model
