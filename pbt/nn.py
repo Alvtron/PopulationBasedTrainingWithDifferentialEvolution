@@ -32,21 +32,6 @@ torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-class DeviceCallable(object):
-    def __init__(self, verbose: bool = False):
-        self.verbose = verbose
-
-    def _print(self, message: str):
-        if not self.verbose:
-            return
-        full_message = f"PID-{os.getpid()}: {message}"
-        print(full_message)
-
-    @abstractmethod
-    def __call__(self, checkpoint: object, device: str, **kwargs) -> object:
-        raise NotImplementedError
-
-
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
 
@@ -147,11 +132,8 @@ class Evaluator(object):
         self.model_class = model_class
         if batches is not None and batches < 1:
             raise ValueError("The number of batches must be at least one or higher.")
-        if batches is not None:
-            self.test_data = create_subset_by_size(
-                dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle)
-        else:
-            self.test_data = test_data
+        self.test_data = test_data
+        self.n_batches = batches
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
@@ -163,18 +145,15 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, checkpoint: dict, device: str):
-        """Evaluate checkpoint model."""
+    def __call__(self, checkpoint : dict, device : str = 'cpu'):
+        """Evaluate model on the provided validation or test set."""
         start_eval_time_ns = time.time_ns()
-        # preparing model
-        model = self.create_model(model_state=checkpoint.model_state, device=device)
-        # prepare batches
-        batches = DataLoader(dataset=self.test_data, batch_size=self.batch_size, shuffle=False, drop_last=False)
-        num_batches = len(batches)
+        model = self.create_model(checkpoint.model_state, device)
+        batches = DataLoader(dataset = self.test_data, batch_size = self.batch_size, shuffle = self.shuffle)
+        num_batches = len(batches) if self.n_batches is None else self.n_batches
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
-        # evaluate
-        for x, y in batches:
+        for batch_index, (x, y) in enumerate(batches, 1):
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             with torch.no_grad():
@@ -185,10 +164,12 @@ class Evaluator(object):
                 checkpoint.loss[self.loss_group][metric_type] += loss.item() / float(num_batches)
                 del loss
             del output
+            if self.n_batches is not None and batch_index == self.n_batches:
+                break
         # clean GPU memory
         del model
         torch.cuda.empty_cache()
-        # save time
+        # update checkpoint
         checkpoint.time[self.loss_group] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
 
 

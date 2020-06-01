@@ -7,6 +7,7 @@ import math
 import random
 import warnings
 import itertools
+from collections.abc import Iterable
 from functools import partial
 from typing import List, Sequence, Iterable, Callable, Generator
 
@@ -41,7 +42,7 @@ class WorkerPool(object):
         self._cuda = any(device.startswith('cuda') for device in devices)
         self._context = torch.multiprocessing.get_context('spawn')
         self._manager = manager
-        self._end_event = self._context.Event()
+        self._end_event = manager.Event()
         send_queues = [self._context.Queue() for _ in devices]
         self._workers: List[Worker] = [
             Worker(id=id, end_event=self._end_event, receive_queue=send_queue,
@@ -122,6 +123,10 @@ class WorkerPool(object):
         return result
 
     def imap(self, function: Callable[[object], object], parameter_map: Iterable[object]) -> Generator[object, None, None]:
+        if not callable(function):
+            raise TypeError("provided function is not callable")
+        if not isinstance(parameter_map, Iterable):
+            raise TypeError("parameter_map is not iterable")
         n_sent = 0
         n_returned = 0
         failed_workers = set()

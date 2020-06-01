@@ -27,11 +27,12 @@ from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
 
 import pbt.member
+from pbt.worker import DeviceCallable
 from pbt.worker_pool import WorkerPool
 from pbt.member import Checkpoint, Generation
 from pbt.utils.date import get_datetime_string
 from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters, hyper_parameter_change_details
-from pbt.nn import DeviceCallable, Trainer, Evaluator, Step, RandomFitnessApproximation
+from pbt.nn import Trainer, Evaluator, Step, RandomFitnessApproximation
 from pbt.evolution import ExploitAndExplore, DifferentialEvolveEngine
 from pbt.database import Database
 from pbt.garbage import GarbageCollector
@@ -364,7 +365,7 @@ class DEController(Controller):
         spawned_members = self.evolver.spawn(initial)
         # create generation
         generation = Generation(
-            # dict_constructor=self._manager.dict,
+            dict_constructor=self._manager.dict,
             members=spawned_members)
         procedure = DEProcedure(
             generation=generation, evolver=self.evolver, fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
