@@ -13,7 +13,7 @@ def randc(mean: float, std: float):
         p = random.random()
     return mean + std * math.tan(math.pi * (p - 0.5))
 
-def mean_wl(S, weights : Sequence[float]) -> float:
+def mean_wl(S, weights: Sequence[float]) -> float:
     """
     The weighted Lehmer mean of a tuple x of positive real numbers,
     with respect to a tuple w of positive weights.

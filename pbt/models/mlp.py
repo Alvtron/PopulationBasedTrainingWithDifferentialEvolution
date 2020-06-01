@@ -6,7 +6,7 @@ import torch.nn as nn
 from .hypernet import HyperNet
 
 class MLP(HyperNet):
-    def __init__(self, output_size : int):
+    def __init__(self, output_size: int):
         super(MLP, self).__init__()
         if not 0 < output_size <= 64:
             raise ValueError("Output size must be between 1 and 64.")

@@ -50,16 +50,16 @@ def is_increasing(df, order=1):
     mean = slopes.values.mean()
     return mean >= 0
 
-def save_figure_to_files(figure, directory, filename : str):
+def save_figure_to_files(figure, directory, filename: str):
     figure.savefig(fname=Path(directory, f"{filename}.png"), format='png', transparent=False)
     figure.savefig(fname=Path(directory, f"{filename}.pdf"), format='pdf', transparent=True)
 
 class Analyzer(object):
-    def __init__(self, database : ReadOnlyDatabase, verbose : bool = False):
-        self.database : ReadOnlyDatabase = database
+    def __init__(self, database: ReadOnlyDatabase, verbose: bool = False):
+        self.database: ReadOnlyDatabase = database
         self.verbose = verbose
 
-    def __print(self, message : str):
+    def __print(self, message: str):
         if self.verbose:
             print(f"Analyzer: {message}")
 
@@ -84,7 +84,7 @@ class Analyzer(object):
         get_worst = max if self.__minimize_score() else min
         return get_worst(self.__get_latest_members(), key=lambda x: x.test_score() if x.test_score() else x.eval_score())
 
-    def test(self, evaluator : Evaluator, save_directory : str, device : str = 'cpu'):
+    def test(self, evaluator: Evaluator, save_directory: str, device: str = 'cpu'):
         self.__print(f"Finding best member in population...")
         best = self.__get_best_member()
         self.__print(f"Testing {best}...")
@@ -201,7 +201,7 @@ class Analyzer(object):
         self.__create_loss_plot_files(directory=save_directory, prefix='loss', figsize=(10,7), save_csv=True)
         self.__create_loss_plot_files(directory=save_directory, prefix='loss', suffix='small', figsize=(10,4), save_csv=False)
 
-    def __create_loss_plot_files(self, directory, prefix : str = None, suffix : str = None, figsize : tuple = (10,7), save_csv : bool = False):
+    def __create_loss_plot_files(self, directory, prefix: str = None, suffix: str = None, figsize: tuple = (10,7), save_csv: bool = False):
         # default style
         DEFAULT_COLOR = 'darkcyan'
         DEFAULT_LINE_SIZE = 2
@@ -252,7 +252,7 @@ class Analyzer(object):
         self.__create_time_plot_files(directory=save_directory, prefix='time', figsize = (10,7), save_csv=True)
         self.__create_time_plot_files(directory=save_directory, prefix='time', suffix='small', figsize = (10,4), save_csv=False)
 
-    def __create_time_plot_files(self, directory, prefix : str = None, suffix : str = None, figsize = (10,7), save_csv : bool = False):
+    def __create_time_plot_files(self, directory, prefix: str = None, suffix: str = None, figsize = (10,7), save_csv: bool = False):
         for time_group, df in self.__create_time_dataframes().items():
             if df.empty:
                 continue
@@ -286,7 +286,7 @@ class Analyzer(object):
         self.__create_hyper_parameter_plot_files_v2(directory=save_directory, prefix='hp', suffix='lines', figsize=(10,7), save_csv=False)
         self.__create_hyper_parameter_plot_files_v2(directory=save_directory, prefix='hp', suffix='lines_small', figsize=(10,4), save_csv=False)
 
-    def __create_hyper_parameter_plot_files_v1(self, directory, prefix : str = '', suffix : str = '', figsize : tuple = (10,7), save_csv : bool = False):
+    def __create_hyper_parameter_plot_files_v1(self, directory, prefix: str = '', suffix: str = '', figsize: tuple = (10,7), save_csv: bool = False):
         # set color map
         COLOR_MAP = plt.get_cmap('winter')
         TAB_COLORS = [COLOR_MAP(i/10) for i in range(0, 11, 1)]
@@ -349,7 +349,7 @@ class Analyzer(object):
                 df.to_csv(Path(directory, f"{filename}.csv"))
             plt.clf()
         
-    def __create_hyper_parameter_plot_files_v2(self, directory, prefix : str = None, suffix : str = None, figsize : tuple = (10,2), save_csv : bool = False):
+    def __create_hyper_parameter_plot_files_v2(self, directory, prefix: str = None, suffix: str = None, figsize: tuple = (10,2), save_csv: bool = False):
         # set colors
         FILL_COLOR = 'gainsboro'
         MEAN_COLOR = 'gray'

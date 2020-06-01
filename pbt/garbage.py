@@ -4,13 +4,13 @@ from pbt.database import Database
 from pbt.member import Generation
 
 class GarbageCollector:
-    def __init__(self, database : Database, history_limit : int = None, verbose : int = 0):
+    def __init__(self, database: Database, history_limit: int = None, verbose: int = 0):
         self.database = database
         self.history_limit = history_limit
         self.verbose = verbose
         self.__processed_identities = set()
 
-    def _log(self, message : str) -> None:
+    def _log(self, message: str) -> None:
         if self.verbose <= 0:
             return
         print(f"GC: {message}")

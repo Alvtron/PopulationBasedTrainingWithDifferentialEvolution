@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, Subset
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
 
-def display_class_balance(labels : Sequence[object]):
+def display_class_balance(labels: Sequence[object]):
     for unique, counts in zip(*np.unique(labels, return_counts=True)):
         print(f"{unique}: {counts} ({counts/len(labels)*100.0:.2f}%)")
 
@@ -25,7 +25,7 @@ def create_subset(dataset: Dataset, start: int, end: int = None, shuffle: bool =
     selected_indices = list(itertools.islice(itertools.cycle(indices), start, end))
     return Subset(dataset, selected_indices)
 
-def create_subset_by_size(dataset: Dataset, n_samples: int, shuffle : bool) -> Subset:
+def create_subset_by_size(dataset: Dataset, n_samples: int, shuffle: bool) -> Subset:
     dataset_size = len(dataset)
     if n_samples > dataset_size:
         raise ValueError("the number of samples exceeds the dataset size.")
@@ -36,7 +36,7 @@ def create_subset_by_size(dataset: Dataset, n_samples: int, shuffle : bool) -> S
         indices = indices[:n_samples]
     return Subset(dataset, indices)
 
-def split(dataset : Dataset, fraction : float) -> (Subset, Subset):
+def split(dataset: Dataset, fraction: float) -> (Subset, Subset):
     assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"
     dataset_length = len(dataset)
     first_set_length = round(fraction * dataset_length)
@@ -44,7 +44,7 @@ def split(dataset : Dataset, fraction : float) -> (Subset, Subset):
     second_set = create_subset(dataset, first_set_length, dataset_length)
     return first_set, second_set
 
-def random_split(dataset : Dataset, fraction : float, random_state : int = None) -> (Subset, Subset):
+def random_split(dataset: Dataset, fraction: float, random_state: int = None) -> (Subset, Subset):
     if random_state: torch.manual_seed(random_state)
     assert 0.0 <= fraction <= 1.0, f"The provided fraction must be between 0.0 and 1.0!"
     dataset_length = len(dataset)
@@ -56,7 +56,7 @@ def random_split(dataset : Dataset, fraction : float, random_state : int = None)
     second_set = Subset(second_set.dataset, second_set.indices)
     return first_set, second_set
 
-def stratified_split(dataset : Dataset, labels : Iterable, fraction : float, random_state : int = None, return_labels : bool = False):
+def stratified_split(dataset: Dataset, labels: Iterable, fraction: float, random_state: int = None, return_labels: bool = False):
     if random_state: random.seed(random_state)
     if isinstance(labels, torch.Tensor):
         labels = labels.numpy().tolist()

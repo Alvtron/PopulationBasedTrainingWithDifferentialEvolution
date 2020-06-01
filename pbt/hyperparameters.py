@@ -19,29 +19,29 @@ class _Hyperparameter(object):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.
     '''
-    def __init__(self, *args : Iterable[HP_TYPE], value : HP_TYPE = None, constraint : str = 'clip') -> None:
+    def __init__(self, *args: Iterable[HP_TYPE], value: HP_TYPE = None, constraint: str = 'clip') -> None:
         ''' 
         Provide a set of [lower bound, upper bound] as float/int, or categorical elements [obj1, obj2, ..., objn].
         Sets the search space and samples a new candidate from an uniform distribution.
         '''
         if args == None:
             raise ValueError("No arguments provided.")
-        self.MIN_NORM : float = 0.0
-        self.MAX_NORM : float = 1.0
+        self.MIN_NORM: float = 0.0
+        self.MAX_NORM: float = 1.0
         self.set_constraint(constraint)
-        self.search_space : Tuple[HP_TYPE, ...] = tuple(args)
+        self.search_space: Tuple[HP_TYPE, ...] = tuple(args)
         self._normalized = self.from_value(value) if value is not None else random.uniform(self.MIN_NORM, self.MAX_NORM)
 
     def __repr__(self):
         return repr(self.value)
 
-    def _translate_from_norm(self, normalized_value : float) -> float:
+    def _translate_from_norm(self, normalized_value: float) -> float:
         return translate(normalized_value, self.MIN_NORM, self.MAX_NORM, self.lower_bound, self.upper_bound)
     
     def _translate_from_value(self, value) -> float:
         return translate(value, self.lower_bound, self.upper_bound, self.MIN_NORM, self.MAX_NORM)
 
-    def set_constraint(self, constraint : str):
+    def set_constraint(self, constraint: str):
         if isinstance(constraint, str):
             if constraint == 'clip':
                 self._constrain = partial(clip, min_value=self.MIN_NORM, max_value=self.MAX_NORM)
@@ -64,7 +64,7 @@ class _Hyperparameter(object):
         return self._normalized
 
     @normalized.setter
-    def normalized(self, value : float) -> float:
+    def normalized(self, value: float) -> float:
         """Sets the normalized hyperparameter value."""
         if not isinstance(value, float) or math.isnan(value) or math.isinf(value):
             raise ValueError("value must be a real-value of type float.")
@@ -242,7 +242,7 @@ class ContiniousHyperparameter(_Hyperparameter):
     '''
     Class for creating and storing a hyperparameter in a given, constrained search space.
     '''
-    def __init__(self, minimum : Union[int, float], maximum : Union[int, float], value : Union[int, float] = None, constraint : str = 'clip'):
+    def __init__(self, minimum: Union[int, float], maximum: Union[int, float], value: Union[int, float] = None, constraint: str = 'clip'):
         ''' 
         Provide a set of [lower bound, upper bound] as float/int.
         Sets the search space and samples a new candidate from an uniform distribution.
@@ -265,7 +265,7 @@ class ContiniousHyperparameter(_Hyperparameter):
         return self.from_normalized(self._normalized)
 
     @value.setter
-    def value(self, value : Union[int, float]):
+    def value(self, value: Union[int, float]):
         """Sets the hyperparameter value."""
         if not(self.lower_bound <= value <= self.upper_bound):
             warnings.warn(f"The value {value} is outside the search space U({self.lower_bound}, {self.upper_bound}). The value will be constrained.")
@@ -281,14 +281,14 @@ class ContiniousHyperparameter(_Hyperparameter):
         ''' Returns the upper bounds of the hyper-parameter search space. If categorical, return the last search space index. '''
         return self.search_space[-1]
 
-    def from_value(self, value : Union[int, float]) -> float:
+    def from_value(self, value: Union[int, float]) -> float:
         """Returns a normalized version of the provided value."""
         if isinstance(value, (int, float)):
             return self._translate_from_value(value)
         else:
             raise Exception(f"Non-categorical hyperparameters must be of type {float} or {int}.")
 
-    def from_normalized(self, normalized_value : float) -> Union[int, float]:
+    def from_normalized(self, normalized_value: float) -> Union[int, float]:
         """Returns a search space value from the provided normalized value."""
         constrained = self._constrain(normalized_value)
         trainslated = self._translate_from_norm(constrained)
@@ -300,7 +300,7 @@ class ContiniousHyperparameter(_Hyperparameter):
             raise Exception(f"Non-categorical hyperparameters must be of type {float} or {int}.")
 
 class DiscreteHyperparameter(_Hyperparameter):
-    def __init__(self, *search_space : Iterable[HP_TYPE], value : HP_TYPE = None, constraint : str = 'clip'):
+    def __init__(self, *search_space: Iterable[HP_TYPE], value: HP_TYPE = None, constraint: str = 'clip'):
         ''' 
         Provide a set of categorical elements [obj1, obj2, ..., objn].
         Sets the search space and samples a new candidate from an uniform distribution.
@@ -319,7 +319,7 @@ class DiscreteHyperparameter(_Hyperparameter):
         return self.from_normalized(self._normalized)
 
     @value.setter
-    def value(self, value : HP_TYPE):
+    def value(self, value: HP_TYPE):
         """Sets the hyperparameter value."""
         if value not in self.search_space:
             raise ValueError("The provided value must be present in the categorical search space.")
@@ -335,13 +335,13 @@ class DiscreteHyperparameter(_Hyperparameter):
         ''' Returns the upper bounds of the hyper-parameter search space. For categorical, it returns the last search space index. '''
         return len(self.search_space) - 1
 
-    def from_value(self, value : HP_TYPE) -> float:
+    def from_value(self, value: HP_TYPE) -> float:
         """Returns a normalized version of the provided value."""
         assert value in self.search_space, f"The provided value {value} does not exist within the categorical search space."
         index = self.search_space.index(value)
         return self._translate_from_value(index)
 
-    def from_normalized(self, normalized_value : float) -> HP_TYPE:
+    def from_normalized(self, normalized_value: float) -> HP_TYPE:
         """Returns a search space value from the provided normalized value."""
         constrained = self._constrain(normalized_value)
         return value_by_fraction(self.search_space, constrained)
@@ -381,7 +381,7 @@ class DiscreteHyperparameter(_Hyperparameter):
 
 class Hyperparameters(object):
     ''' Class for storing and updating hyperparameters. '''
-    def __init__(self, **hp_groups : Dict[str, Dict[str, _Hyperparameter]]):
+    def __init__(self, **hp_groups: Dict[str, Dict[str, _Hyperparameter]]):
         if not hp_groups or sum(1 for hp_dict in hp_groups.values() if hp_dict is not None) == 0:
             raise TypeError(f"At least one argument required!")
         for group, hp_dict in hp_groups.items():
@@ -418,7 +418,7 @@ class Hyperparameters(object):
         for groups in self.__dict__.values():
             yield from (groups.values())
 
-    def __getitem__(self, key : Union[str, int]) -> _Hyperparameter:
+    def __getitem__(self, key: Union[str, int]) -> _Hyperparameter:
         if isinstance(key, int):
             if not 0 <= key < len(self):
                 raise IndexError("The provided key is out of bounds.")
@@ -432,7 +432,7 @@ class Hyperparameters(object):
             return group[hp_name]
         raise ValueError("Key types supported are integer or string of syntax 'param_group/param_name'.")
 
-    def __setitem__(self, key : Union[str, int], value : _Hyperparameter):
+    def __setitem__(self, key: Union[str, int], value: _Hyperparameter):
         if isinstance(key, int):
             if not 0 <= key < len(self):
                 raise IndexError("The provided key is out of bounds.")
@@ -447,14 +447,14 @@ class Hyperparameters(object):
             return
         raise ValueError("Key types supported are integer or string of syntax 'param_group/param_name'.")
 
-    def items(self, full_key : bool = False):
+    def items(self, full_key: bool = False):
         if not full_key:
             for groups in self.__dict__.values():
                 yield from (groups.items())
         else:
             yield from self.__keys_and_values()
 
-    def _key_to_index(self, key : str) -> int:
+    def _key_to_index(self, key: str) -> int:
         if not isinstance(key, str):
             raise IndexError("Key must be of type string.")
         key_split = tuple(key.split("/"))

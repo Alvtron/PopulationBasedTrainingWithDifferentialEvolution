@@ -57,7 +57,7 @@ def create_dataframes():
                 data = data.append(loss_df)
         data.to_csv(Path(data_path, f"{task}.csv"))
 
-def plot_boxplot_figure(df : pd.DataFrame, group : str, categories : list, **kwargs):
+def plot_boxplot_figure(df: pd.DataFrame, group: str, categories: list, **kwargs):
     colors = mcolors.TABLEAU_COLORS
     df = df.copy(deep=True)
     df = df[df[group].isin(categories)] # remove unwanted columns
@@ -112,6 +112,6 @@ def create_stats():
             del figure
             plt.close('all')
 
-# MAIN
-#create_dataframes()
-create_stats()
+if __name__ == "__main__":
+    #create_dataframes()
+    create_stats()

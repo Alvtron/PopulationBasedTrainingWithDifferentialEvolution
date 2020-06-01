@@ -27,9 +27,9 @@ class AdaptiveDataset(Dataset):
         dataset (Dataset): The whole Dataset
         indices (sequence): Indices in the whole set selected for subset
     """
-    def __init__(self, dataset : Dataset,
-            prefix_transform : list = None, prefix_target_transform : list = None,
-            suffix_transform : list = None, suffix_target_transform : list = None):
+    def __init__(self, dataset: Dataset,
+            prefix_transform: list = None, prefix_target_transform: list = None,
+            suffix_transform: list = None, suffix_target_transform: list = None):
         super().__init__()
         self.dataset = dataset
         self.prefix_transform = prefix_transform
@@ -55,39 +55,39 @@ class AdaptiveDataset(Dataset):
         copied.transform = copy.deepcopy(self.transform)
         return copied
 
-    def split(self, fraction : float):
+    def split(self, fraction: float):
         subset = self.copy()
         subset.dataset = split(subset.dataset, fraction)
         return subset
 
-    def subset(self, indices : Sequence[int]):
+    def subset(self, indices: Sequence[int]):
         subset = self.copy()
         subset.dataset = Subset(self.dataset, indices)
         return Subset
 
     @staticmethod
-    def create_hyper_parameters(include : Sequence[str] = None) -> Dict[str, ContiniousHyperparameter]:
+    def create_hyper_parameters(include: Sequence[str] = None) -> Dict[str, ContiniousHyperparameter]:
         hparams = {
-            'brightness' : ContiniousHyperparameter(0.0, 1.0),
-            'contrast' : ContiniousHyperparameter(0.0, 1.0),
-            'saturation' : ContiniousHyperparameter(0.0, 1.0),
-            'hue' : ContiniousHyperparameter(0.0, 1.0),
-            'rotate' : ContiniousHyperparameter(0, 180),
-            'translate_horizontal' : ContiniousHyperparameter(0.0, 1.0),
-            'translate_vertical' : ContiniousHyperparameter(0.0, 1.0),
-            'scale_min' : ContiniousHyperparameter(0.5, 1.5),
-            'scale_max' : ContiniousHyperparameter(0.5, 1.5),
-            'shear' : ContiniousHyperparameter(0, 90),
-            'perspective' : ContiniousHyperparameter(0.0, 1.0),
-            'vertical_flip' : ContiniousHyperparameter(0.0, 1.0),
-            'horizontal_flip' : ContiniousHyperparameter(0.0, 1.0)}
+            'brightness': ContiniousHyperparameter(0.0, 1.0),
+            'contrast': ContiniousHyperparameter(0.0, 1.0),
+            'saturation': ContiniousHyperparameter(0.0, 1.0),
+            'hue': ContiniousHyperparameter(0.0, 1.0),
+            'rotate': ContiniousHyperparameter(0, 180),
+            'translate_horizontal': ContiniousHyperparameter(0.0, 1.0),
+            'translate_vertical': ContiniousHyperparameter(0.0, 1.0),
+            'scale_min': ContiniousHyperparameter(0.5, 1.5),
+            'scale_max': ContiniousHyperparameter(0.5, 1.5),
+            'shear': ContiniousHyperparameter(0, 90),
+            'perspective': ContiniousHyperparameter(0.0, 1.0),
+            'vertical_flip': ContiniousHyperparameter(0.0, 1.0),
+            'horizontal_flip': ContiniousHyperparameter(0.0, 1.0)}
         if include:
             exclude = [param_name for param_name in hparams if param_name not in include]
             for param_name in exclude:
                 del hparams[param_name]
         return hparams
 
-    def update(self, hparams : Dict[str, ContiniousHyperparameter] = None):
+    def update(self, hparams: Dict[str, ContiniousHyperparameter] = None):
         transforms = list()
         target_transforms = list()
         # add original transform at the end

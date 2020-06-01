@@ -9,7 +9,7 @@ from .hypernet import HyperNet, Print
 from ..hyperparameters import ContiniousHyperparameter
 
 class LeNet5(HyperNet):
-    def __init__(self, output_size : int):
+    def __init__(self, output_size: int):
         super().__init__()
         if not 0 < output_size <= 84:
             raise ValueError("Output size must be between 1 and 84.")
@@ -28,7 +28,7 @@ class LeNet5(HyperNet):
         self.softmax = nn.LogSoftmax(dim=1)
 
 class Lenet5WithDropout(HyperNet):
-    def __init__(self, output_size : int):
+    def __init__(self, output_size: int):
         super().__init__()
         if not 0 < output_size <= 84:
             raise ValueError("Output size must be between 1 and 84.")
@@ -67,7 +67,7 @@ class Lenet5WithDropout(HyperNet):
         self.dropout_4.p = hyper_parameters['dropout_rate_4'].value
 
 class Lenet5WithBatchNorm(HyperNet):
-    def __init__(self, output_size : int):
+    def __init__(self, output_size: int):
         super().__init__()
         if not 0 < output_size <= 84:
             raise ValueError("Output size must be between 1 and 84.")

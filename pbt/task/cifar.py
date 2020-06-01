@@ -15,7 +15,7 @@ from ..loss import Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
 class Cifar10(Task):
-    def __init__(self, model : str = 'VGG16'):
+    def __init__(self, model: str = 'VGG16'):
         super().__init__()
         self.model = model
 

@@ -11,13 +11,13 @@ class Comparable(metaclass=ABCMeta):
 T = TypeVar('T')
 CT = TypeVar('CT', bound=Comparable)
 
-def random_from_dict(values : Dict[object, CT], k : int = 1, exclude : Sequence[CT] = []) -> Tuple[CT, ...]:
+def random_from_dict(values: Dict[object, CT], k: int = 1, exclude: Sequence[CT] = []) -> Tuple[CT, ...]:
     if not isinstance(exclude, Sequence):
         exclude = [exclude]
     filtered = values.values() if not exclude else [v for id, v in values.values() if v not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
-def random_from_list(values : Iterable[CT], k : int = 1, exclude : Sequence[CT] = []) -> Tuple[CT, ...]:
+def random_from_list(values: Iterable[CT], k: int = 1, exclude: Sequence[CT] = []) -> Tuple[CT, ...]:
     if not isinstance(exclude, Sequence):
         exclude = [exclude]
     filtered = values if not exclude else [v for v in values if v not in exclude]
@@ -27,7 +27,7 @@ def grid(span, n_grids):
     step = span / (n_grids + 1)
     return tuple(step * (i + 1) for i in range(n_grids))
 
-def average(iterable : Iterable):
+def average(iterable: Iterable):
     total = 0
     n_values = 0
     for value in iterable:
@@ -51,14 +51,14 @@ def flatten_dict(dictionary, exclude = [], delimiter ='_'):
             flat_dict[key] = value
     return flat_dict
 
-def unwrap_iterable(iterable : Iterable[Union[Iterable, T]], exceptions : Sequence = []) -> Generator[T, None, None]:
+def unwrap_iterable(iterable: Iterable[Union[Iterable, T]], exceptions: Sequence = []) -> Generator[T, None, None]:
     for value in iterable.values() if isinstance(iterable, dict) else iterable:
         if isinstance(value, Iterable) and not type(value) not in exceptions:
             yield from unwrap_iterable(value)
         else:
             yield value
 
-def modify_iterable(iterable : Union[List[T], Dict[object,T]], expression : Callable[[T], T], condition : Callable[[T], bool] = None) -> None:
+def modify_iterable(iterable: Union[List[T], Dict[object,T]], expression: Callable[[T], T], condition: Callable[[T], bool] = None) -> None:
     if not isinstance(iterable, (list, dict)):
         raise TypeError("iterable must be a dict or list.")
     for key, value in iterable.items() if isinstance(iterable, dict) else enumerate(iterable):
@@ -88,7 +88,7 @@ def insert_sequence(index, seq1, seq2):
     """Inserts the second sequence on the index in the first sequence."""
     return seq1[:index] + seq2 + seq1[index:]
 
-def value_by_fraction(sequence : Sequence[T], fraction : float) -> T:
+def value_by_fraction(sequence: Sequence[T], fraction: float) -> T:
     """Returns the value that reside within a specific fraction of the sequence."""
     if not sequence:
         raise ValueError("the provided sequence cannot be empty")
@@ -97,5 +97,5 @@ def value_by_fraction(sequence : Sequence[T], fraction : float) -> T:
     index = int(fraction / (1 / len(sequence) + 1e-9))
     return sequence[index]
 
-def singular(iterable : Iterable) -> bool:
+def singular(iterable: Iterable) -> bool:
     return len(set(iterable)) <= 1

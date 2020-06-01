@@ -33,7 +33,7 @@ class EMnist(Mnist):
     The subsets that are marked with 'validation' has a balanced validation set built into the training set.
     The validation set is the last portion of the training set, equal to the size of the testing set.
     """
-    def __init__(self, model : str = 'lenet5_dropout', split : str = 'mnist'):
+    def __init__(self, model: str = 'lenet5_dropout', split: str = 'mnist'):
         super().__init__(model)
         self.num_classes_dict = {'byclass': 62, 'bymerge': 47, 'balanced': 47, 'letters': 26, 'digits': 10, 'mnist': 10}
         self.split = split
