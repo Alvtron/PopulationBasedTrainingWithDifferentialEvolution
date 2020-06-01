@@ -420,6 +420,4 @@ class DEProcedure(DeviceCallable):
         if self.test_function is not None:
             self._print(f"testing member {member.id}...")
             self.test_function(checkpoint=member, device=device)
-        # update generation
-        self.generation.update(member)
         return member

@@ -212,7 +212,7 @@ class RandomFitnessApproximation():
 
     def __call__(self, checkpoint: Checkpoint, device: str):
         # copy old loss
-        #old_loss = deepcopy(checkpoint.loss)
+        old_loss = deepcopy(checkpoint.loss)
         # load checkpoint state
         checkpoint.load_state(device=device, missing_ok=False)
         # train and evaluate
@@ -221,4 +221,4 @@ class RandomFitnessApproximation():
         # unload checkpoint state
         checkpoint.unload_state()
         # correct loss
-        #checkpoint.loss = self.__adjust_loss(old_loss, checkpoint.loss)
+        checkpoint.loss = self.__adjust_loss(old_loss, checkpoint.loss)
