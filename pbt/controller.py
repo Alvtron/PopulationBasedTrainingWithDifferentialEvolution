@@ -369,12 +369,13 @@ class DEController(Controller):
             members=spawned_members)
         procedure = DEProcedure(
             generation=generation, evolver=self.evolver, fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
+        trainer = DETrainer(self.step_function)
         while not self._is_finished(generation):
             # increment n steps
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
             self._whisper("training members...")
-            for member in self._worker_pool.imap(self.step_function, generation):
+            for member in self._worker_pool.imap(trainer, generation):
                 # update generation
                 generation.update(member)
             self._whisper("mutating members...")
@@ -389,6 +390,17 @@ class DEController(Controller):
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
             yield list(generation)
+
+
+class DETrainer(DeviceCallable):
+    def __init__(self, train_function, verbose: bool = False):
+        super().__init__(verbose)
+        self.train_function = train_function
+
+    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+        self._print(f"training member {member.id}...")
+        self.train_function(checkpoint=member, device=device)
+        return member
 
 class DEProcedure(DeviceCallable):
     def __init__(self, generation: Generation, evolver: DifferentialEvolveEngine, fitness_function, test_function=None, verbose: bool = False):
