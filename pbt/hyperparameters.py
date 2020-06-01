@@ -56,7 +56,7 @@ class _Hyperparameter(object):
         
 
     def __str__(self) -> str:
-        return f"v: {self.value}, n: {self.normalized:.4E} U({self.lower_bound},{self.upper_bound})"
+        return f"v: {self.value:.4E}, n: {self.normalized:.4f} U({self.lower_bound},{self.upper_bound})"
 
     @property
     def normalized(self) -> float:

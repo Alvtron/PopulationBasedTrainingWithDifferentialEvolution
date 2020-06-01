@@ -174,11 +174,11 @@ class DifferentialEvolution(DifferentialEvolveEngine):
         for j in range(dimensions):
             CR_ri = random.uniform(0.0, 1.0)
             if CR_ri <= self.Cr or j == j_rand:
-                self.logger(f"M{parent.id}: crossover in dimension {j} with CR_ri {CR_ri:.4E}")
+                self.logger(f"M{parent.id}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
                 mutant = de_rand_1(F=self.F, x_r0=x_r0[j], x_r1=x_r1[j], x_r2=x_r2[j])
                 constrained = clip(mutant, 0.0, 1.0)
                 trial[j] = constrained
-                self.logger(f"M{parent.id}: mutant value {mutant:.4E}, constrained to {constrained:.4E}")
+                self.logger(f"M{parent.id}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
             else:
                 trial[j] = parent[j]
         # measure fitness
@@ -192,10 +192,10 @@ class DifferentialEvolution(DifferentialEvolveEngine):
     def _select(self, parent: Checkpoint, trial: Checkpoint) -> Checkpoint:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         if parent <= trial:
-            self.logger(f"M{parent.id}: mutate member (x {parent.eval_score():.4E} <= u {trial.eval_score():.4E}).")
+            self.logger(f"M{parent.id}: mutate member (x {parent.eval_score():.4f} <= u {trial.eval_score():.4f}).")
             return trial
         else:
-            self.logger(f"M{parent.id}: maintain member (x {parent.eval_score():.4E} > u {trial.eval_score():.4E}).")
+            self.logger(f"M{parent.id}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
             return parent
     
     def _print_mutation_parameters(self, parent, x_r0, x_r1, x_r2, j_rand):
@@ -203,7 +203,7 @@ class DifferentialEvolution(DifferentialEvolveEngine):
             return
         lines = [
             f"M{parent.id} mutation parameters:",
-            f"control parameters: CR {self.Cr:.4E}, F {self.F:.4E}",
+            f"control parameters: CR {self.Cr:.4f}, F {self.F:.4f}",
             f"x_r0: {x_r0} with score {x_r0.eval_score()}",
             f"x_r1: {x_r1} with score {x_r1.eval_score()}",
             f"x_r2: {x_r2} with score {x_r2.eval_score()}",
@@ -253,16 +253,19 @@ class HistoricalMemory(object):
 class ExternalArchive():
     def __init__(self, manager, size: int) -> None:
         self.size = size
+        self.__lock = manager.Lock()
         self.records = manager.list()
 
     def append(self, parent: Checkpoint) -> None:
-        if len(self.records) == self.size:
-            random_value = random.choice(self.records)
-            index = self.records.index(random_value)
-            print(f"ExternalArchive: removing random {random_value} at index {index} from archive.")
-            self.records.remove(random_value)
-        parent.delete_state() # remove useless state
-        self.records.append(parent)
+        with self.__lock:
+            print(f"ExternalArchive: appending {parent} to archive of size {len(self.records)}")
+            if len(self.records) == self.size:
+                random_value = random.choice(self.records)
+                index = self.records.index(random_value)
+                print(f"ExternalArchive: removing random {random_value} at index {index} from archive.")
+                self.records.remove(random_value)
+            parent.delete_state() # remove useless state
+            self.records.append(parent)
 
 
 class SHADE(DifferentialEvolveEngine):
@@ -344,11 +347,11 @@ class SHADE(DifferentialEvolveEngine):
         for j in range(dimensions):
             CR_ri = random.uniform(0.0, 1.0)
             if CR_ri <= CR_i or j == j_rand:
-                self.logger(f"M{parent.id}: crossover in dimension {j} with CR_ri {CR_ri:.4E}")
+                self.logger(f"M{parent.id}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
                 mutant = de_current_to_best_1(F=F_i, x_base=parent[j], x_best=x_pbest[j], x_r1=x_r1[j], x_r2=x_r2[j])
                 constrained = halving(base=parent[j], mutant=mutant, lower_bounds=0.0, upper_bounds=1.0)
                 trial[j] = constrained
-                self.logger(f"M{parent.id}: mutant value {mutant:.4E}, constrained to {constrained:.4E}")
+                self.logger(f"M{parent.id}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
             else:
                 trial[j] = parent[j]
         # measure fitness
@@ -366,13 +369,13 @@ class SHADE(DifferentialEvolveEngine):
                 self.logger(f"M{parent.id}: adding parent to archive.")
                 self.archive.append(parent.copy())
                 w_i = abs(trial.eval_score() - parent.eval_score())
-                self.logger(f"M{parent.id}: recording CR_i {CR_i:.4E} and F_i {F_i:.4E} with w_i {w_i:.4E} to historical memory.")
+                self.logger(f"M{parent.id}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
                 self.memory.record(CR_i, F_i, w_i)
-            self.logger(f"M{parent.id}: mutate member (x {parent.eval_score():.4E} < u {trial.eval_score():.4E}).")
+            self.logger(f"M{parent.id}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
             return trial
         else:
             self.logger(
-                f"M{parent.id}: maintain member (x {parent.eval_score():.4E} > u {trial.eval_score():.4E}).")
+                f"M{parent.id}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
             return parent
 
     def on_generation_end(self, generation: Generation):
@@ -426,7 +429,7 @@ class SHADE(DifferentialEvolveEngine):
             return
         lines = [
             f"M{parent.id} mutation parameters:",
-            f"control parameters: CR_i {CR_i:.4E}, F_i {F_i:.4E}",
+            f"control parameters: CR_i {CR_i:.4f}, F_i {F_i:.4f}",
             f"x_r1: {x_r1} with score {x_r1.eval_score()}",
             f"x_r2: {x_r2} with score {x_r2.eval_score()}",
             f"x_pbest: {x_pbest} with score {x_pbest.eval_score()}",
@@ -475,7 +478,7 @@ class LSHADE(SHADE):
         for worst in sorted(generation)[:size_delta]:
             generation.remove(worst)
             self.logger(
-                f"member {worst.id} with score {worst.eval_score():.4E} was removed from the generation.")
+                f"member {worst.id} with score {worst.eval_score():.4f} was removed from the generation.")
 
 
 def logistic(x: float, k: float = 20) -> float:
