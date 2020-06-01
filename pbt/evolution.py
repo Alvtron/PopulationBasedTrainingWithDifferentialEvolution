@@ -255,7 +255,7 @@ class HistoricalMemory(object):
 
 
 class ExternalArchive():
-    def __init__(self, manager, size: int, verbose: float = True) -> None:
+    def __init__(self, manager, size: int, verbose: float = False) -> None:
         self.size = size
         self.__records = manager.list()
         self.__lock = manager.Lock()
@@ -316,7 +316,7 @@ class SHADE(DifferentialEvolveEngine):
         if f_max < f_min:
             raise ValueError("f_max cannot be less than f_min.")
         self.archive = ExternalArchive(
-            manager=manager, size=round(N_INIT * r_arc), verbose=self.verbose)
+            manager=manager, size=round(N_INIT * r_arc), verbose=True)
         self.memory = HistoricalMemory(
             manager=manager, size=memory_size, default=(f_max - f_min) / 2.0)
         self.F_MIN = f_min
