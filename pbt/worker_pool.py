@@ -90,8 +90,7 @@ class WorkerPool(object):
 
     def start(self) -> None:
         if any(worker.is_alive() for worker in self._workers):
-            raise Exception(
-                "service is already running. Consider calling stop() when service is not in use.")
+            raise Exception("service is already running. Consider calling stop() when service is not in use.")
         [worker.start() for worker in self._workers]
 
     def stop(self) -> None:
@@ -111,14 +110,12 @@ class WorkerPool(object):
             self.__async_return_queue = self._manager.Queue()
         worker = next(self._workers_iterator)
         self._print(f"pushing job to worker receive queue...")
-        trial = Trial(return_queue=self.__async_return_queue,
-                      function=function, parameters=parameters)
+        trial = Trial(return_queue=self.__async_return_queue, function=function, parameters=parameters)
         worker.receive_queue.put(trial)
 
     def get(self) -> object:
         if self.__async_return_queue is None:
-            raise Exception(
-                "'apply_async' must be called at least once before 'get'.")
+            raise Exception("'apply_async' must be called at least once before 'get'.")
         result = self.__async_return_queue.get()
         if isinstance(result, FailMessage):
             self._on_fail_message(result)
@@ -132,8 +129,7 @@ class WorkerPool(object):
         return_queue = self._manager.Queue()
         self._print(f"queuing parameters...")
         for parameters, worker in zip(parameter_map, self._workers_iterator):
-            trial = Trial(return_queue=return_queue,
-                          function=function, parameters=parameters)
+            trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
             worker.receive_queue.put(trial)
             n_sent += 1
         self._print(f"awaiting results...")
@@ -154,8 +150,7 @@ class WorkerPool(object):
             if failed_workers:
                 raise Exception(f"{len(failed_workers)} workers failed.")
             else:
-                raise Exception(
-                    f"{n_sent - n_returned} one or more parameters failed.")
+                raise Exception(f"{n_sent - n_returned} one or more parameters failed.")
         elif failed_workers:
             self._respawn(failed_workers)
         else:
