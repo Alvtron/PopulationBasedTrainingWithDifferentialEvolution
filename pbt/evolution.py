@@ -77,10 +77,12 @@ class ExploitAndExplore(EvolveEngine):
 
     def __init__(self, exploit_factor: float = 0.2, explore_factors: Tuple[float, ...] = (0.8, 1.2), perturb_method: str = 'choice', **kwargs) -> None:
         super().__init__(**kwargs)
-        assert isinstance(
-            exploit_factor, float) and 0.0 <= exploit_factor <= 1.0, f"Exploit factor must be of type {float} between 0.0 and 1.0."
-        assert isinstance(explore_factors, (float, list, tuple)
-                          ), f"Explore factors must be of type {float}, {tuple} or {list}."
+        if not isinstance(exploit_factor, float) or not(0.0 <= exploit_factor <= 1.0):
+            raise ValueError(f"the exploit factor must be of type {float} in range [0.0, 1.0].")
+        if not isinstance(explore_factors, (list, tuple)):
+            raise ValueError(f"the explore factors must be a sequence or tuple.")
+        if perturb_method not in ('choice', 'sample'):
+            raise NotImplementedError(f"perturb method '{perturb_method}' is not supported")
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
         self.perturb_method = perturb_method
@@ -100,6 +102,14 @@ class ExploitAndExplore(EvolveEngine):
         A fraction of the bottom performing members exploit the top performing members.
         If member exploits, the hyper-parameters are parturbed.
         """
+        if member is None:
+            raise ValueError("checkpoint object is None")
+        if len(generation) < 2:
+            raise ValueError("generation size must be at least 2 or higher")
+        if member not in generation:
+            raise ValueError("parent is not present in generation")
+        if generation is None:
+            raise ValueError("generation object is None")
         n_elitists = max(1, round(len(generation) * self.exploit_factor))
         sorted_members = sorted(generation, reverse=True)
         elitists = sorted_members[:n_elitists]
@@ -161,8 +171,18 @@ class DifferentialEvolution(DifferentialEvolveEngine):
         Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
         implementation of differential evolution.
         """
+        if parent is None:
+            raise ValueError("checkpoint object is None")
         if len(generation) < 3:
             raise ValueError("generation size must be at least 3 or higher")
+        if parent not in generation:
+            raise ValueError("parent is not present in generation")
+        if generation is None:
+            raise ValueError("generation object is None")
+        if fitness_function is None:
+            raise ValueError("fitness_function is None")
+        if callable(fitness_function):
+            raise ValueError("fitness_function is not callable")
         # copy parent
         parent = parent.copy()
         dimensions = len(parent.parameters)
@@ -225,9 +245,12 @@ class HistoricalMemory(object):
 
     def record(self, cr: float, f: float, w: float) -> None:
         """Save control parameters and delta score (weight) to historical memory."""
-        assert math.isfinite(cr) and 0.0 <= cr <= 1.0, "cr is not valid."
-        assert math.isfinite(f) and 0.0 <= f, "f is not valid."
-        assert math.isfinite(w) and w > 0.0, "w is not valid."
+        if not math.isfinite(cr) or not (0.0 <= cr <= 1.0):
+            raise ValueError(f"cr value {cr} is not valid.")
+        if not math.isfinite(f) or f < 0.0:
+            raise ValueError(f"f value {f} is not valid.")
+        if not math.isfinite(w) or w < 0.0:
+            raise ValueError(f"w value {w} is not valid.")
         with self.__lock:
             self.__s_cr.append(cr)
             self.__s_f.append(f)
@@ -271,7 +294,8 @@ class ExternalArchive():
         print(f"ExternalArchive: {message}")
 
     def __random_delete(self, n: int = 1):
-        assert n > len(self.__records), "attempted to remove too many values"
+        assert n >= 0, "n is negative!"
+        assert n <= len(self.__records), "attempted to remove too many values"
         for _ in range(n):
             random_value = random.choice(self.__records)
             index = self.__records.index(random_value)
@@ -279,16 +303,26 @@ class ExternalArchive():
             self.__records.remove(random_value)
 
     def resize(self, size: int):
+        if size < 0:
+            raise ValueError("specified size is negative")
+        if size > self.__size.value:
+            raise ValueError("specified size is larger than current size")
         with self.__lock:
-            self.__size = size
-            overflow = len(self.__records) - self.__size
+            # assign new size value
+            self.__size.value = size
+            # randomly remove overflow
+            overflow = len(self.__records) - self.__size.value
             if overflow > 0:
                 self.__random_delete(n=overflow)
 
     def append(self, parent: Checkpoint) -> None:
+        if parent is None:
+            raise ValueError("checkpoint is None.")
+        if parent in self.__records:
+            raise ValueError("checkpoint already exists in archive.")
         with self.__lock:
             self.__print(f"appending {parent} to archive of size {len(self.__records)}")
-            if len(self.__records) == self.__size:
+            if len(self.__records) == self.__size.value:
                 self.__random_delete(n=1)
             parent.delete_state() # remove useless state
             self.__records.append(parent)
@@ -355,8 +389,18 @@ class SHADE(DifferentialEvolveEngine):
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
         implementation of differential evolution, with adapted CR and F parameters.
         """
+        if parent is None:
+            raise ValueError("checkpoint object is None")
         if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher")
+        if parent not in generation:
+            raise ValueError("parent is not present in generation")
+        if generation is None:
+            raise ValueError("generation object is None")
+        if fitness_function is None:
+            raise ValueError("fitness_function is None")
+        if callable(fitness_function):
+            raise ValueError("fitness_function is not callable")
         # copy parent
         parent = parent.copy()
         # control parameter assignment
