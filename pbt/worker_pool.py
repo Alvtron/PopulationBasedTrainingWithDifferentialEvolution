@@ -67,10 +67,9 @@ class WorkerPool(object):
 
     def _on_fail_message(self, message: FailMessage) -> None:
         # print info
-        self._print(
-            f"fail message received from worker {message.sender_id}: {message.text}.")
+        print(f"{self.__class__.__name__}: fail message received from worker {message.sender_id}: {message.text}.")
         if message.exception:
-            self._print(f"exception: {message.exception}.")
+            print(f"{self.__class__.__name__}: exception: {message.exception}.")
 
     def _respawn(self, worker_id: int) -> None:
         # stop existing worker
