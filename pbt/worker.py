@@ -26,6 +26,8 @@ from pbt.device import DeviceCallable
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
+torch.cuda.manual_seed(0)
+torch.cuda.manual_seed_all(0)
 # set torch settings
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
@@ -90,6 +92,8 @@ class Worker(CONTEXT.Process):
         random.seed(self.random_seed)
         np.random.seed(self.random_seed)
         torch.manual_seed(self.random_seed)
+        torch.cuda.manual_seed(self.random_seed)
+        torch.cuda.manual_seed_all(self.random_seed)
         while not self.end_event.is_set():
             # get next checkpoint from train queue
             self.__log("awaiting trial...")
