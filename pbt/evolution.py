@@ -255,8 +255,8 @@ class HistoricalMemory(object):
 
 class ExternalArchive():
     def __init__(self, manager, size: int, verbose: float = False) -> None:
-        self.size = size
         self.__lock = manager.Lock()
+        self.__size = manager.Value('i', size)
         self.__records = manager.list()
         self.__verbose = verbose
 
@@ -270,16 +270,29 @@ class ExternalArchive():
             return
         print(f"ExternalArchive: {message}")
 
+    def __random_delete(self, n: int = 1):
+        assert n > len(self.__records), "attempted to remove too many values"
+        for _ in range(n):
+            random_value = random.choice(self.__records)
+            index = self.__records.index(random_value)
+            self.__print(f"removing random {random_value} at index {index} from archive.")
+            self.__records.remove(random_value)
+
+    def resize(self, size: int):
+        with self.__lock:
+            self.__size = size
+            overflow = len(self.__records) - self.__size
+            if overflow > 0:
+                self.__random_delete(n=overflow)
+
     def append(self, parent: Checkpoint) -> None:
         with self.__lock:
             self.__print(f"appending {parent} to archive of size {len(self.__records)}")
-            if len(self.__records) == self.size:
-                random_value = random.choice(self.__records)
-                index = self.__records.index(random_value)
-                self.__print(f"removing random {random_value} at index {index} from archive.")
-                self.__records.remove(random_value)
+            if len(self.__records) == self.__size:
+                self.__random_delete(n=1)
             parent.delete_state() # remove useless state
             self.__records.append(parent)
+
 
     def clear(self) -> None:
         """Clear records"""
@@ -492,7 +505,8 @@ class LSHADE(SHADE):
         self.logger(
             f"adjusting generation size {len(generation)} --> {new_size}")
         # adjust archive size |A| according to |P|
-        self.archive.size = new_size * self.r_arc
+        self.archive.resize(round(new_size * self.r_arc))
+        # remove Delta-N worst members
         size_delta = len(generation) - new_size
         for worst in sorted(generation)[:size_delta]:
             generation.remove(worst)
