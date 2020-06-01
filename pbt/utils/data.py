@@ -19,6 +19,9 @@ def display_class_balance(labels: Sequence[object]):
 
 def create_subset(dataset: Dataset, start: int, end: int = None, shuffle: bool = False) -> Subset:
     dataset_size = len(dataset)
+    if end is not None and end > dataset_size:
+        raise ValueError("end index is larger than dataset length.")
+    end = dataset_size if end is None else end
     indices = list(range(dataset_size))
     if shuffle:
         random.shuffle(indices)

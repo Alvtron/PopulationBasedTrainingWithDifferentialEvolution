@@ -27,7 +27,7 @@ from torch.multiprocessing import Process
 import matplotlib.pyplot as plt
 
 import pbt.member
-from pbt.worker import DeviceCallable
+from pbt.device import DeviceCallable
 from pbt.worker_pool import WorkerPool
 from pbt.member import Checkpoint, Generation
 from pbt.utils.date import get_datetime_string

@@ -121,11 +121,13 @@ class Evaluator(object):
         self.model_class = model_class
         if batches is not None and batches < 1:
             raise ValueError("The number of batches must be at least one or higher.")
-        if batches is not None:
-            self.test_data = create_subset_by_size(
-                dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle)
-        else:
-            self.test_data = test_data
+        #if batches is not None:
+        #    self.test_data = create_subset_by_size(
+        #        dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle)
+        #else:
+        #    self.test_data = test_data
+        self.n_batches = batches
+        self.test_data = test_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
@@ -143,12 +145,12 @@ class Evaluator(object):
         # preparing model
         model = self.create_model(model_state=checkpoint.model_state, device=device)
         # prepare batches
-        batches = DataLoader(dataset=self.test_data, batch_size=self.batch_size, shuffle=False, drop_last=False)
+        batches = DataLoader(dataset=self.test_data, batch_size=self.batch_size, shuffle=self.shuffle, drop_last=False)
         num_batches = len(batches)
         # reset loss dict
         checkpoint.loss[self.loss_group] = dict.fromkeys(self.loss_functions, 0.0)
         # evaluate
-        for x, y in batches:
+        for index, (x, y) in enumerate(batches, 1):
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             with torch.no_grad():
@@ -159,6 +161,8 @@ class Evaluator(object):
                 checkpoint.loss[self.loss_group][metric_type] += loss.item() / float(num_batches)
                 del loss
             del output
+            if self.n_batches is not None and self.index == self.n_batches:
+                break
         # clean GPU memory
         del model
         torch.cuda.empty_cache()
@@ -214,7 +218,7 @@ class RandomFitnessApproximation():
         # copy old loss
         #old_loss = deepcopy(checkpoint.loss)
         # load checkpoint state
-        checkpoint.load_state(device=device, missing_ok=checkpoint.steps == 0)
+        checkpoint.load_state(device=device, missing_ok=False)
         # train and evaluate
         self.trainer(checkpoint, device)
         self.evaluator(checkpoint, device)

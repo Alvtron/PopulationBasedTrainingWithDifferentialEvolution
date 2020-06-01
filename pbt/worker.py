@@ -19,6 +19,8 @@ from multiprocessing.pool import ThreadPool
 import torch
 import numpy as np
 
+from pbt.device import DeviceCallable
+
 # various settings for reproducibility
 # set random seed
 random.seed(0)
@@ -34,19 +36,6 @@ CONTEXT = torch.multiprocessing.get_context("spawn")
 
 STOP_FLAG = None
 
-class DeviceCallable(object):
-    def __init__(self, verbose: bool = False):
-        self.verbose = verbose
-
-    def _print(self, message: str):
-        if not self.verbose:
-            return
-        full_message = f"PID-{os.getpid()}: {message}"
-        print(full_message)
-
-    @abstractmethod
-    def __call__(self, checkpoint: object, device: str, **kwargs) -> object:
-        raise NotImplementedError
 
 class Trial:
     def __init__(self, return_queue, function: DeviceCallable, parameters: object):

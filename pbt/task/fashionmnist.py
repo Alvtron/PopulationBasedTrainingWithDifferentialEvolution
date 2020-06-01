@@ -15,7 +15,7 @@ from ..loss import F1, Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
 class FashionMnist(Task):
-    def __init__(self, model: str = 'lenet5'):
+    def __init__(self, model : str = 'lenet5'):
         super().__init__()
         self.model = model
 
@@ -47,7 +47,7 @@ class FashionMnist(Task):
             optimizer={
                 'lr': ContiniousHyperparameter(1e-9, 1e-1),
                 'momentum': ContiniousHyperparameter(1e-9, 1.0),
-                'weight_decay': ContiniousHyperparameter(1e-9, 1e-1),
+                'weight_decay': ContiniousHyperparameter(1e-9, 1e-2),
             })
 
     @property
