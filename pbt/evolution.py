@@ -217,11 +217,11 @@ class HistoricalMemory(object):
         self.size = size
         self.m_cr = [default] * size
         self.m_f = [default] * size
-        self.s_cr = manager.list()
-        self.s_f = manager.list()
-        self.s_w = manager.list()
-        self.k = 0
         self.__lock = manager.Lock()
+        self.__s_cr = manager.list()
+        self.__s_f = manager.list()
+        self.__s_w = manager.list()
+        self.__k = 0
 
     def record(self, cr: float, f: float, w: float) -> None:
         """Save control parameters and delta score (weight) to historical memory."""
@@ -229,36 +229,35 @@ class HistoricalMemory(object):
         assert math.isfinite(f) and 0.0 <= f, "f is not valid."
         assert math.isfinite(w) and w > 0.0, "w is not valid."
         with self.__lock:
-            self.s_cr.append(cr)
-            self.s_f.append(f)
-            self.s_w.append(w)
+            self.__s_cr.append(cr)
+            self.__s_f.append(f)
+            self.__s_w.append(w)
 
     def reset(self) -> None:
         """Reset S_CR, S_F and weights to empty lists."""
         with self.__lock:
-            self.s_cr[:] = []
-            self.s_f[:] = []
-            self.s_w[:] = []
+            self.__s_cr[:] = []
+            self.__s_f[:] = []
+            self.__s_w[:] = []
 
     def update(self) -> None:
         with self.__lock:
-            assert len(self.s_cr) == len(self.s_f) == len(
-                self.s_w), "the lengths of s_cr, s_f and s_weights are not equal."
-            if len(self.s_cr) == 0:
+            assert len(self.__s_cr) == len(self.__s_f) == len(self.__s_w), "the lengths of __s_cr, __s_f and __s_weights are not equal."
+            if len(self.__s_cr) == 0:
                 return
-            if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
-                self.m_cr[self.k] = None
+            if self.m_cr[self.__k] == None or max(self.__s_cr) == 0.0:
+                self.m_cr[self.__k] = None
             else:
-                self.m_cr[self.k] = mean_wl(self.s_cr, self.s_w)
-            self.m_f[self.k] = mean_wl(self.s_f, self.s_w)
-            self.k = 0 if self.k >= self.size - 1 else self.k + 1
+                self.m_cr[self.__k] = mean_wl(self.__s_cr, self.__s_w)
+            self.m_f[self.__k] = mean_wl(self.__s_f, self.__s_w)
+            self.__k = 0 if self.__k >= self.size - 1 else self.__k + 1
 
 
 class ExternalArchive():
     def __init__(self, manager, size: int, verbose: float = False) -> None:
         self.size = size
-        self.__records = manager.list()
         self.__lock = manager.Lock()
+        self.__records = manager.list()
         self.__verbose = verbose
 
     @property
@@ -273,14 +272,14 @@ class ExternalArchive():
 
     def append(self, parent: Checkpoint) -> None:
         with self.__lock:
-            self.__print(f"appending {parent} to archive of size {len(self.records)}")
-            if len(self.records) == self.size:
-                random_value = random.choice(self.records)
-                index = self.records.index(random_value)
+            self.__print(f"appending {parent} to archive of size {len(self.__records)}")
+            if len(self.__records) == self.size:
+                random_value = random.choice(self.__records)
+                index = self.__records.index(random_value)
                 self.__print(f"removing random {random_value} at index {index} from archive.")
-                self.records.remove(random_value)
+                self.__records.remove(random_value)
             parent.delete_state() # remove useless state
-            self.records.append(parent)
+            self.__records.append(parent)
 
     def clear(self) -> None:
         """Clear records"""
