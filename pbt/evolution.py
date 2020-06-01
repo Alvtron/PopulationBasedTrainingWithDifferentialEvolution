@@ -43,7 +43,7 @@ class EvolveEngine(object):
 
 class DifferentialEvolveEngine(EvolveEngine):
     """
-    Base class for all evolvers.
+    Base class for all differential evolvers.
     """
 
     def __init__(self, verbose: bool = False):
@@ -258,7 +258,10 @@ class ExternalArchive():
     def append(self, parent: Checkpoint) -> None:
         if len(self.records) == self.size:
             random_value = random.choice(self.records)
+            index = self.records.index(random_value)
+            print(f"ExternalArchive: removing random {random_value} at index {index} from archive.")
             self.records.remove(random_value)
+        parent.delete_state() # remove useless state
         self.records.append(parent)
 
 

@@ -22,7 +22,7 @@ import numpy as np
 from pbt.nn import DeviceCallable
 
 # various settings for reproducibility
-# set random state
+# set random seed
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)

@@ -20,6 +20,17 @@ from .hyperparameters import Hyperparameters
 from .models.hypernet import HyperNet
 from pbt.utils.data import create_subset, create_subset_by_size
 
+# various settings for reproducibility
+# set random seed
+random.seed(0)
+np.random.seed(0)
+torch.manual_seed(0)
+# set torch settings
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.enabled = True
+# multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 class DeviceCallable(object):
     def __init__(self, verbose: bool = False):

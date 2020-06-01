@@ -52,6 +52,7 @@ def import_user_arguments():
 
 if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy('file_system')
+    # set random seed
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)
