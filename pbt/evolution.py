@@ -221,41 +221,50 @@ class HistoricalMemory(object):
         self.s_f = manager.list()
         self.s_w = manager.list()
         self.k = 0
+        self.__lock = manager.Lock()
 
     def record(self, cr: float, f: float, w: float) -> None:
         """Save control parameters and delta score (weight) to historical memory."""
         assert math.isfinite(cr) and 0.0 <= cr <= 1.0, "cr is not valid."
         assert math.isfinite(f) and 0.0 <= f, "f is not valid."
         assert math.isfinite(w) and w > 0.0, "w is not valid."
-        self.s_cr.append(cr)
-        self.s_f.append(f)
-        self.s_w.append(w)
+        with self.__lock:
+            self.s_cr.append(cr)
+            self.s_f.append(f)
+            self.s_w.append(w)
 
     def reset(self) -> None:
         """Reset S_CR, S_F and weights to empty lists."""
-        self.s_cr[:] = []
-        self.s_f[:] = []
-        self.s_w[:] = []
+        with self.__lock:
+            self.s_cr[:] = []
+            self.s_f[:] = []
+            self.s_w[:] = []
 
     def update(self) -> None:
-        assert len(self.s_cr) == len(self.s_f) == len(
-            self.s_w), "the lengths of s_cr, s_f and s_weights are not equal."
-        if len(self.s_cr) == 0:
-            return
-        if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
-            self.m_cr[self.k] = None
-        else:
-            self.m_cr[self.k] = mean_wl(self.s_cr, self.s_w)
-        self.m_f[self.k] = mean_wl(self.s_f, self.s_w)
-        self.k = 0 if self.k >= self.size - 1 else self.k + 1
+        with self.__lock:
+            assert len(self.s_cr) == len(self.s_f) == len(
+                self.s_w), "the lengths of s_cr, s_f and s_weights are not equal."
+            if len(self.s_cr) == 0:
+                return
+            if self.m_cr[self.k] == None or max(self.s_cr) == 0.0:
+                self.m_cr[self.k] = None
+            else:
+                self.m_cr[self.k] = mean_wl(self.s_cr, self.s_w)
+            self.m_f[self.k] = mean_wl(self.s_f, self.s_w)
+            self.k = 0 if self.k >= self.size - 1 else self.k + 1
 
 
 class ExternalArchive():
-    def __init__(self, manager, size: int, verbose: float = False) -> None:
+    def __init__(self, manager, size: int, verbose: float = True) -> None:
         self.size = size
-        self.records = manager.list()
+        self.__records = manager.list()
         self.__lock = manager.Lock()
         self.__verbose = verbose
+
+    @property
+    def records(self):
+        with self.__lock:
+            return list(self.__records)
 
     def __print(self, message: str):
         if not self.__verbose:
@@ -272,6 +281,11 @@ class ExternalArchive():
                 self.records.remove(random_value)
             parent.delete_state() # remove useless state
             self.records.append(parent)
+
+    def clear(self) -> None:
+        """Clear records"""
+        with self.__lock:
+            self.__records[:] = []
 
 
 class SHADE(DifferentialEvolveEngine):
@@ -302,7 +316,7 @@ class SHADE(DifferentialEvolveEngine):
         if f_max < f_min:
             raise ValueError("f_max cannot be less than f_min.")
         self.archive = ExternalArchive(
-            manager=manager, size=round(N_INIT * r_arc))
+            manager=manager, size=round(N_INIT * r_arc), verbose=self.verbose)
         self.memory = HistoricalMemory(
             manager=manager, size=memory_size, default=(f_max - f_min) / 2.0)
         self.F_MIN = f_min
@@ -419,7 +433,7 @@ class SHADE(DifferentialEvolveEngine):
 
     def _sample_r1_and_r2(self, member: Checkpoint, generation: Generation) -> Tuple[Checkpoint, Checkpoint]:
         x_r1 = random_from_list(list(generation), k=1, exclude=(member,))
-        x_r2 = random_from_list(list(self.archive.records) + list(generation), k=1, exclude=(member, x_r1))
+        x_r2 = random_from_list(self.archive.records + list(generation), k=1, exclude=(member, x_r1))
         return x_r1, x_r2
 
     def _sample_pbest_member(self, generation: Generation) -> Checkpoint:
