@@ -14,12 +14,12 @@ def validate_arguments(args):
         raise ValueError("Population size must be at least 2.")
     if (args.batch_size < 0):
         raise ValueError("Batch size must be at least 1.")
-    if (args.step_size < 0):
-        raise ValueError("Step size must be at least 1.")
-    if (args.eval_steps < 0):
-        raise ValueError("Step size must satisfy 0 <= eval_steps < step_size.")
-    if (args.step_size < 0):
-        raise ValueError("Step size must be at least 1.")
+    if (args.train_steps < 0):
+        raise ValueError("Train steps must be at least 1.")
+    if (args.fitness_steps < 0):
+        raise ValueError("Fitness steps must satisfy 0 <= fitness_steps < train_steps.")
+    if (args.train_steps < 0):
+        raise ValueError("Train steps must be at least 1.")
     if any(device.startswith('cuda') for device in args.devices):
         if not torch.cuda.is_available():
             raise ValueError("CUDA is not available on your machine.")
