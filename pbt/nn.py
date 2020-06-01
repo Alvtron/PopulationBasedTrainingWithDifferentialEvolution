@@ -61,23 +61,25 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
-    def __call__(self, checkpoint: Checkpoint, device: str):
+    def create_subset(self, start_step : int, end_step : int, shuffle : bool):
+        dataset_size = len(self.train_data)
+        start_index = (start_step * self.batch_size) % dataset_size
+        n_samples = (end_step - start_step) * self.batch_size
+        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
+        if shuffle:
+            random.shuffle(indices)
+        return Subset(dataset=self.train_data, indices=indices)
+
+    def __call__(self, checkpoint : Checkpoint, device : str = 'cpu'):
         start_train_time_ns = time.time_ns()
         # preparing model and optimizer
-        model = self.create_model(
-            hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
-        optimizer = self.create_optimizer(
-            model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
-        # prepare batches
-        subset = create_subset(
-            dataset=self.train_data, start=checkpoint.steps * self.batch_size, end=(checkpoint.steps + self.step_size) * self.batch_size, shuffle=self.shuffle)
-        batches = DataLoader(
-            dataset=subset, batch_size=self.batch_size, shuffle=False, drop_last=False)
-        num_batches = len(batches)
+        model = self.create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
+        optimizer = self.create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
+        subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + self.step_size, shuffle = self.shuffle)
+        dataloader = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
-        # train
-        for x, y in batches:
+        for batch_index, (x, y) in enumerate(dataloader):
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
             # 1. Forward pass: compute predicted y by passing x to the model.
@@ -86,7 +88,7 @@ class Trainer(object):
                 if metric_type == self.loss_metric:
                     # 2. Compute loss and save loss.
                     loss = metric_function(output, y)
-                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(num_batches)
+                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(self.step_size)
                     # 3. Before the backward pass, use the optimizer object to zero all of the gradients
                     # for the variables it will update (which are the learnable weights of the model).
                     optimizer.zero_grad()
@@ -98,7 +100,7 @@ class Trainer(object):
                     # 2. Compute loss and save loss
                     with torch.no_grad():
                         loss = metric_function(output, y)
-                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(num_batches)
+                    checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(self.step_size)
                 del loss
             del output
             checkpoint.steps += len(x)
@@ -109,7 +111,6 @@ class Trainer(object):
         del model
         del optimizer
         torch.cuda.empty_cache()
-        # save time
         checkpoint.time[self.LOSS_GROUP] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
 
 
