@@ -181,7 +181,7 @@ class DifferentialEvolution(DifferentialEvolveEngine):
             raise ValueError("generation object is None")
         if fitness_function is None:
             raise ValueError("fitness_function is None")
-        if callable(fitness_function):
+        if not callable(fitness_function):
             raise ValueError("fitness_function is not callable")
         # copy parent
         parent = parent.copy()
@@ -327,7 +327,6 @@ class ExternalArchive():
             parent.delete_state() # remove useless state
             self.__records.append(parent)
 
-
     def clear(self) -> None:
         """Clear records"""
         with self.__lock:
@@ -399,7 +398,7 @@ class SHADE(DifferentialEvolveEngine):
             raise ValueError("generation object is None")
         if fitness_function is None:
             raise ValueError("fitness_function is None")
-        if callable(fitness_function):
+        if not callable(fitness_function):
             raise ValueError("fitness_function is not callable")
         # copy parent
         parent = parent.copy()
