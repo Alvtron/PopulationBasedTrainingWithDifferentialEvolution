@@ -251,18 +251,24 @@ class HistoricalMemory(object):
 
 
 class ExternalArchive():
-    def __init__(self, manager, size: int) -> None:
+    def __init__(self, manager, size: int, verbose: float = False) -> None:
         self.size = size
-        self.__lock = manager.Lock()
         self.records = manager.list()
+        self.__lock = manager.Lock()
+        self.__verbose = verbose
+
+    def __print(self, message: str):
+        if not self.__verbose:
+            return
+        print(f"ExternalArchive: {message}")
 
     def append(self, parent: Checkpoint) -> None:
         with self.__lock:
-            print(f"ExternalArchive: appending {parent} to archive of size {len(self.records)}")
+            self.__print(f"appending {parent} to archive of size {len(self.records)}")
             if len(self.records) == self.size:
                 random_value = random.choice(self.records)
                 index = self.records.index(random_value)
-                print(f"ExternalArchive: removing random {random_value} at index {index} from archive.")
+                self.__print(f"removing random {random_value} at index {index} from archive.")
                 self.records.remove(random_value)
             parent.delete_state() # remove useless state
             self.records.append(parent)
