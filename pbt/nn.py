@@ -10,6 +10,7 @@ from warnings import warn
 import numpy as np
 import torch
 import torchvision
+from torch.nn import Module
 from torch.utils.data import Dataset, Subset, DataLoader
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
@@ -38,18 +39,27 @@ class Trainer(object):
         self.loss_metric = loss_metric
         self.shuffle = shuffle
 
-    def create_model(self, hyper_parameters: Hyperparameters, device: str, model_state: dict = None):
+    def __create_model(self, hyper_parameters: Hyperparameters, device: str, model_state: dict = None):
+        """Create an instance of the model with the supplied hyper-parameters and optional model state"""
+        assert isinstance(hyper_parameters, Hyperparameters), "hyper_parameters is wrong type"
+        assert isinstance(device, str), "device is of wrong type"
+        assert model_state is None or isinstance(model_state, dict), "model_state is wrong type"
+        # create model instance
         model = self.model_class().to(device)
+        # loading model state
         if model_state is not None:
-            # loading model state
             model.load_state_dict(model_state)
+        # applying hyper-parameters
         if isinstance(model, HyperNet) and hasattr(hyper_parameters, 'model'):
-            # applying hyper-parameters
             model.apply_hyper_parameters(hyper_parameters.model, device)
+        # set model to train mode
         model.train()
         return model
 
-    def create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict = None):
+    def __create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict = None):
+        assert isinstance(model, Module), "model is of wrong type"
+        assert isinstance(hyper_parameters, Hyperparameters), "hyper_parameters is wrong type"
+        assert optimizer_state is None or isinstance(optimizer_state, dict), "optimizer_state is wrong type"
         hp_value_dict = {hp_name: hp_value.value for hp_name, hp_value in hyper_parameters.optimizer.items()}
         optimizer = self.optimizer_class(model.parameters(), **hp_value_dict)
         if optimizer_state is not None:
@@ -61,7 +71,11 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
-    def create_subset(self, start_step : int, end_step : int, shuffle : bool):
+    def __create_subset(self, start_step : int, end_step : int, shuffle : bool):
+        assert isinstance(start_step, int), "start step is wrong type"
+        assert isinstance(end_step, int), "end step is wrong type"
+        assert isinstance(shuffle, bool), "shuffle is wrong type"
+        assert start_step < end_step, "start step is bigger than end step"
         dataset_size = len(self.train_data)
         start_index = (start_step * self.batch_size) % dataset_size
         n_samples = (end_step - start_step) * self.batch_size
@@ -71,11 +85,15 @@ class Trainer(object):
         return Subset(dataset=self.train_data, indices=indices)
 
     def __call__(self, checkpoint : Checkpoint, device : str = 'cpu'):
+        if not isinstance(checkpoint, Checkpoint):
+            raise TypeError("checkpoint is wrong type")
+        if not isinstance(device, str):
+            raise TypeError("device is wrong type")
         start_train_time_ns = time.time_ns()
         # preparing model and optimizer
-        model = self.create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
-        optimizer = self.create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
-        subset = self.create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + self.step_size, shuffle = self.shuffle)
+        model = self.__create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
+        optimizer = self.__create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
+        subset = self.__create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + self.step_size, shuffle = self.shuffle)
         dataloader = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
@@ -118,7 +136,6 @@ class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
 
     def __init__(self, model_class: HyperNet, test_data: Dataset, batch_size: int, loss_functions: dict, loss_group: str = 'eval', batches: int = None, shuffle: bool = False):
-        self.model_class = model_class
         if batches is not None and batches < 1:
             raise ValueError("The number of batches must be at least one or higher.")
         if batches is not None:
@@ -126,22 +143,29 @@ class Evaluator(object):
                 dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle)
         else:
             self.test_data = test_data
+        self.model_class = model_class
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
         self.shuffle = shuffle
 
-    def create_model(self, model_state: dict, device: str):
+    def __create_model(self, model_state: dict, device: str):
+        assert isinstance(model_state, dict), "model_state is wrong type"
+        assert isinstance(device, str), "device is of wrong type"
         model = self.model_class().to(device)
         model.load_state_dict(model_state)
         model.eval()
         return model
 
-    def __call__(self, checkpoint: dict, device: str):
+    def __call__(self, checkpoint: Checkpoint, device: str):
         """Evaluate checkpoint model."""
+        if not isinstance(checkpoint, Checkpoint):
+            raise TypeError("checkpoint is wrong type")
+        if not isinstance(device, str):
+            raise TypeError("device is wrong type")
         start_eval_time_ns = time.time_ns()
         # preparing model
-        model = self.create_model(model_state=checkpoint.model_state, device=device)
+        model = self.__create_model(model_state=checkpoint.model_state, device=device)
         # prepare batches
         batches = DataLoader(dataset=self.test_data, batch_size=self.batch_size, shuffle=False, drop_last=False)
         num_batches = len(batches)
