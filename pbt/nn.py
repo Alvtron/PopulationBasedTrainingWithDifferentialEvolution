@@ -225,6 +225,8 @@ class RandomFitnessApproximation():
         self.weight = (batches * batch_size) / len(test_data)
 
     def __adjust_weighted_loss(self, previous_loss: dict, fitness_loss: dict) -> dict:
+        assert isinstance(previous_loss, dict), "previous_loss is wrong type"
+        assert isinstance(fitness_loss, dict), "fitness_loss is wrong type"
         new_loss = collections.defaultdict(dict)
         for loss_group in fitness_loss:
             for loss_type in fitness_loss[loss_group]:
