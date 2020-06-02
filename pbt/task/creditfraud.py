@@ -12,10 +12,17 @@ from .task import Task
 from ..models import hypernet, fraudnet
 from ..utils.data import split, random_split, stratified_split
 from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
-from ..loss import F1, NLL, Accuracy, BinaryCrossEntropy
+from ..loss import F1, Accuracy, BinaryCrossEntropy
 from ..dataset import Datasets
 
+
+bce = BinaryCrossEntropy()
+f1 = F1(classes=2)
+accuracy = Accuracy()
+
+
 class CreditCardFraud(Task):
+
     def __init__(self):
         pass
 
@@ -43,20 +50,19 @@ class CreditCardFraud(Task):
 
     @property
     def loss_functions(self) -> dict:
-        return \
-        {
-            'bce': BinaryCrossEntropy(),
-            'acc': Accuracy(),
-            'f1': F1(classes=self.num_classes)
+        return {
+            bce.iso: bce,
+            f1.iso: f1,
+            accuracy.iso: accuracy
         }
 
     @property
     def loss_metric(self) -> str:
-        return 'bce'
+        return bce.iso
 
     @property
     def eval_metric(self) -> str:
-        return 'bce'
+        return f1.iso
 
     @property
     def datasets(self) -> Datasets:

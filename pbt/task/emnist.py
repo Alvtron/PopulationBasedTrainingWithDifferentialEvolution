@@ -12,7 +12,6 @@ from .mnist import Mnist
 from ..models import hypernet, lenet5, mlp, vgg, resnet
 from ..utils.data import split, random_split, stratified_split
 from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
-from ..loss import F1, Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
 class EMnist(Mnist):

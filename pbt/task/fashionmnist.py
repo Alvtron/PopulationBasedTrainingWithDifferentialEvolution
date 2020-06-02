@@ -14,7 +14,14 @@ from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, 
 from ..loss import F1, Accuracy, CategoricalCrossEntropy
 from ..dataset import Datasets
 
+
+cce = CategoricalCrossEntropy()
+f1 = F1(classes=10)
+accuracy = Accuracy()
+
+
 class FashionMnist(Task):
+
     def __init__(self, model : str = 'lenet5'):
         super().__init__()
         self.model = model
@@ -52,19 +59,19 @@ class FashionMnist(Task):
 
     @property
     def loss_functions(self) -> dict:
-        return \
-        {
-            'cce': CategoricalCrossEntropy(),
-            'acc': Accuracy()
+        return {
+            cce.iso: cce,
+            f1.iso: f1,
+            accuracy.iso: accuracy
         }
 
     @property
     def loss_metric(self) -> str:
-        return 'cce'
+        return cce.iso
 
     @property
     def eval_metric(self) -> str:
-        return 'cce'
+        return f1.iso
 
     @property
     def datasets(self) -> Datasets:
