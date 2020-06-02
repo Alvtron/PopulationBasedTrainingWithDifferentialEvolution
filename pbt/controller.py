@@ -379,8 +379,8 @@ class DEController(Controller):
         generation = Generation(
             dict_constructor=self._manager.dict,
             members=spawned_members)
-        mutate_procedure = DEProcedure(
-            generation=generation, evolver=self.evolver, fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
+        mutate_procedure = DEProcedure(generation=generation, evolver=self.evolver, step_function=self.step_function,
+            fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
         while not self._is_finished(generation):
             # increment n steps
             self._whisper("on generation start...")
