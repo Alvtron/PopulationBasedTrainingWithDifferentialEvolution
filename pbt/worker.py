@@ -34,10 +34,8 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
-CONTEXT = torch.multiprocessing.get_context("spawn")
 
 STOP_FLAG = None
-
 
 class Trial:
     def __init__(self, return_queue, function: DeviceCallable, parameters: object):
@@ -56,7 +54,8 @@ class FailMessage(object):
     exception: str = None
 
 
-class Worker(CONTEXT.Process):
+
+class Worker(torch.multiprocessing.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
 
     def __init__(self, id: int, end_event, receive_queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
