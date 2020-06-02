@@ -36,9 +36,9 @@ class CreditCardFraud(Task):
         return Hyperparameters(
             model= self.model_class.create_hyper_parameters(),
             optimizer={
-                'lr': ContiniousHyperparameter(1e-6, 1e-1),
+                'lr': ContiniousHyperparameter(1e-5, 1e-1),
                 'momentum': ContiniousHyperparameter(0.8, 1.0),
-                'weight_decay': ContiniousHyperparameter(0.0, 1e-2),
+                'weight_decay': ContiniousHyperparameter(0.0, 1e-3),
             })
 
     @property
