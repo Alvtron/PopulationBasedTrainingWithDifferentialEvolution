@@ -224,7 +224,7 @@ class RandomFitnessApproximation():
             batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
         self.weight = (batches * batch_size) / len(test_data)
 
-    def __adjust_loss(self, previous_loss: dict, fitness_loss: dict) -> dict:
+    def __adjust_weighted_loss(self, previous_loss: dict, fitness_loss: dict) -> dict:
         new_loss = collections.defaultdict(dict)
         for loss_group in fitness_loss:
             for loss_type in fitness_loss[loss_group]:
@@ -245,4 +245,4 @@ class RandomFitnessApproximation():
         # unload checkpoint state
         checkpoint.unload_state()
         # correct loss
-        checkpoint.loss = self.__adjust_loss(old_loss, checkpoint.loss)
+        checkpoint.loss = self.__adjust_weighted_loss(old_loss, checkpoint.loss)

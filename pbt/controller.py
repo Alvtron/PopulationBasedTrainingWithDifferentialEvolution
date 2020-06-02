@@ -410,7 +410,6 @@ class DEProcedure(DeviceCallable):
     def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
         self._print(f"training member {member.id}...")
         self.step_function(checkpoint=member, device=device)
-        self.generation.update(member)
         self._print(f"mutating member {member.id}...")
         member = self.evolver.mutate(
             parent=member,
