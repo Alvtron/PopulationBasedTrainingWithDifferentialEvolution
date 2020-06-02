@@ -21,6 +21,8 @@ import numpy as np
 
 from pbt.device import DeviceCallable
 
+# set torch multiprocessing settings
+torch.multiprocessing.set_sharing_strategy('file_system')
 # various settings for reproducibility
 # set random seed
 random.seed(0)
