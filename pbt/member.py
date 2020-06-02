@@ -42,13 +42,13 @@ class Checkpoint(object):
         self.TRAIN_LABEL = 'train'
         self.EVAL_LABEL = 'eval'
         self.TEST_LABEL = 'test'
+        self.MODEL_STATE_PROPERTY = 'model_state'
+        self.OPTIMIZER_STATE_PROPERTY = 'optimizer_state'
         self.id: object = id
         self.parameters: Hyperparameters = parameters
         self.minimize: bool = minimize
         self.steps: int = 0
-        self.MODEL_STATE_PROPERTY = 'model_state'
         self.model_state: dict = None
-        self.OPTIMIZER_STATE_PROPERTY = 'optimizer_state'
         self.optimizer_state: dict = None
         self.loss_metric: str = loss_metric
         self.eval_metric: str = eval_metric
