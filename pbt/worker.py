@@ -34,8 +34,10 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 # multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
+torch.multiprocessing.set_start_method('spawn')
 
 STOP_FLAG = None
+
 
 class Trial:
     def __init__(self, return_queue, function: DeviceCallable, parameters: object):
@@ -52,7 +54,6 @@ class FailMessage(object):
     sender_id: int
     text: str
     exception: str = None
-
 
 
 class Worker(torch.multiprocessing.Process):
