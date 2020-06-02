@@ -279,9 +279,19 @@ class PBTController(Controller):
         spawned_members = self.evolver.spawn(initial)
         # create generation
         generation = Generation(dict_constructor=self._manager.dict, members=spawned_members)
+        # create procedures
+        train_procedure = PBTTrainer(train_function=self.step_function, verbose=self.verbose > 3)
+        mutate_procedure = PBTProcedure(generation=generation, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
-            for member in self.__mutate_asynchronously(generation):
+            self._whisper(f"training members...")
+            for member in self._worker_pool.imap(train_procedure, generation):
+                # report member performance
+                self._say(f"{member}, {member.performance_details()}")
+                # update generation
+                generation.update(member)
+            self._whisper(f"exploiting and exploring members...")
+            for member in self._worker_pool.imap(mutate_procedure, generation):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.id].parameters, new_hps=member.parameters)}")
@@ -291,24 +301,26 @@ class PBTController(Controller):
                 self.__n_steps += 1
             yield list(generation)
 
-    def __mutate_asynchronously(self, generation: Generation):
-        procedure = PBTProcedure(
-            generation=generation, evolver=self.evolver, step_function=self.step_function, test_function=self.test_function, verbose=self.verbose > 3)
-        yield from self._worker_pool.imap(procedure, generation)
+
+class PBTTrainer(DeviceCallable):
+    def __init__(self, train_function, verbose: bool = False):
+        super().__init__(verbose)
+        self.train_function = train_function
+
+    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+        self._print(f"training member {member.id}...")
+        self.train_function(checkpoint=member, device=device)
+        return member
 
 
 class PBTProcedure(DeviceCallable):
-    def __init__(self, generation: Generation, evolver: ExploitAndExplore, step_function, test_function=None, verbose: bool = False):
+    def __init__(self, generation: Generation, evolver: ExploitAndExplore, test_function=None, verbose: bool = False):
         super().__init__(verbose)
         self.generation = generation
         self.evolver = evolver
-        self.step_function = step_function
         self.test_function = test_function
 
     def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
-        self._print(f"training and evaluating member {member.id}...")
-        self.step_function(member, device)
-        self.generation.update(member)
         # exploit and explore
         self._print(f"mutating member {member.id}...")
         member = self.evolver.mutate(member=member, generation=self.generation)
@@ -367,19 +379,21 @@ class DEController(Controller):
         generation = Generation(
             dict_constructor=self._manager.dict,
             members=spawned_members)
-        procedure = DEProcedure(
+        train_procedure = DETrainer(self.step_function)
+        mutate_procedure = DEProcedure(
             generation=generation, evolver=self.evolver, fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
-        trainer = DETrainer(self.step_function)
         while not self._is_finished(generation):
             # increment n steps
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
             self._whisper("training members...")
-            for member in self._worker_pool.imap(trainer, generation):
+            for member in self._worker_pool.imap(train_procedure, generation):
+                # report member performance
+                self._say(f"{member}, {member.performance_details()}")
                 # update generation
                 generation.update(member)
             self._whisper("mutating members...")
-            for member in self._worker_pool.imap(procedure, generation):
+            for member in self._worker_pool.imap(mutate_procedure, generation):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.id].parameters, new_hps=member.parameters)}")
