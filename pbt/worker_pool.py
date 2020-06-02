@@ -30,8 +30,6 @@ torch.cuda.manual_seed_all(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
-# multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 class WorkerPool(object):
@@ -42,10 +40,9 @@ class WorkerPool(object):
                 "n_jobs must be larger or equal the number of devices.")
         self.verbose = verbose
         self._cuda = any(device.startswith('cuda') for device in devices)
-        self._context = torch.multiprocessing.get_context('spawn')
         self._manager = manager
         self._end_event = manager.Event()
-        send_queues = [self._context.Queue() for _ in devices]
+        send_queues = [torch.multiprocessing.Queue() for _ in devices]
         self._workers: List[Worker] = [
             Worker(id=id, end_event=self._end_event, receive_queue=send_queue,
                    device=device, random_seed=id, verbose=verbose > 1)

@@ -32,9 +32,6 @@ torch.cuda.manual_seed_all(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
-# multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
-torch.multiprocessing.set_start_method('spawn')
 
 STOP_FLAG = None
 

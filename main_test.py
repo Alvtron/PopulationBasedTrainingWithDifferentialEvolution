@@ -6,8 +6,9 @@ import numpy as np
 from main_helper import run
 
 if __name__ == "__main__":
-    # set global parameters
+    # set multiprocessing settings
     torch.multiprocessing.set_sharing_strategy('file_system')
+    torch.multiprocessing.set_start_method('spawn')
     # set random seed
     random.seed(0)
     np.random.seed(0)

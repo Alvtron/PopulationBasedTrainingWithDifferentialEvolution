@@ -172,8 +172,7 @@ def run(task: str, evolver: str, population_size: int, batch_size: int, train_st
     print(f"Importing task...")
     _task = import_task(task)
     # create memory manager
-    context = torch.multiprocessing.get_context("spawn")
-    manager = context.Manager()
+    manager = torch.multiprocessing.Manager()
     # prepare database
     print(f"Preparing database...")
     database = Database(
