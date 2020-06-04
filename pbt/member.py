@@ -48,6 +48,7 @@ class Checkpoint(object):
         self.parameters: Hyperparameters = parameters
         self.minimize: bool = minimize
         self.steps: int = 0
+        self.epochs: int = 0
         self.model_state: dict = None
         self.optimizer_state: dict = None
         self.loss_metric: str = loss_metric
@@ -56,7 +57,7 @@ class Checkpoint(object):
         self.time: Dict[str, dict] = dict()
 
     def __str__(self) -> str:
-        return f"member {self.id} at step {self.steps:05d}"
+        return f"member {self.id}, step {self.steps}, epoch {self.epochs}"
 
     def __getitem__(self, index: int) -> float:
         return self.parameters[index].normalized

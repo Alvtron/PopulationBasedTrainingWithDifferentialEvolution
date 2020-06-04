@@ -25,8 +25,8 @@ class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
 
     def __init__(
-        self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, batch_size: int,
-        loss_functions: dict, loss_metric: str, step_size: int = 1, shuffle: bool = False):
+        self, model_class: Module, optimizer_class: Optimizer, train_data: Dataset, batch_size: int,
+        loss_functions: dict, loss_metric: str, step_size: int = 1):
         if step_size < 1:
             raise ValueError("The number of steps must be at least one or higher.")
         self.LOSS_GROUP = 'train'
@@ -37,9 +37,8 @@ class Trainer(object):
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_metric = loss_metric
-        self.shuffle = shuffle
 
-    def __create_model(self, hyper_parameters: Hyperparameters, device: str, model_state: dict = None):
+    def __create_model(self, hyper_parameters: Hyperparameters, device: str, model_state: dict = None) -> Module:
         """Create an instance of the model with the supplied hyper-parameters and optional model state"""
         assert isinstance(hyper_parameters, Hyperparameters), "hyper_parameters is wrong type"
         assert isinstance(device, str), "device is of wrong type"
@@ -56,7 +55,7 @@ class Trainer(object):
         model.train()
         return model
 
-    def __create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict = None):
+    def __create_optimizer(self, model: HyperNet, hyper_parameters: Hyperparameters, optimizer_state: dict = None) -> Optimizer:
         assert isinstance(model, Module), "model is of wrong type"
         assert isinstance(hyper_parameters, Hyperparameters), "hyper_parameters is wrong type"
         assert optimizer_state is None or isinstance(optimizer_state, dict), "optimizer_state is wrong type"
@@ -71,18 +70,25 @@ class Trainer(object):
                     param_group[param_name] = param_value.value
         return optimizer
 
-    def __create_subset(self, start_step : int, end_step : int, shuffle : bool):
-        assert isinstance(start_step, int), "start step is wrong type"
-        assert isinstance(end_step, int), "end step is wrong type"
-        assert isinstance(shuffle, bool), "shuffle is wrong type"
-        assert start_step < end_step, "start step is bigger than end step"
+    def __create_dataloader(self, steps_performed : int) -> DataLoader:
+        """Load a cyclic subset of the training data with indices decided by the range between the number of steps performed and step size, and return the dalaloader.\n
+        If the number of steps exceeds the length of the training data, the exceeding steps are shifted to index 0.
+        """
+        assert isinstance(steps_performed, int), "start step is wrong type"
+        assert steps_performed >= 0, "steps_performed was negative"
         dataset_size = len(self.train_data)
-        start_index = (start_step * self.batch_size) % dataset_size
-        n_samples = (end_step - start_step) * self.batch_size
-        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, start_index + n_samples))
-        if shuffle:
-            random.shuffle(indices)
-        return Subset(dataset=self.train_data, indices=indices)
+        n_samples = self.step_size * self.batch_size
+        start_index = (steps_performed * self.batch_size) % dataset_size
+        end_index = start_index + n_samples
+        indices_iterator = itertools.cycle(range(dataset_size))
+        indices = list(itertools.islice(indices_iterator, start_index, start_index + n_samples))
+        subset = Subset(dataset=self.train_data, indices=indices)
+        return DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
+
+    def __calculate_epochs(self, steps_performed: int) -> int:
+        """Calculate the number of epochs based on the number of steps performed."""
+        samples_processed = (steps_performed * self.batch_size)
+        return samples_processed // len(self.train_data)
 
     def __call__(self, checkpoint : Checkpoint, device : str = 'cpu'):
         if not isinstance(checkpoint, Checkpoint):
@@ -93,10 +99,11 @@ class Trainer(object):
         # preparing model and optimizer
         model = self.__create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
         optimizer = self.__create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
-        subset = self.__create_subset(start_step = checkpoint.steps, end_step = checkpoint.steps + self.step_size, shuffle = self.shuffle)
-        dataloader = DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
+        # create dataloader
+        dataloader = self.__create_dataloader(steps_performed = checkpoint.steps)
         # reset loss dict
         checkpoint.loss[self.LOSS_GROUP] = dict.fromkeys(self.loss_functions, 0.0)
+        # train
         for batch_index, (x, y) in enumerate(dataloader):
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
@@ -121,7 +128,9 @@ class Trainer(object):
                     checkpoint.loss[self.LOSS_GROUP][metric_type] += loss.item() / float(self.step_size)
                 del loss
             del output
-            checkpoint.steps += len(x)
+            checkpoint.steps += 1
+        # update number of epochs performed
+        checkpoint.epochs = self.__calculate_epochs(checkpoint.steps)
         # set new state
         checkpoint.model_state = model.state_dict()
         checkpoint.optimizer_state = optimizer.state_dict()
@@ -196,7 +205,7 @@ class Step():
         # n batches for training
         self.trainer = Trainer(
             model_class=model_class, optimizer_class=optimizer_class, train_data=train_data, step_size=step_size,
-            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric, shuffle=False)
+            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric)
         # n random batches for evaluation
         self.evaluator = Evaluator(
             model_class=model_class, test_data=test_data, batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
@@ -217,7 +226,7 @@ class RandomFitnessApproximation():
         # n batches for training
         self.trainer = Trainer(
             model_class=model_class, optimizer_class=optimizer_class, train_data=train_data, step_size=batches,
-            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric, shuffle=False)
+            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric)
         # n random batches for evaluation
         self.evaluator = Evaluator(
             model_class=model_class, test_data=test_data, batches=batches,
