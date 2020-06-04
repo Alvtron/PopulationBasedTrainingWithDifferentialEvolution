@@ -80,8 +80,7 @@ class Trainer(object):
         n_samples = self.step_size * self.batch_size
         start_index = (steps_performed * self.batch_size) % dataset_size
         end_index = start_index + n_samples
-        indices_iterator = itertools.cycle(range(dataset_size))
-        indices = list(itertools.islice(indices_iterator, start_index, start_index + n_samples))
+        indices = list(itertools.islice(itertools.cycle(range(dataset_size)), start_index, end_index))
         subset = Subset(dataset=self.train_data, indices=indices)
         return DataLoader(dataset = subset, batch_size = self.batch_size, shuffle = False)
 
