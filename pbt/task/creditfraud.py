@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import pandas
+import pandas as pd
 import sklearn.preprocessing
 import numpy as np
 import torch
@@ -66,16 +66,19 @@ class CreditCardFraud(Task):
 
     @property
     def datasets(self) -> Datasets:
-        df = pandas.read_csv('./data/CreditCardFraud/creditcard.csv')
-        inputs = df.iloc[:, :-1].values
-        labels = df.iloc[:, -1].values
+        data = pd.read_csv('./data/CreditCardFraud/creditcard.csv')
+        # normalize amount
         sc = sklearn.preprocessing.StandardScaler()
-        torch_inputs = sc.fit_transform(inputs)
-        torch_inputs = from_numpy(torch_inputs).float()
+        data['Amount'] = sc.fit_transform(data['Amount'].values.reshape(-1, 1))
+        # remove time column
+        data = data.drop(['Time'],axis=1)
+        # assign inputs and labels
+        inputs = data.loc[:, data.columns != 'Class'].values
+        labels = data['Class'].values
+        torch_inputs = from_numpy(inputs).float()
         torch_labels = from_numpy(labels).float()
         dataset = torch.utils.data.TensorDataset(torch_inputs, torch_labels)
         # split dataset into training-, testing- and validation set
-        unique_labels = set(labels)
-        train_data, test_data = stratified_split(dataset, unique_labels, fraction=0.9, random_state=1)
-        train_data, eval_data = stratified_split(train_data, unique_labels, fraction=0.9, random_state=1)
+        train_data, test_data = stratified_split(dataset, torch_labels, fraction=0.9, random_state=1)
+        train_data, eval_data = stratified_split(train_data, torch_labels, fraction=0.9, random_state=1)
         return Datasets(train_data, eval_data, test_data)
