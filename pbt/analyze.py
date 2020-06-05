@@ -292,7 +292,6 @@ class Analyzer(object):
         TAB_COLORS = [COLOR_MAP(i/10) for i in range(0, 11, 1)]
         TAB_MAP = matplotlib.colors.ListedColormap(TAB_COLORS)
         # set colors
-        DEFAULT_LINE_COLOR = '#C0C0C0' # gray
         WORST_COLOR = 'red'
         BEST_COLOR = 'orange'
         # set markers
@@ -353,7 +352,6 @@ class Analyzer(object):
         # set colors
         FILL_COLOR = 'gainsboro'
         MEAN_COLOR = 'gray'
-        LINE_COLOR = 'cadetblue'
         HIGHLIGHT_COLOR = 'darkcyan'
         NAN_COLOR = 'crimson'
         # set markers
@@ -366,10 +364,8 @@ class Analyzer(object):
         score_df = self.__create_score_dataframe()
         if self.__minimize_score():
             best_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
-            worst_member_id = score_df.tail(1).idxmax(axis=1).to_numpy()[0]
         else:
             best_member_id = score_df.tail(1).idxmax(axis=1).to_numpy()[0]
-            worst_member_id = score_df.tail(1).idxmin(axis=1).to_numpy()[0]
         # create hyper-parameter dataframe
         hp_df = self.__create_hp_dataframes()
         # plot data
