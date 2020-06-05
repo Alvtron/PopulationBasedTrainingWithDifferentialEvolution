@@ -131,17 +131,21 @@ class WorkerPool:
             raise Exception("worker failed.")
         return result
 
-    def imap(self, function: Callable[[object], object], parameter_map: Iterable[object]) -> Generator[object, None, None]:
+    def imap(self, function: Callable[[object], object], parameters: Sequence[object], shuffle: bool = False) -> Generator[object, None, None]:
         if not callable(function):
-            raise TypeError("provided function is not callable")
-        if not isinstance(parameter_map, Iterable):
-            raise TypeError("parameter_map is not iterable")
+            raise TypeError("'function' is not callable")
+        if not isinstance(parameters, (list, tuple)):
+            raise TypeError("'parameters' is not a sequence")
+        if not isinstance(shuffle, bool):
+            raise TypeError("'shuffle' is not a bool")
+        if shuffle:
+            random.shuffle(parameters)
         n_sent = 0
         n_returned = 0
         failed_workers = set()
         return_queue = self._manager.Queue()
         self._print(f"queuing parameters...")
-        for parameters, worker in zip(parameter_map, self._workers_iterator):
+        for parameters, worker in zip(parameters, self._workers_iterator):
             trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
             worker.receive_queue.put(trial)
             n_sent += 1
