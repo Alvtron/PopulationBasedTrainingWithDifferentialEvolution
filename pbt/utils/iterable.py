@@ -22,7 +22,7 @@ def is_iterable(obj: object) -> bool:
 def random_from_dict(values: Dict[object, CT], k: int = 1, exclude: Sequence[CT] = []) -> Tuple[CT, ...]:
     if not isinstance(exclude, Sequence):
         exclude = [exclude]
-    filtered = values.values() if not exclude else [v for id, v in values.values() if v not in exclude]
+    filtered = values.values() if not exclude else [v for uid, v in values.values() if v not in exclude]
     return random.sample(filtered, k) if k and k > 1 else random.choice(filtered)
 
 def random_from_list(values: Iterable[CT], k: int = 1, exclude: Sequence[CT] = []) -> Tuple[CT, ...]:

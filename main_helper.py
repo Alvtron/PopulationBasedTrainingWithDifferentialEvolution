@@ -4,7 +4,7 @@ import random
 import time
 import argparse
 import multiprocessing
-from typing import List
+from typing import List, Sequence
 from functools import partial
 from dataclasses import dataclass
 
@@ -164,10 +164,59 @@ def create_tensorboard(log_directory):
     return SummaryWriter(tensorboard_log_path), url
 
 
-def run(task: str, evolver: str, population_size: int, batch_size: int, train_steps: int,
-        end_steps: int = None, end_time: int = None, end_score: float = None, history: int = 2,
-        directory: str = 'checkpoints', devices: List[str] = ['cpu'], n_jobs: int = 1,
-        tensorboard: bool = False, fitness_steps: int = 0, verbose: int = 1, logging: bool = True):
+def run(task: str, evolver: str, population_size: int, batch_size: int, train_steps: int, fitness_steps: int = 0,
+        end_steps: int = None, end_time: int = None, end_score: float = None, directory: str = 'checkpoints',
+        devices: Sequence[str] = ['cpu'], n_jobs: int = 1, verbose: int = 1, logging: bool = True, history: int = 2, tensorboard: bool = False):
+    if not isinstance(task, str):
+        raise TypeError(f"the 'task' specified was of wrong type {type(task)}, expected {str}.")
+    if not task:
+        raise ValueError(f"the 'task' string specified was empty.")
+    if not isinstance(evolver, str):
+        raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {str}.")
+    if not evolver:
+        raise ValueError(f"the 'evolver' string specified was empty.")
+    if not isinstance(population_size, int):
+        raise TypeError(f"the 'population_size' specified was of wrong type {type(population_size)}, expected {int}.")
+    if population_size < 1:
+        raise ValueError(f"the 'population_size' specified was less than 1.")
+    if not isinstance(batch_size, int):
+        raise TypeError(f"the 'batch_size' specified was of wrong type {type(batch_size)}, expected {int}.")
+    if batch_size < 1:
+        raise ValueError(f"the 'batch_size' specified was less than 1.")
+    if not isinstance(train_steps, int):
+        raise TypeError(f"the 'train_steps' specified was of wrong type {type(train_steps)}, expected {int}.")
+    if train_steps < 1:
+        raise ValueError(f"the 'train_steps' specified was less than 1.")
+    if not isinstance(fitness_steps, int):
+        raise TypeError(f"the 'fitness_steps' specified was of wrong type {type(fitness_steps)}, expected {int}.")
+    if fitness_steps < 0:
+        raise ValueError(f"the 'fitness_steps' specified was less than 0.")
+    if end_steps is not None and not isinstance(end_steps, int):
+        raise TypeError(f"the 'end_steps' specified was of wrong type {type(end_steps)}, expected {int}.")
+    if end_time is not None and not isinstance(end_time, int):
+        raise TypeError(f"the 'end_time' specified was of wrong type {type(end_time)}, expected {int}.")
+    if end_score is not None and not isinstance(end_score, int):
+        raise TypeError(f"the 'end_score' specified was of wrong type {type(end_score)}, expected {int}.")
+    if not isinstance(directory, str):
+        raise TypeError(f"the 'directory' path specified was of wrong type {type(directory)}, expected {str}.")
+    if not directory:
+        raise ValueError(f"the 'directory' path specified was empty.")
+    if not isinstance(devices, (list, tuple)):
+        raise TypeError(f"the 'devices' specified was of wrong type {type(devices)}, expected {list} or {tuple}.")
+    if not isinstance(n_jobs, int):
+        raise TypeError(f"the 'n_jobs' specified was of wrong type {type(n_jobs)}, expected {int}.")
+    if n_jobs < 1:
+        raise ValueError(f"the 'n_jobs' specified was less than 1.")
+    if not isinstance(verbose, int):
+        raise TypeError(f"the 'verbose' specified was of wrong type {type(verbose)}, expected {int}.")
+    if not isinstance(logging, bool):
+        raise TypeError(f"the 'logging' specified was of wrong type {type(logging)}, expected {bool}.")
+    if not isinstance(history, int):
+        raise TypeError(f"the 'history' specified was of wrong type {type(history)}, expected {int}.")
+    if history < 1:
+        raise ValueError(f"the 'history' specified was less than 1.")
+    if not isinstance(tensorboard, bool):
+        raise TypeError(f"the 'tensorboard' specified was of wrong type {type(tensorboard)}, expected {bool}.")
     # prepare objective
     print(f"Importing task...")
     _task = import_task(task)

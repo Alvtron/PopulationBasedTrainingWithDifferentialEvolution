@@ -4,14 +4,20 @@ from pbt.database import Database
 from pbt.member import Generation
 
 class GarbageCollector:
-    def __init__(self, database: Database, history_limit: int = None, verbose: int = 0):
+    def __init__(self, database: Database, history_limit: int = None, verbose: bool = False):
+        if not isinstance(database, Database):
+            raise TypeError(f"the 'database' specified was of wrong type {type(database)}, expected {Database}.")
+        if not isinstance(history_limit, int):
+            raise TypeError(f"the 'history_limit' specified was of wrong type {type(history_limit)}, expected {int}.")
+        if not isinstance(verbose, bool):
+            raise TypeError(f"the 'verbose' specified was of wrong type {type(verbose)}, expected {bool}.")
         self.database = database
         self.history_limit = history_limit
         self.verbose = verbose
         self.__processed_identities = set()
 
     def _log(self, message: str) -> None:
-        if self.verbose <= 0:
+        if not self.verbose:
             return
         print(f"GC: {message}")
 
@@ -28,9 +34,9 @@ class GarbageCollector:
                 if not member.has_state():
                     # skipping the member as it has no state to delete
                     continue
-                self._log(f"deleting the state from member {member.id} at step {member.steps}...")
+                self._log(f"deleting the state from member {member.uid} at step {member.steps}...")
                 member.delete_state()
                 # updating database
-                self.database.update(member.id, member.steps, member)
+                self.database.update(member.uid, member.steps, member)
                 # save identiy to processed identities
                 self.__processed_identities.add((uid, key))

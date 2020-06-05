@@ -16,19 +16,31 @@ from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
 from torch.optim import Optimizer
 
-from .member import Checkpoint, MissingStateError
-from .hyperparameters import Hyperparameters
-from .models.hypernet import HyperNet
+from pbt.member import Checkpoint, MissingStateError
+from pbt.hyperparameters import Hyperparameters
+from pbt.models.hypernet import HyperNet
 from pbt.utils.data import create_subset, create_subset_by_size
 
 class Trainer(object):
     """ A class for training the provided model with the provided hyper-parameters on the set training dataset. """
 
-    def __init__(
-        self, model_class: Module, optimizer_class: Optimizer, train_data: Dataset, batch_size: int,
-        loss_functions: dict, loss_metric: str, step_size: int = 1):
+    def __init__(self, model_class, optimizer_class, train_data: Dataset, batch_size: int, loss_functions: dict, loss_metric: str, step_size: int = 1):
+        if not callable(model_class):
+            raise TypeError(f"the 'model_class' specified was not callable.")
+        if not callable(optimizer_class):
+            raise TypeError(f"the 'optimizer_class' specified was not callable.")
+        if not isinstance(train_data, Dataset):
+            raise TypeError(f"the 'train_data' specified was of wrong type {type(train_data)}, expected {Dataset}.")
+        if not isinstance(batch_size, int):
+            raise TypeError(f"the 'batch_size' specified was of wrong type {type(batch_size)}, expected {int}.")
+        if not isinstance(loss_functions, dict):
+            raise TypeError(f"the 'loss_functions' specified was of wrong type {type(loss_functions)}, expected {dict}.")
+        if not isinstance(loss_metric, str):
+            raise TypeError(f"the 'loss_metric' specified was of wrong type {type(loss_metric)}, expected {str}.")
+        if not isinstance(step_size, int):
+            raise TypeError(f"the 'step_size' specified was of wrong type {type(step_size)}, expected {int}.")
         if step_size < 1:
-            raise ValueError("The number of steps must be at least one or higher.")
+            raise ValueError("The 'step_size' specified was lower than 1.")
         self.LOSS_GROUP = 'train'
         self.model_class = model_class
         self.optimizer_class = optimizer_class
@@ -92,9 +104,9 @@ class Trainer(object):
 
     def __call__(self, checkpoint : Checkpoint, device : str = 'cpu'):
         if not isinstance(checkpoint, Checkpoint):
-            raise TypeError("checkpoint is wrong type")
+            raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
         if not isinstance(device, str):
-            raise TypeError("device is wrong type")
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         start_train_time_ns = time.time_ns()
         # preparing model and optimizer
         model = self.__create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
@@ -144,15 +156,27 @@ class Trainer(object):
 class Evaluator(object):
     """ Class for evaluating the performance of the provided model on the set evaluation dataset. """
 
-    def __init__(self, model_class: HyperNet, test_data: Dataset, batch_size: int, loss_functions: dict, loss_group: str = 'eval', batches: int = None, shuffle: bool = False):
-        if batches is not None and batches < 1:
-            raise ValueError("The number of batches must be at least one or higher.")
+    def __init__(self, model_class, test_data: Dataset, batch_size: int, loss_functions: dict, loss_group: str = 'eval', batches: int = None, shuffle: bool = False):
+        if not callable(model_class):
+            raise TypeError(f"the 'model_class' specified was not callable.")
+        if not isinstance(test_data, Dataset):
+            raise TypeError(f"the 'test_data' specified was of wrong type {type(test_data)}, expected {Dataset}.")
+        if not isinstance(batch_size, int):
+            raise TypeError(f"the 'batch_size' specified was of wrong type {type(batch_size)}, expected {int}.")
+        if not isinstance(loss_functions, dict):
+            raise TypeError(f"the 'loss_functions' specified was of wrong type {type(loss_functions)}, expected {dict}.")
+        if not isinstance(loss_group, str):
+            raise TypeError(f"the 'loss_group' specified was of wrong type {type(loss_group)}, expected {str}.")
         if batches is not None:
-            self.test_data = create_subset_by_size(
-                dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle)
-        else:
-            self.test_data = test_data
+            if not isinstance(batches, int):
+                raise TypeError(f"the 'batches' specified was of wrong type {type(batches)}, expected {int}.")
+            if batches < 1:
+                raise ValueError("The 'batches' specified was less than 1.")
+        if not isinstance(shuffle, bool):
+            raise TypeError(f"the 'shuffle' specified was of wrong type {type(shuffle)}, expected {bool}.")
         self.model_class = model_class
+        self.test_data = create_subset_by_size(
+            dataset=test_data, n_samples=batches * batch_size, shuffle=shuffle) if batches is not None else test_data
         self.batch_size = batch_size
         self.loss_functions = loss_functions
         self.loss_group = loss_group
@@ -169,9 +193,9 @@ class Evaluator(object):
     def __call__(self, checkpoint: Checkpoint, device: str):
         """Evaluate checkpoint model."""
         if not isinstance(checkpoint, Checkpoint):
-            raise TypeError("checkpoint is wrong type")
+            raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
         if not isinstance(device, str):
-            raise TypeError("device is wrong type")
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         start_eval_time_ns = time.time_ns()
         # preparing model
         model = self.__create_model(model_state=checkpoint.model_state, device=device)
@@ -211,6 +235,10 @@ class Step():
             model_class=model_class, test_data=test_data, batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
 
     def __call__(self, checkpoint: Checkpoint, device: str):
+        if not isinstance(checkpoint, Checkpoint):
+            raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
+        if not isinstance(device, str):
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         # load checkpoint state
         checkpoint.load_state(device=device, missing_ok=checkpoint.steps == 0)
         # train and evaluate
@@ -246,6 +274,10 @@ class RandomFitnessApproximation():
         return new_loss
 
     def __call__(self, checkpoint: Checkpoint, device: str):
+        if not isinstance(checkpoint, Checkpoint):
+            raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
+        if not isinstance(device, str):
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         # copy old loss
         old_loss = deepcopy(checkpoint.loss)
         # load checkpoint state

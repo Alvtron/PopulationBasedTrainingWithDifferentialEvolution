@@ -15,6 +15,12 @@ from .hyperparameters import ContiniousHyperparameter, Hyperparameters
 
 class Datasets(object):
     def __init__(self, train_data: Dataset, eval_data: Dataset, test_data: Dataset = None):
+        if not isinstance(train_data, Dataset):
+            raise TypeError(f"the 'train_data' specified was of wrong type {type(train_data)}, expected {Dataset}.")
+        if not isinstance(eval_data, Dataset):
+            raise TypeError(f"the 'eval_data' specified was of wrong type {type(eval_data)}, expected {Dataset}.")
+        if not isinstance(test_data, Dataset):
+            raise TypeError(f"the 'test_data' specified was of wrong type {type(test_data)}, expected {Dataset}.")
         self.train = train_data
         self.eval = eval_data
         self.test = test_data

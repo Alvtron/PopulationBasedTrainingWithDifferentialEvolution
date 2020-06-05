@@ -10,11 +10,13 @@ import itertools
 from collections.abc import Iterable
 from functools import partial
 from typing import List, Sequence, Iterable, Callable, Generator
+from multiprocessing.managers import SyncManager
 
 import numpy as np
 import torch
 from multiprocessing.pool import ThreadPool
 
+from pbt.utils.iterable import is_iterable
 from .worker import STOP_FLAG, FailMessage, Trial, Worker
 from .utils.cuda import get_gpu_memory_stats
 
@@ -32,21 +34,29 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
 
 
-class WorkerPool(object):
-    def __init__(self, manager, devices: Sequence[str] = ('cpu',), n_jobs: int = 1, verbose: int = 0):
-        super().__init__()
+class WorkerPool:
+    def __init__(self, manager: SyncManager, devices: Sequence[str] = ('cpu',), n_jobs: int = 1, verbose: int = 0):
+        if not isinstance(manager, SyncManager):
+            raise TypeError(f"the manager specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(devices, (list, tuple)):
+            raise TypeError(f"the devices specified was of wrong type {type(devices)}, expected {list} or {tuple}.")
+        if not is_iterable(devices):
+            raise TypeError(f"the devices specified was not iterable.")
+        if not isinstance(n_jobs, int):
+            raise TypeError(f"the n_jobs specified was of wrong type {type(n_jobs)}, expected {int}.")
         if n_jobs < len(devices):
-            raise ValueError(
-                "n_jobs must be larger or equal the number of devices.")
+            raise ValueError(f"the n_jobs specified must be larger or equal the number of devices, i.e. {n_jobs} < {len(devices)}.")
+        if not isinstance(verbose, int):
+            raise TypeError(f"the manager specified was of wrong type {type(verbose)}, expected {int}.")
         self.verbose = verbose
         self._cuda = any(device.startswith('cuda') for device in devices)
         self._manager = manager
         self._end_event = manager.Event()
         send_queues = [torch.multiprocessing.Queue() for _ in devices]
         self._workers: List[Worker] = [
-            Worker(id=id, end_event=self._end_event, receive_queue=send_queue,
-                   device=device, random_seed=id, verbose=verbose > 1)
-            for id, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
+            Worker(uid=uid, end_event=self._end_event, receive_queue=send_queue,
+                   device=device, random_seed=uid, verbose=verbose > 1)
+            for uid, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
         self.__async_return_queue = None
 
@@ -61,7 +71,7 @@ class WorkerPool(object):
             return
         memory_stats = get_gpu_memory_stats()
         memory_stats_formatted = (
-            f"CUDA:{id} ({memory[0]}/{memory[1]}MB)" for id, memory in memory_stats.items())
+            f"CUDA:{uid} ({memory[0]}/{memory[1]}MB)" for uid, memory in memory_stats.items())
         output = ', '.join(memory_stats_formatted)
         self._print(output)
 
@@ -74,12 +84,12 @@ class WorkerPool(object):
     def _respawn(self, worker_id: int) -> None:
         # stop existing worker
         worker = self._workers[worker_id]
-        self._print(f"terminating old worker with id {worker_id}...")
+        self._print(f"terminating old worker with uid {worker_id}...")
         self._stop_worker(worker)
         # spawn new worker
-        self._print(f"spawning new worker with id {worker.id}...")
-        self._workers[worker_id] = Worker(id=worker.id, end_event=self._end_event, receive_queue=worker.receive_queue,
-                                          device=worker.device, random_seed=worker.id, verbose=self.verbose > 1)
+        self._print(f"spawning new worker with uid {worker.uid}...")
+        self._workers[worker_id] = Worker(uid=worker.uid, end_event=self._end_event, receive_queue=worker.receive_queue,
+                                          device=worker.device, random_seed=worker.uid, verbose=self.verbose > 1)
         self._workers[worker_id].start()
 
     def _stop_worker(self, worker: Worker) -> None:

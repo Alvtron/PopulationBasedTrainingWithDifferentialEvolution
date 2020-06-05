@@ -5,16 +5,16 @@ import warnings
 import collections
 from abc import abstractmethod
 from typing import Tuple, List, Dict, Iterable, Sequence, Callable, Generator
+from multiprocessing.managers import SyncManager
 
 from pbt.utils.multiprocessing import Counter
-
-from .member import Checkpoint, Generation
-from .hyperparameters import Hyperparameters
-from .de.mutation import de_rand_1, de_current_to_best_1
-from .de.constraint import halving
-from .utils.constraint import clip
-from .utils.distribution import randn, randc, mean_wl
-from .utils.iterable import grid, random_from_list, average
+from pbt.member import Checkpoint, Generation
+from pbt.hyperparameters import Hyperparameters
+from pbt.de.mutation import de_rand_1, de_current_to_best_1
+from pbt.de.constraint import halving
+from pbt.utils.constraint import clip
+from pbt.utils.distribution import randn, randc, mean_wl
+from pbt.utils.iterable import grid, random_from_list, average
 
 
 class EvolveEngine(object):
@@ -75,14 +75,22 @@ class ExploitAndExplore(EvolveEngine):
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """
 
+    PERTURB_METHODS = ('choice', 'sample')
+
     def __init__(self, exploit_factor: float = 0.2, explore_factors: Tuple[float, ...] = (0.8, 1.2), perturb_method: str = 'choice', **kwargs) -> None:
         super().__init__(**kwargs)
-        if not isinstance(exploit_factor, float) or not(0.0 <= exploit_factor <= 1.0):
-            raise ValueError(f"the exploit factor must be of type {float} in range [0.0, 1.0].")
-        if not isinstance(explore_factors, (list, tuple)):
-            raise ValueError(f"the explore factors must be a sequence or tuple.")
-        if perturb_method not in ('choice', 'sample'):
-            raise NotImplementedError(f"perturb method '{perturb_method}' is not supported")
+        if not isinstance(exploit_factor, float):
+            raise TypeError(f"the 'exploit_factor' specified was of wrong type {type(exploit_factor)}, expected {float}.")
+        if not(0.0 <= exploit_factor <= 1.0):
+            raise ValueError(f"the 'exploit_factor' specified was not in range [0.0, 1.0].")
+        if not isinstance(explore_factors, float):
+            raise TypeError(f"the 'explore_factors' specified was of wrong type {type(explore_factors)}, expected {list} or {tuple}.")
+        if not all(isinstance(factor, float) for factor in explore_factors):
+            raise ValueError(f"the 'explore_factors' specified was not a sequence of floats.")
+        if not isinstance(perturb_method, str):
+            raise TypeError(f"the 'perturb_method' specified was of wrong type {type(perturb_method)}, expected {str}.")
+        if perturb_method not in ExploitAndExplore.PERTURB_METHODS:
+            raise NotImplementedError(f"perturb method '{perturb_method}' is not supported, expected {ExploitAndExplore.PERTURB_METHODS}.")
         self.exploit_factor = exploit_factor
         self.explore_factors = explore_factors
         self.perturb_method = perturb_method
@@ -102,14 +110,14 @@ class ExploitAndExplore(EvolveEngine):
         A fraction of the bottom performing members exploit the top performing members.
         If member exploits, the hyper-parameters are parturbed.
         """
-        if member is None:
-            raise ValueError("checkpoint object is None")
+        if not isinstance(member, Checkpoint):
+            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
         if len(generation) < 2:
             raise ValueError("generation size must be at least 2 or higher")
         if member not in generation:
-            raise ValueError("parent is not present in generation")
-        if generation is None:
-            raise ValueError("generation object is None")
+            raise ValueError("member is required to be present in the specified generation")
         n_elitists = max(1, round(len(generation) * self.exploit_factor))
         sorted_members = sorted(generation, reverse=True)
         elitists = sorted_members[:n_elitists]
@@ -117,21 +125,22 @@ class ExploitAndExplore(EvolveEngine):
         if member not in elitists:
             elitist = random.choice(elitists)
             if not elitist.has_state():
-                self.logger(f"member {member.id} remains itself; elitist {elitist.id} does not have state to share.")
+                self.logger(f"member {member.uid} remains itself; elitist {elitist.uid} does not have state to share.")
                 return member.copy()
             exploiter = member.copy()
-            self.logger(f"member {exploiter.id} exploits member {elitist.id}...")
+            self.logger(f"member {exploiter.uid} exploits member {elitist.uid}...")
             exploiter.copy_parameters(elitist)
             exploiter.copy_state(elitist)
             exploiter.copy_score(elitist)
-            self.logger(f"member {exploiter.id} explores member {elitist.id}...")
+            self.logger(f"member {exploiter.uid} explores member {elitist.uid}...")
             return self.__explore(exploiter)
         else:
-            self.logger(f"member {member.id} remains itself...")
+            self.logger(f"member {member.uid} remains itself...")
             return member.copy()
 
     def __explore(self, member: Checkpoint) -> Checkpoint:
         """Perturb all parameters by the defined explore_factors."""
+        assert isinstance(member, Checkpoint)
         explorer = member.copy()
         for index, _ in enumerate(explorer.parameters):
             perturb_factor = self._get_perturb_factor()
@@ -154,8 +163,18 @@ class DifferentialEvolution(DifferentialEvolveEngine):
 
     def __init__(self, F: float = 0.2, Cr: float = 0.8, **kwargs) -> None:
         super().__init__(**kwargs)
+        if not isinstance(F, float):
+            raise TypeError(f"the 'F' specified was of wrong type {type(F)}, expected {float}.")
+        if not isinstance(Cr, float):
+            raise TypeError(f"the 'Cr' specified was of wrong type {type(Cr)}, expected {float}.")
         self.F = F
         self.Cr = Cr
+
+    def on_generation_start(self, generation: Generation) -> None:
+        pass
+
+    def on_generation_end(self, generation: Generation) -> None:
+        pass
 
     def spawn(self, members: Iterable[Checkpoint]) -> Generation:
         """Create initial generation."""
@@ -171,16 +190,14 @@ class DifferentialEvolution(DifferentialEvolveEngine):
         Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
         implementation of differential evolution.
         """
-        if parent is None:
-            raise ValueError("checkpoint object is None")
+        if not isinstance(parent, Checkpoint):
+            raise TypeError(f"the 'parent' specified was of wrong type {type(parent)}, expected {Checkpoint}.")
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
         if len(generation) < 3:
             raise ValueError("generation size must be at least 3 or higher")
         if parent not in generation:
-            raise ValueError("parent is not present in generation")
-        if generation is None:
-            raise ValueError("generation object is None")
-        if fitness_function is None:
-            raise ValueError("fitness_function is None")
+            raise ValueError("parent is required to be present in the specified generation")
         if not callable(fitness_function):
             raise ValueError("fitness_function is not callable")
         # copy parent
@@ -189,40 +206,40 @@ class DifferentialEvolution(DifferentialEvolveEngine):
         x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=(parent,))
         j_rand = random.randrange(0, dimensions)
         self._print_mutation_parameters(parent=parent, x_r0=x_r0, x_r1=x_r1, x_r2=x_r2, j_rand=j_rand)
-        self.logger(f"generating trial member {parent.id}")
+        self.logger(f"generating trial member {parent.uid}")
         trial = parent.copy()
         for j in range(dimensions):
             CR_ri = random.uniform(0.0, 1.0)
             if CR_ri <= self.Cr or j == j_rand:
-                self.logger(f"M{parent.id}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
+                self.logger(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
                 mutant = de_rand_1(F=self.F, x_r0=x_r0[j], x_r1=x_r1[j], x_r2=x_r2[j])
                 constrained = clip(mutant, 0.0, 1.0)
                 trial[j] = constrained
-                self.logger(f"M{parent.id}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
+                self.logger(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
             else:
                 trial[j] = parent[j]
         # measure fitness
-        self.logger(f"M{parent.id}: measuring fitness score of parent and trial")
+        self.logger(f"M{parent.uid}: measuring fitness score of parent and trial")
         fitness_function(parent)
         fitness_function(trial)
         # select best
-        self.logger(f"M{parent.id}: selecting between evaluated parent and trial")
+        self.logger(f"M{parent.uid}: selecting between evaluated parent and trial")
         return self._select(parent, trial)
 
     def _select(self, parent: Checkpoint, trial: Checkpoint) -> Checkpoint:
         """Evaluates candidate, compares it to the base and returns the best performer."""
         if parent <= trial:
-            self.logger(f"M{parent.id}: mutate member (x {parent.eval_score():.4f} <= u {trial.eval_score():.4f}).")
+            self.logger(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} <= u {trial.eval_score():.4f}).")
             return trial
         else:
-            self.logger(f"M{parent.id}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
+            self.logger(f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
             return parent
     
     def _print_mutation_parameters(self, parent, x_r0, x_r1, x_r2, j_rand):
         if not self.verbose:
             return
         lines = [
-            f"M{parent.id} mutation parameters:",
+            f"M{parent.uid} mutation parameters:",
             f"control parameters: CR {self.Cr:.4f}, F {self.F:.4f}",
             f"x_r0: {x_r0} with score {x_r0.eval_score()}",
             f"x_r1: {x_r1} with score {x_r1.eval_score()}",
@@ -233,7 +250,13 @@ class DifferentialEvolution(DifferentialEvolveEngine):
 
 
 class HistoricalMemory(object):
-    def __init__(self, manager, size: int, default: float = 0.5) -> None:
+    def __init__(self, manager: SyncManager, size: int, default: float = 0.5) -> None:
+        if not isinstance(manager, SyncManager):
+            raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(size, int):
+            raise TypeError(f"the 'size' specified was of wrong type {type(size)}, expected {int}.")
+        if not isinstance(default, float):
+            raise TypeError(f"the 'default' specified was of wrong type {type(default)}, expected {float}.")
         self.size = size
         self.m_cr = [default] * size
         self.m_f = [default] * size
@@ -245,10 +268,16 @@ class HistoricalMemory(object):
 
     def record(self, cr: float, f: float, w: float) -> None:
         """Save control parameters and delta score (weight) to historical memory."""
+        if not isinstance(cr, float):
+            raise TypeError(f"the 'cr' specified was of wrong type {type(cr)}, expected {float}.")
         if not math.isfinite(cr) or not (0.0 <= cr <= 1.0):
             raise ValueError(f"cr value {cr} is not valid.")
+        if not isinstance(f, float):
+            raise TypeError(f"the 'f' specified was of wrong type {type(f)}, expected {float}.")
         if not math.isfinite(f) or f < 0.0:
             raise ValueError(f"f value {f} is not valid.")
+        if not isinstance(w, float):
+            raise TypeError(f"the 'w' specified was of wrong type {type(w)}, expected {float}.")
         if not math.isfinite(w) or w < 0.0:
             raise ValueError(f"w value {w} is not valid.")
         with self.__lock:
@@ -277,7 +306,13 @@ class HistoricalMemory(object):
 
 
 class ExternalArchive():
-    def __init__(self, manager, size: int, verbose: float = False) -> None:
+    def __init__(self, manager: SyncManager, size: int, verbose: bool = False) -> None:
+        if not isinstance(manager, SyncManager):
+            raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(size, int):
+            raise TypeError(f"the 'size' specified was of wrong type {type(size)}, expected {int}.")
+        if not isinstance(verbose, bool):
+            raise TypeError(f"the 'verbose' specified was of wrong type {type(verbose)}, expected {bool}.")
         self.__lock = manager.Lock()
         self.__size = manager.Value('i', size)
         self.__records = manager.list()
@@ -303,6 +338,8 @@ class ExternalArchive():
             self.__records.remove(random_value)
 
     def resize(self, size: int):
+        if not isinstance(size, int):
+            raise TypeError(f"the 'size' specified was of wrong type {type(size)}, expected {int}.")
         if size < 0:
             raise ValueError("specified size is negative")
         if size > self.__size.value:
@@ -316,8 +353,8 @@ class ExternalArchive():
                 self.__random_delete(n=overflow)
 
     def append(self, parent: Checkpoint) -> None:
-        if parent is None:
-            raise ValueError("checkpoint is None.")
+        if not isinstance(parent, Checkpoint):
+            raise TypeError(f"the 'parent' specified was of wrong type {type(parent)}, expected {Checkpoint}.")
         if parent in self.__records:
             raise ValueError("checkpoint already exists in archive.")
         with self.__lock:
@@ -349,17 +386,36 @@ class SHADE(DifferentialEvolveEngine):
 
     def __init__(self, manager, N_INIT: int, r_arc: float = 2.0, p: float = 0.1, memory_size: int = 5, f_min: float = 0.0, f_max: float = 1.0, state_sharing: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
+        if not isinstance(manager, SyncManager):
+            raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(N_INIT, int):
+            raise TypeError(f"the 'N_INIT' specified was of wrong type {type(N_INIT)}, expected {int}.")
         if N_INIT < 4:
-            raise ValueError("population size must be at least 4 or higher.")
+            raise ValueError("the 'N_INIT' specified must be at least 4 or higher.")
+        if not isinstance(r_arc, float):
+            raise TypeError(f"the 'r_arc' specified was of wrong type {type(r_arc)}, expected {float}.")
+        if not isinstance(p, float):
+            raise TypeError(f"the 'p' specified was of wrong type {type(p)}, expected {float}.")
+        if not (0.0 <= p <= 1.0):
+            raise ValueError("the 'p' specified was not in range [0.0, 1.0].")
         if round(N_INIT * p) < 1:
-            warnings.warn(
-                f"p-parameter too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
-        if f_min < 0:
-            raise ValueError("f_min cannot be negative.")
-        if f_max <= 0:
-            raise ValueError("f_max cannot be negative.")
+            warnings.warn(f"the 'p' specified was too low for the provided population size. It must be atleast {1.0 / N_INIT} for population size of {N_INIT}. This will be resolved by always choosing the top one performer in the population as pbest.")
+        if not isinstance(memory_size, int):
+            raise TypeError(f"the 'memory_size' specified was of wrong type {type(memory_size)}, expected {int}.")
+        if memory_size < 0.0:
+            raise ValueError("the 'memory_size' specified was negative.")
+        if not isinstance(f_min, float):
+            raise TypeError(f"the 'f_min' specified was of wrong type {type(f_min)}, expected {float}.")
+        if f_min < 0.0:
+            raise ValueError("the 'f_min' specified was negative.")
+        if not isinstance(f_max, float):
+            raise TypeError(f"the 'f_max' specified was of wrong type {type(f_max)}, expected {float}.")
+        if f_max < 0.0:
+            raise ValueError("the 'f_max' specified was negative.")
         if f_max < f_min:
-            raise ValueError("f_max cannot be less than f_min.")
+            raise ValueError("the 'f_max' specified was less than 'f_min'.")
+        if not isinstance(state_sharing, bool):
+            raise TypeError(f"the 'state_sharing' specified was of wrong type {type(state_sharing)}, expected {bool}.")
         self.archive = ExternalArchive(
             manager=manager, size=round(N_INIT * r_arc), verbose=self.verbose)
         self.memory = HistoricalMemory(
@@ -381,6 +437,8 @@ class SHADE(DifferentialEvolveEngine):
         return generation
 
     def on_generation_start(self, generation: Generation) -> None:
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
         self.memory.reset()
 
     def mutate(self, parent: Checkpoint, generation: Generation, fitness_function: Callable[[Checkpoint], None]) -> Checkpoint:
@@ -388,16 +446,14 @@ class SHADE(DifferentialEvolveEngine):
         Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
         implementation of differential evolution, with adapted CR and F parameters.
         """
-        if parent is None:
-            raise ValueError("checkpoint object is None")
+        if not isinstance(parent, Checkpoint):
+            raise TypeError(f"the 'parent' specified was of wrong type {type(parent)}, expected {Checkpoint}.")
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
         if len(generation) < 4:
             raise ValueError("generation size must be at least 4 or higher")
         if parent not in generation:
-            raise ValueError("parent is not present in generation")
-        if generation is None:
-            raise ValueError("generation object is None")
-        if fitness_function is None:
-            raise ValueError("fitness_function is None")
+            raise ValueError("parent is required to be present in the specified generation")
         if not callable(fitness_function):
             raise ValueError("fitness_function is not callable")
         # copy parent
@@ -416,44 +472,46 @@ class SHADE(DifferentialEvolveEngine):
         # make a copy of the member
         trial = parent.copy()
         if self.state_sharing:
-            self.logger(f"M{parent.id}: copying state from x_pbest member {x_pbest.id}")
+            self.logger(f"M{parent.uid}: copying state from x_pbest member {x_pbest.uid}")
             trial.copy_state(x_pbest)
-        self.logger(f"M{parent.id}: generating trial member")
+        self.logger(f"M{parent.uid}: generating trial member")
         for j in range(dimensions):
             CR_ri = random.uniform(0.0, 1.0)
             if CR_ri <= CR_i or j == j_rand:
-                self.logger(f"M{parent.id}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
+                self.logger(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
                 mutant = de_current_to_best_1(F=F_i, x_base=parent[j], x_best=x_pbest[j], x_r1=x_r1[j], x_r2=x_r2[j])
                 constrained = halving(base=parent[j], mutant=mutant, lower_bounds=0.0, upper_bounds=1.0)
                 trial[j] = constrained
-                self.logger(f"M{parent.id}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
+                self.logger(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
             else:
                 trial[j] = parent[j]
         # measure fitness
-        self.logger(f"M{parent.id}: measuring fitness score of parent and trial")
+        self.logger(f"M{parent.uid}: measuring fitness score of parent and trial")
         fitness_function(parent)
         fitness_function(trial)
         # select
-        self.logger(f"M{parent.id}: selecting between measured parent and trial")
+        self.logger(f"M{parent.uid}: selecting between measured parent and trial")
         return self._select(parent, trial, CR_i, F_i)
 
     def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
         """Evaluates candidate, compares it to the original member and returns the best performer."""
         if parent <= trial:
             if parent < trial:
-                self.logger(f"M{parent.id}: adding parent to archive.")
+                self.logger(f"M{parent.uid}: adding parent to archive.")
                 self.archive.append(parent.copy())
                 w_i = abs(trial.eval_score() - parent.eval_score())
-                self.logger(f"M{parent.id}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
+                self.logger(f"M{parent.uid}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
                 self.memory.record(CR_i, F_i, w_i)
-            self.logger(f"M{parent.id}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
+            self.logger(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
             return trial
         else:
             self.logger(
-                f"M{parent.id}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
+                f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
             return parent
 
     def on_generation_end(self, generation: Generation):
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
         self.memory.update()
 
     def _get_control_parameters(self) -> Tuple[float, float]:
@@ -503,7 +561,7 @@ class SHADE(DifferentialEvolveEngine):
         if not self.verbose:
             return
         lines = [
-            f"M{parent.id} mutation parameters:",
+            f"M{parent.uid} mutation parameters:",
             f"control parameters: CR_i {CR_i:.4f}, F_i {F_i:.4f}",
             f"x_r1: {x_r1} with score {x_r1.eval_score()}",
             f"x_r2: {x_r2} with score {x_r2.eval_score()}",
@@ -527,8 +585,10 @@ class LSHADE(SHADE):
         + SHADE parameters
     """
 
-    def __init__(self, MAX_NFE: int, manager, **kwargs) -> None:
+    def __init__(self, manager: SyncManager, MAX_NFE: int, **kwargs) -> None:
         super().__init__(manager, **kwargs)
+        if not isinstance(MAX_NFE, int):
+            raise TypeError(f"the 'MAX_NFE' specified was of wrong type {type(MAX_NFE)}, expected {int}.")
         self.N_MIN = 4
         self.MAX_NFE = MAX_NFE
         self._nfe = Counter(manager=manager, value=0)
@@ -538,8 +598,8 @@ class LSHADE(SHADE):
         return super()._select(parent, trial, CR_i, F_i)
 
     def on_generation_end(self, generation: Generation):
-        self._adjust_generation_size(generation)
         super().on_generation_end(generation)
+        self._adjust_generation_size(generation)
 
     def _adjust_generation_size(self, generation: Generation):
         new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self._nfe.value + self.N_INIT)
@@ -554,7 +614,7 @@ class LSHADE(SHADE):
         for worst in sorted(generation)[:size_delta]:
             generation.remove(worst)
             self.logger(
-                f"member {worst.id} with score {worst.eval_score():.4f} was removed from the generation.")
+                f"member {worst.uid} with score {worst.eval_score():.4f} was removed from the generation.")
 
 
 def logistic(x: float, k: float = 20) -> float:

@@ -14,7 +14,7 @@ class TestDatabase(unittest.TestCase):
         self.assertTrue(self.database.exists)
         len(self.database)
         entry = self.database.entry(0, 250)
-        self.assertEqual(entry.id, 0)
+        self.assertEqual(entry.uid, 0)
         self.assertEqual(entry.steps, 250)
         entry = self.database.entry(0, 300)
         self.assertTrue(entry is None)

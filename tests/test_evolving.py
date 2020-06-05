@@ -36,7 +36,7 @@ class TestEvolving(unittest.TestCase):
         self.members = Generation()
         for i in range(self.population_size):
             member = Checkpoint(
-                id=i,
+                uid=i,
                 parameters=hp,
                 loss_metric=loss_metric,
                 eval_metric=eval_metric,

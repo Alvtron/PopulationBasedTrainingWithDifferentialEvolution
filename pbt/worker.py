@@ -10,11 +10,11 @@ import warnings
 import itertools
 from abc import abstractmethod
 from functools import partial
-from typing import List, Dict, Tuple, Sequence, Callable
+from typing import List, Dict, Tuple, Sequence, Callable, Union
 from functools import partial
 from dataclasses import dataclass
-from multiprocessing.context import BaseContext
-from multiprocessing.pool import ThreadPool
+from multiprocessing.managers import EventProxy
+from multiprocessing.queues import Queue
 
 import torch
 import numpy as np
@@ -39,7 +39,13 @@ STOP_FLAG = None
 
 
 class Trial:
-    def __init__(self, return_queue, function: DeviceCallable, parameters: object):
+    def __init__(self, return_queue, function: DeviceCallable, parameters):
+        if return_queue is None:
+            raise TypeError(f"the 'return_queue' specified was None.")
+        if not isinstance(function, DeviceCallable):
+            raise TypeError(f"the 'function' specified was of wrong type {type(function)}, expected {DeviceCallable}.")
+        if parameters is None:
+            raise TypeError(f"the 'parameters' specified was None.")
         self.return_queue = return_queue
         self.function: DeviceCallable = function
         self.parameters = parameters
@@ -49,7 +55,7 @@ class Trial:
 
 
 @dataclass
-class FailMessage(object):
+class FailMessage:
     sender_id: int
     text: str
     exception: str = None
@@ -58,23 +64,31 @@ class FailMessage(object):
 class Worker(torch.multiprocessing.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
 
-    def __init__(self, id: int, end_event, receive_queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
+    def __init__(self, uid: Union[int, str], end_event: EventProxy, receive_queue: Queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
         super().__init__()
-        self._id = id
+        if not isinstance(uid, (int, str)):
+            raise TypeError(f"the 'uid' specified was of wrong type {type(uid)}, expected {str} or {int}.")
+        if not isinstance(end_event, EventProxy):
+            raise TypeError(f"the 'end_event' specified was of wrong type {type(end_event)}, expected {EventProxy}.")
+        if not isinstance(receive_queue, Queue):
+            raise TypeError(f"the 'receive_queue' specified was of wrong type {type(receive_queue)}, expected {Queue}.")
+        if not isinstance(device, str):
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+        if not isinstance(random_seed, int):
+            raise TypeError(f"the 'random_seed' specified was of wrong type {type(random_seed)}, expected {int}.")
+        if not isinstance(verbose, bool):
+            raise TypeError(f"the 'verbosity' specified was of wrong type {type(verbose)}, expected {bool}.", )
+        self.uid = uid
         self.end_event = end_event
         self.receive_queue = receive_queue
         self.device = device
         self.random_seed = random_seed
         self.verbose = verbose
 
-    @property
-    def id(self):
-        return self._id
-
     def __log(self, message: str):
         if not self.verbose:
             return
-        prefix = f"Worker {self._id} (PID {os.getpid()})"
+        prefix = f"Worker {self.uid} (PID {os.getpid()})"
         full_message = f"{prefix}: {message}"
         print(full_message)
 
@@ -102,7 +116,7 @@ class Worker(torch.multiprocessing.Process):
                 break
             if not isinstance(trial, Trial):
                 self.__log("Received wrong trial-type.")
-                raise TypeError('received wrong trial-type.')
+                raise TypeError(f"the 'trial' received was of wrong type {type(trial)}, expected {Trial}.", )
             try:
                 self.__log("running trial...")
                 result = self.__process_trial(trial)
@@ -114,7 +128,7 @@ class Worker(torch.multiprocessing.Process):
                 traceback_stacktrace = traceback.format_exc()
                 self.__log(str(traceback_stacktrace))
                 fail_message = FailMessage(
-                    self._id, "trial excecution failed!", str(traceback_stacktrace))
+                    self.uid, "trial excecution failed!", str(traceback_stacktrace))
                 trial.return_queue.put(fail_message)
                 # delete failed trial
                 del trial

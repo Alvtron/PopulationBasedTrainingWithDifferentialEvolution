@@ -13,10 +13,7 @@ from datetime import datetime, timedelta
 from abc import abstractmethod
 from typing import List, Dict, Sequence, Iterator, Iterable, Tuple, Callable, Generator
 from functools import partial
-from collections import defaultdict
-from multiprocessing.context import BaseContext
-from dataclasses import dataclass
-from multiprocessing.pool import ThreadPool
+from multiprocessing.managers import SyncManager
 
 import torch
 import torchvision
@@ -35,12 +32,41 @@ from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters, hyper_p
 from pbt.nn import Trainer, Evaluator, Step, RandomFitnessApproximation
 from pbt.evolution import ExploitAndExplore, DifferentialEvolveEngine
 from pbt.database import Database
+from pbt.dataset import Datasets
 from pbt.garbage import GarbageCollector
 
 class Controller(object):
     def __init__(
-            self, manager, population_size: int, hyper_parameters: Hyperparameters, loss_metric: str, eval_metric: str, loss_functions: dict, database: Database, end_criteria: dict = {'score': 100.0}, history_limit: int = None,
-            devices: List[str] = ['cpu'], n_jobs: int = -1, verbose: int = 1, logging: bool = True, tensorboard: SummaryWriter = None):
+            self, manager: SyncManager, population_size: int, hyper_parameters: Hyperparameters, loss_metric: str, eval_metric: str, loss_functions: dict, database: Database, end_criteria: dict = {'score': 100.0},
+            devices: List[str] = ['cpu'], n_jobs: int = 1, verbose: int = 1, logging: bool = True, history_limit: int = None, tensorboard: SummaryWriter = None):
+        if not isinstance(manager, SyncManager):
+            raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(population_size, int):
+            raise TypeError(f"the 'population_size' specified was of wrong type {type(population_size)}, expected {int}.")
+        if not isinstance(hyper_parameters, Hyperparameters):
+            raise TypeError(f"the 'hyper_parameters' specified was of wrong type {type(hyper_parameters)}, expected {Hyperparameters}.")
+        if not isinstance(loss_metric, str):
+            raise TypeError(f"the 'loss_metric' specified was of wrong type {type(loss_metric)}, expected {str}.")
+        if not isinstance(eval_metric, str):
+            raise TypeError(f"the 'eval_metric' specified was of wrong type {type(eval_metric)}, expected {str}.")
+        if not isinstance(loss_functions, dict):
+            raise TypeError(f"the 'loss_functions' specified was of wrong type {type(loss_functions)}, expected {dict}.")
+        if not isinstance(database, Database):
+            raise TypeError(f"the 'database' specified was of wrong type {type(database)}, expected {Database}.")
+        if not isinstance(end_criteria, dict):
+            raise TypeError(f"the 'end_criteria' specified was of wrong type {type(end_criteria)}, expected {dict}.")
+        if not isinstance(devices, (list, tuple)):
+            raise TypeError(f"the 'devices' specified was of wrong type {type(devices)}, expected {list} or {tuple}.")
+        if not isinstance(n_jobs, int):
+            raise TypeError(f"the 'n_jobs' specified was of wrong type {type(n_jobs)}, expected {int}.")
+        if not isinstance(verbose, int):
+            raise TypeError(f"the 'verbose' specified was of wrong type {type(verbose)}, expected {int}.")
+        if not isinstance(logging, bool):
+            raise TypeError(f"the 'logging' specified was of wrong type {type(logging)}, expected {bool}.")
+        if history_limit is not None and not isinstance(history_limit, int):
+            raise TypeError(f"the 'history_limit' specified was of wrong type {type(history_limit)}, expected {int}.")
+        if tensorboard is not None and not isinstance(tensorboard, SummaryWriter):
+            raise TypeError(f"the 'tensorboard' specified was of wrong type {type(tensorboard)}, expected {SummaryWriter}.")
         self.population_size = population_size
         self.database = database
         self.hyper_parameters = hyper_parameters
@@ -52,9 +78,9 @@ class Controller(object):
         self.logging = logging
         self._manager = manager
         self._worker_pool = WorkerPool(
-            manager=manager, devices=devices, n_jobs=n_jobs, verbose=max(verbose - 2, 0))
+            manager=manager, devices=devices, n_jobs=n_jobs, verbose=verbose - 2)
         self.__garbage_collector = GarbageCollector(
-            database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose-2)
+            database=database, history_limit=history_limit if history_limit and history_limit > 2 else 2, verbose=verbose > 2)
         self.__n_generations = 0
         self.__start_time = None
         self.__tensorboard = tensorboard
@@ -117,28 +143,28 @@ class Controller(object):
         for eval_metric_group, eval_metrics in member.loss.items():
             for metric_name, metric_value in eval_metrics.items():
                 self.__tensorboard.add_scalar(
-                    tag=f"metrics/{eval_metric_group}_{metric_name}/{member.id:03d}",
+                    tag=f"metrics/{eval_metric_group}_{metric_name}/{member.uid:03d}",
                     scalar_value=metric_value,
                     global_step=member.steps)
         # plot time
         for time_type, time_value in member.time.items():
             self.__tensorboard.add_scalar(
-                tag=f"time/{time_type}/{member.id:03d}",
+                tag=f"time/{time_type}/{member.uid:03d}",
                 scalar_value=time_value,
                 global_step=member.steps)
         # plot hyper-parameters
         for hparam_name, hparam in member.parameters.items():
             self.__tensorboard.add_scalar(
-                tag=f"hyperparameters/{hparam_name}/{member.id:03d}",
+                tag=f"hyperparameters/{hparam_name}/{member.uid:03d}",
                 scalar_value=hparam.normalized if isinstance(
                     hparam, DiscreteHyperparameter) else hparam.value,
                 global_step=member.steps)
 
-    def __create_member(self, id) -> Checkpoint:
+    def __create_member(self, uid) -> Checkpoint:
         """Create a member object."""
         # create new member object
         member = Checkpoint(
-            id=id,
+            uid=uid,
             parameters=copy.deepcopy(self.hyper_parameters),
             loss_metric=self.loss_metric,
             eval_metric=self.eval_metric,
@@ -147,8 +173,8 @@ class Controller(object):
 
     def __create_members(self, k: int) -> List[Checkpoint]:
         members = list()
-        for id in range(k):
-            members.append(self.__create_member(id))
+        for uid in range(k):
+            members.append(self.__create_member(uid))
         return members
 
     def __create_initial_generation(self) -> Generation:
@@ -157,7 +183,7 @@ class Controller(object):
 
     def __update_database(self, member: Checkpoint) -> None:
         """Updates the database stored in files."""
-        self.database.update(member.id, member.steps, member)
+        self.database.update(member.uid, member.steps, member)
 
     def __is_score_end(self, generation):
         return 'score' in self.end_criteria and self.end_criteria['score'] and any(member >= self.end_criteria['score'] for member in generation)
@@ -238,8 +264,20 @@ class Controller(object):
 
 
 class PBTController(Controller):
-    def __init__(self, evolver: ExploitAndExplore, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, **kwargs):
+    def __init__(self, evolver: ExploitAndExplore, model_class, optimizer_class, datasets: Datasets, batch_size: int, train_steps: int, **kwargs):
         super().__init__(**kwargs)
+        if not isinstance(evolver, ExploitAndExplore):
+            raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {ExploitAndExplore}.")
+        if not callable(model_class):
+            raise TypeError(f"the 'model_class' specified was not callable.")
+        if not callable(optimizer_class):
+            raise TypeError(f"the 'optimizer_class' specified was not callable.")
+        if not isinstance(datasets, Datasets):
+            raise TypeError(f"the 'datasets' specified was of wrong type {type(datasets)}, expected {Datasets}.")
+        if not isinstance(batch_size, int):
+            raise TypeError(f"the 'batch_size' specified was of wrong type {type(batch_size)}, expected {int}.")
+        if not isinstance(train_steps, int):
+            raise TypeError(f"the 'train_steps' specified was of wrong type {type(train_steps)}, expected {int}.")
         # evolver
         self.evolver = evolver
         self.evolver.verbose = self.verbose > 2
@@ -287,7 +325,7 @@ class PBTController(Controller):
             for member in self._worker_pool.imap(mutate_procedure, generation):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
-                self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.id].parameters, new_hps=member.parameters)}")
+                self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
                 # update generation
                 generation.update(member)
                 # increment steps
@@ -298,28 +336,54 @@ class PBTController(Controller):
 class PBTProcedure(DeviceCallable):
     def __init__(self, generation: Generation, evolver: ExploitAndExplore, train_function, test_function=None, verbose: bool = False):
         super().__init__(verbose)
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+        if not isinstance(evolver, ExploitAndExplore):
+            raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {ExploitAndExplore}.")
+        if not callable(train_function):
+            raise TypeError(f"the 'train_function' specified was not callable.")
+        if test_function is not None and not callable(test_function):
+            raise TypeError(f"the 'test_function' specified was not callable.")
         self.generation = generation
         self.evolver = evolver
         self.train_function = train_function
         self.test_function = test_function
 
     def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+        if not isinstance(member, Checkpoint):
+            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+        if not isinstance(device, str):
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         # train
-        self._print(f"training member {member.id}...")
+        self._print(f"training member {member.uid}...")
         self.train_function(checkpoint=member, device=device)
         # exploit and explore
-        self._print(f"mutating member {member.id}...")
+        self._print(f"mutating member {member.uid}...")
         member = self.evolver.mutate(member=member, generation=self.generation)
         # measure test set performance if available
         if self.test_function is not None:
-            self._print(f"testing member {member.id}...")
+            self._print(f"testing member {member.uid}...")
             self.test_function(member, device)
         return member
 
 
 class DEController(Controller):
-    def __init__(self, evolver: DifferentialEvolveEngine, model_class, optimizer_class, datasets, batch_size: int, train_steps: int, fitness_steps: int, **kwargs):
+    def __init__(self, evolver: DifferentialEvolveEngine, model_class, optimizer_class, datasets: Datasets, batch_size: int, train_steps: int, fitness_steps: int, **kwargs):
         super().__init__(**kwargs)
+        if not isinstance(evolver, DifferentialEvolveEngine):
+            raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {DifferentialEvolveEngine}.")
+        if not callable(model_class):
+            raise TypeError(f"the 'model_class' specified was not callable.")
+        if not callable(optimizer_class):
+            raise TypeError(f"the 'optimizer_class' specified was not callable.")
+        if not isinstance(datasets, Datasets):
+            raise TypeError(f"the 'datasets' specified was of wrong type {type(datasets)}, expected {Datasets}.")
+        if not isinstance(batch_size, int):
+            raise TypeError(f"the 'batch_size' specified was of wrong type {type(batch_size)}, expected {int}.")
+        if not isinstance(train_steps, int):
+            raise TypeError(f"the 'train_steps' specified was of wrong type {type(train_steps)}, expected {int}.")
+        if not isinstance(fitness_steps, int):
+            raise TypeError(f"the 'fitness_steps' specified was of wrong type {type(fitness_steps)}, expected {int}.")
         # evolver
         self.evolver = evolver
         self.evolver.verbose = self.verbose > 2
@@ -374,7 +438,7 @@ class DEController(Controller):
             for member in self._worker_pool.imap(mutate_procedure, generation):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
-                self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.id].parameters, new_hps=member.parameters)}")
+                self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
                 # update generation
                 generation.update(member)
                 # increment n steps
@@ -387,6 +451,16 @@ class DEController(Controller):
 class DEProcedure(DeviceCallable):
     def __init__(self, generation: Generation, evolver: DifferentialEvolveEngine, step_function, fitness_function, test_function=None, verbose: bool = False):
         super().__init__(verbose)
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+        if not isinstance(evolver, DifferentialEvolveEngine):
+            raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {DifferentialEvolveEngine}.")
+        if not callable(step_function):
+            raise TypeError(f"the 'step_function' specified was not callable.")
+        if not callable(fitness_function):
+            raise TypeError(f"the 'fitness_function' specified was not callable.")
+        if test_function is not None and not callable(test_function):
+            raise TypeError(f"the 'test_function' specified was not callable.")
         self.generation = generation
         self.evolver = evolver
         self.step_function = step_function
@@ -394,15 +468,19 @@ class DEProcedure(DeviceCallable):
         self.test_function = test_function
 
     def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
-        self._print(f"training member {member.id}...")
+        if not isinstance(member, Checkpoint):
+            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+        if not isinstance(device, str):
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+        self._print(f"training member {member.uid}...")
         self.step_function(checkpoint=member, device=device)
-        self._print(f"mutating member {member.id}...")
+        self._print(f"mutating member {member.uid}...")
         member = self.evolver.mutate(
             parent=member,
             generation=self.generation,
             fitness_function=partial(self.fitness_function, device=device))
         # measure test set performance if available
         if self.test_function is not None:
-            self._print(f"testing member {member.id}...")
+            self._print(f"testing member {member.uid}...")
             self.test_function(checkpoint=member, device=device)
         return member
