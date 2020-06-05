@@ -322,7 +322,7 @@ class PBTController(Controller):
         # loop until finished
         while not self._is_finished(generation):
             self._whisper(f"training generation...")
-            for member in self._worker_pool.imap(mutate_procedure, generation, True):
+            for member in self._worker_pool.imap(mutate_procedure, list(generation), True):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
@@ -435,7 +435,7 @@ class DEController(Controller):
             # increment n steps
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
-            for member in self._worker_pool.imap(mutate_procedure, generation, True):
+            for member in self._worker_pool.imap(mutate_procedure, list(generation), True):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
