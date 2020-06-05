@@ -37,8 +37,11 @@ from pbt.garbage import GarbageCollector
 
 class Controller(object):
     def __init__(
-            self, manager: SyncManager, population_size: int, hyper_parameters: Hyperparameters, loss_metric: str, eval_metric: str, loss_functions: dict, database: Database, end_criteria: dict = {'score': 100.0},
-            devices: List[str] = ['cpu'], n_jobs: int = 1, verbose: int = 1, logging: bool = True, history_limit: int = None, tensorboard: SummaryWriter = None):
+            self, manager: SyncManager, population_size: int,
+            hyper_parameters: Hyperparameters, loss_metric: str, eval_metric: str,
+            loss_functions: dict, database: Database, end_criteria: dict = {'score': 100.0},
+            devices: List[str] = ['cpu'], n_jobs: int = 1, verbose: int = 1,
+            logging: bool = True, history_limit: int = None, tensorboard: SummaryWriter = None):
         if not isinstance(manager, SyncManager):
             raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
         if not isinstance(population_size, int):
@@ -449,7 +452,9 @@ class DEController(Controller):
 
 
 class DEProcedure(DeviceCallable):
-    def __init__(self, generation: Generation, evolver: DifferentialEvolveEngine, step_function, fitness_function, test_function=None, verbose: bool = False):
+    def __init__(
+            self, generation: Generation, evolver: DifferentialEvolveEngine, step_function: Callable[[Checkpoint, str], Checkpoint],
+            fitness_function: Callable[[Checkpoint, str], Checkpoint], test_function: Callable[[Checkpoint, str], Checkpoint] = None, verbose: bool = False):
         super().__init__(verbose)
         if not isinstance(generation, Generation):
             raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
