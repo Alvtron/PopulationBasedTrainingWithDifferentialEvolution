@@ -11,6 +11,14 @@ class Comparable(metaclass=ABCMeta):
 T = TypeVar('T')
 CT = TypeVar('CT', bound=Comparable)
 
+def is_iterable(obj: object) -> bool:
+    try:
+        iter(obj)
+    except Exception:
+        return False
+    else:
+        return True
+
 def random_from_dict(values: Dict[object, CT], k: int = 1, exclude: Sequence[CT] = []) -> Tuple[CT, ...]:
     if not isinstance(exclude, Sequence):
         exclude = [exclude]
