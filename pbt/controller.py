@@ -304,6 +304,7 @@ class PBTController(Controller):
         """Resets class properties, starts training service and cleans up temporary files."""
         super()._on_start()
         self.__n_steps = 0
+        self._worker_pool.start()
 
     def _on_stop(self) -> None:
         """Stops training service and cleans up temporary files."""
