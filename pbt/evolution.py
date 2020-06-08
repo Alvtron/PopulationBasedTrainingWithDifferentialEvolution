@@ -1,10 +1,11 @@
-import math
-import random
 import copy
+import math
+import heapq
+import random
 import warnings
 import collections
 from abc import abstractmethod
-from typing import Tuple, List, Dict, Iterable, Sequence, Callable, Generator
+from typing import Tuple, List, Dict, Iterable, Sequence, Callable, Generator, Any
 from multiprocessing.managers import SyncManager
 
 from pbt.utils.multiprocessing import Counter
@@ -15,6 +16,13 @@ from pbt.de.constraint import halving
 from pbt.utils.constraint import clip
 from pbt.utils.distribution import randn, randc, mean_wl
 from pbt.utils.iterable import grid, random_from_list, average
+
+
+def best(members: Iterable[Checkpoint], n: int = 1) -> Sequence[Checkpoint]:
+    return heapq.nlargest(n=n, iterable=members)
+
+def worst(members: Iterable[Checkpoint], n: int = 1) -> Sequence[Checkpoint]:
+    return heapq.nsmallest(n=n, iterable=members)
 
 
 class EvolveEngine(object):
@@ -119,8 +127,7 @@ class ExploitAndExplore(EvolveEngine):
         if member not in generation:
             raise ValueError("member is required to be present in the specified generation")
         n_elitists = max(1, round(len(generation) * self.exploit_factor))
-        sorted_members = sorted(generation, reverse=True)
-        elitists = sorted_members[:n_elitists]
+        elitists = best(generation, n_elitists)
         # exploit if member is not elitist
         if member not in elitists:
             elitist = random.choice(elitists)
@@ -128,24 +135,21 @@ class ExploitAndExplore(EvolveEngine):
                 self.logger(f"member {member.uid} remains itself; elitist {elitist.uid} does not have state to share.")
                 return member.copy()
             exploiter = member.copy()
-            self.logger(f"member {exploiter.uid} exploits member {elitist.uid}...")
+            self.logger(f"member {exploiter.uid} exploits and explores member {elitist.uid}...")
             exploiter.copy_parameters(elitist)
             exploiter.copy_state(elitist)
-            exploiter.copy_score(elitist)
-            self.logger(f"member {exploiter.uid} explores member {elitist.uid}...")
-            return self.__explore(exploiter)
+            self.__explore(exploiter)
+            return exploiter
         else:
             self.logger(f"member {member.uid} remains itself...")
             return member.copy()
 
-    def __explore(self, member: Checkpoint) -> Checkpoint:
+    def __explore(self, member: Checkpoint):
         """Perturb all parameters by the defined explore_factors."""
         assert isinstance(member, Checkpoint)
-        explorer = member.copy()
-        for index, _ in enumerate(explorer.parameters):
+        for parameter in member.parameters:
             perturb_factor = self._get_perturb_factor()
-            explorer[index] = explorer[index] * perturb_factor
-        return explorer
+            parameter *= perturb_factor
 
     def _get_perturb_factor(self):
         if self.perturb_method == 'choice':
@@ -551,10 +555,8 @@ class SHADE(DifferentialEvolveEngine):
 
     def _sample_pbest_member(self, generation: Generation) -> Checkpoint:
         """Sample a random top member from the popualtion."""
-        sorted_members = sorted(generation, reverse=True)
-        n_elitists = round(len(generation) * self.p)
-        n_elitists = max(n_elitists, 1)  # correction for too small p-values
-        elitists = sorted_members[:n_elitists]
+        n_elitists = max(1, round(len(generation) * self.p))
+        elitists = best(generation, n_elitists)
         return random.choice(elitists)
 
     def _print_mutation_parameters(self, parent, CR_i, F_i, x_r1, x_r2, x_pbest, j_rand):
@@ -611,10 +613,10 @@ class LSHADE(SHADE):
         self.archive.resize(round(new_size * self.r_arc))
         # remove Delta-N worst members
         size_delta = len(generation) - new_size
-        for worst in sorted(generation)[:size_delta]:
-            generation.remove(worst)
+        for member in worst(generation, size_delta):
+            generation.remove(member)
             self.logger(
-                f"member {worst.uid} with score {worst.eval_score():.4f} was removed from the generation.")
+                f"member {member.uid} with score {member.eval_score():.4f} was removed from the generation.")
 
 
 def logistic(x: float, k: float = 20) -> float:

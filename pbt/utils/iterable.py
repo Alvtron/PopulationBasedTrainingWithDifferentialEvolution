@@ -1,5 +1,6 @@
 import itertools
 import random
+import heapq
 from collections import defaultdict
 from abc import ABCMeta, abstractmethod
 from typing import Any, TypeVar, Iterable, Iterator, Dict, Sequence, Tuple, Generator, Callable, Union, List

@@ -31,5 +31,5 @@ if __name__ == "__main__":
         n_jobs=8,
         devices=['cuda:0'],
         tensorboard=False,
-        verbose=2,
+        verbose=3,
         logging=True)

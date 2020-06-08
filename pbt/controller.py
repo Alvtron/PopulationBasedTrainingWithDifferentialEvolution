@@ -339,6 +339,8 @@ class PBTController(Controller):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
+                # update generation
+                generation.update(member)
             yield list(generation)
 
 
@@ -377,8 +379,6 @@ class PBTProcedure(DeviceCallable):
             if self.test_function is not None:
                 self._print(f"testing member {member.uid}...")
                 self.test_function(member, device)
-        # update generation
-        self.generation.update(member)
         return member
 
 
@@ -475,6 +475,8 @@ class DEController(Controller):
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
+                # update generation
+                generation.update(member)
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
             yield list(generation)
@@ -517,6 +519,4 @@ class DEProcedure(DeviceCallable):
         if self.test_function is not None:
             self._print(f"testing member {member.uid}...")
             self.test_function(checkpoint=member, device=device)
-        # update generation
-        generation.update(member)
         return member
