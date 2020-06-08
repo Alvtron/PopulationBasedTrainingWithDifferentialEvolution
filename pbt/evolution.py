@@ -133,16 +133,15 @@ class ExploitAndExplore(EvolveEngine):
             elitist = random.choice(elitists)
             if not elitist.has_state():
                 self.logger(f"member {member.uid} remains itself; elitist {elitist.uid} does not have state to share.")
-                return member.copy()
-            exploiter = member.copy()
-            self.logger(f"member {exploiter.uid} exploits and explores member {elitist.uid}...")
-            exploiter.copy_parameters(elitist)
-            exploiter.copy_state(elitist)
-            self.__explore(exploiter)
-            return exploiter
+                return member
+            self.logger(f"member {member.uid} exploits and explores member {elitist.uid}...")
+            member.copy_parameters(elitist)
+            member.copy_state(elitist)
+            self.__explore(member)
+            return member
         else:
             self.logger(f"member {member.uid} remains itself...")
-            return member.copy()
+            return member
 
     def __explore(self, member: Checkpoint):
         """Perturb all parameters by the defined explore_factors."""
