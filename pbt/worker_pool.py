@@ -9,7 +9,7 @@ import warnings
 import itertools
 from collections.abc import Iterable
 from functools import partial
-from typing import List, Sequence, Iterable, Callable, Generator
+from typing import List, Sequence, Iterable, Callable, Generator, Any
 from multiprocessing.managers import SyncManager
 
 import numpy as np
@@ -49,7 +49,6 @@ class WorkerPool:
         if not isinstance(verbose, int):
             raise TypeError(f"the manager specified was of wrong type {type(verbose)}, expected {int}.")
         self.verbose = verbose
-        self._cuda = any(device.startswith('cuda') for device in devices)
         self._manager = manager
         self._end_event = manager.Event()
         send_queues = [torch.multiprocessing.Queue() for _ in devices]
@@ -65,15 +64,6 @@ class WorkerPool:
             return
         full_message = f"{self.__class__.__name__}: {message}"
         print(full_message)
-
-    def __print_gpu_memory_stats(self) -> None:
-        if self.verbose < 2 or not self._cuda or os.name == 'nt':
-            return
-        memory_stats = get_gpu_memory_stats()
-        memory_stats_formatted = (
-            f"CUDA:{uid} ({memory[0]}/{memory[1]}MB)" for uid, memory in memory_stats.items())
-        output = ', '.join(memory_stats_formatted)
-        self._print(output)
 
     def _on_fail_message(self, message: FailMessage) -> None:
         # print info
@@ -145,8 +135,8 @@ class WorkerPool:
         failed_workers = set()
         return_queue = self._manager.Queue()
         self._print(f"queuing parameters...")
-        for parameters, worker in zip(parameters, self._workers_iterator):
-            trial = Trial(return_queue=return_queue, function=function, parameters=parameters)
+        for param, worker in zip(parameters, self._workers_iterator):
+            trial = Trial(return_queue=return_queue, function=function, parameters=param)
             worker.receive_queue.put(trial)
             n_sent += 1
         self._print(f"awaiting results...")
@@ -172,3 +162,54 @@ class WorkerPool:
             self._respawn(failed_workers)
         else:
             self._print("all parameters were executed successfully.")
+
+class WorkerThreadPool:
+    def __init__(self, manager: SyncManager, devices: Sequence[str] = ('cpu',), n_threads: int = 1, verbose: int = 0):
+        if not isinstance(manager, SyncManager):
+            raise TypeError(f"the manager specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(devices, (list, tuple)):
+            raise TypeError(f"the devices specified was of wrong type {type(devices)}, expected {list} or {tuple}.")
+        if not is_iterable(devices):
+            raise TypeError(f"the devices specified was not iterable.")
+        if not isinstance(n_threads, int):
+            raise TypeError(f"the n_threads specified was of wrong type {type(n_threads)}, expected {int}.")
+        if n_threads < len(devices):
+            raise ValueError(f"the n_threads specified must be larger or equal the number of devices, i.e. {n_threads} < {len(devices)}.")
+        if not isinstance(verbose, int):
+            raise TypeError(f"the manager specified was of wrong type {type(verbose)}, expected {int}.")
+        self.verbose = verbose
+        self.__devices_iterator = itertools.cycle(devices)
+        self.__pool = ThreadPool(processes=n_threads)
+        self.__results = list()
+
+    def _print(self, message: str) -> None:
+        if self.verbose < 1:
+            return
+        full_message = f"{self.__class__.__name__}: {message}"
+        print(full_message)
+
+    def stop(self) -> None:
+        self.__pool.close()
+        self.__pool.join()
+        
+    def apply_async(self, function: Callable[[Any], Any], parameter: Any) -> None:
+        if not callable(function):
+            raise TypeError("'function' is not callable.")
+        if parameter is None:
+            raise TypeError("'parameters' is None.")
+        device = next(self.__devices_iterator)
+        self._print(f"pushing job to worker receive queue...")
+        async_result = self.__pool.apply_async(func=function, args=(parameter, device))
+        self.__results.append(async_result)
+
+    def get(self) -> object:
+        if not self.__results:
+            raise Exception("no results are waiting to be retrieved.")
+        result = self.__results.pop(0)
+        result_iterator = itertools.cycle(self.__results)
+        while(True):
+            result = next(result_iterator)
+            if result.ready():
+                self.__results.remove(result)
+                return result.get()
+            time.sleep(0.1)
