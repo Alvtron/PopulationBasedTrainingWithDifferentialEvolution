@@ -375,10 +375,10 @@ class PBTProcedure(DeviceCallable):
         self._print(f"mutating member {member.uid}...")
         if self.is_ready_function(member):
             member = self.evolver.mutate(member=member, generation=self.generation)
-            # measure test set performance if available
-            if self.test_function is not None:
-                self._print(f"testing member {member.uid}...")
-                self.test_function(member, device)
+        # measure test set performance if available
+        if self.test_function is not None:
+            self._print(f"testing member {member.uid}...")
+            self.test_function(member, device)
         return member
 
 

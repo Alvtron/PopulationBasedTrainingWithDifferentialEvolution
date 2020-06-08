@@ -137,6 +137,7 @@ class ExploitAndExplore(EvolveEngine):
             self.logger(f"member {member.uid} exploits and explores member {elitist.uid}...")
             member.copy_parameters(elitist)
             member.copy_state(elitist)
+            member.copy_score(elitist)
             self.__explore(member)
             return member
         else:
