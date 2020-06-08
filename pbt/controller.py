@@ -251,12 +251,14 @@ class Controller(object):
     def _train(self, initial: Iterable[Checkpoint]) -> Generator[List[Checkpoint], None, None]:
         raise NotImplementedError()
 
+def is_ready(member: Checkpoint) -> bool:
+    return True
 
 class PBTController(Controller):
     def __init__(
             self, evolver: ExploitAndExplore, model_class, optimizer_class,
             datasets: Datasets, batch_size: int, train_steps: int, 
-            manager: SyncManager, devices: Sequence[str] = ['cpu'], n_threads: int = 1, **kwargs):
+            manager: SyncManager, devices: Sequence[str] = ['cpu'], n_jobs: int = 1, **kwargs):
         super().__init__(**kwargs)
         if not isinstance(evolver, ExploitAndExplore):
             raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {ExploitAndExplore}.")
@@ -274,23 +276,22 @@ class PBTController(Controller):
             raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
         if not isinstance(devices, (list, tuple)):
             raise TypeError(f"the 'devices' specified was of wrong type {type(devices)}, expected {list} or {tuple}.")
-        if not isinstance(n_threads, int):
-            raise TypeError(f"the 'n_threads' specified was of wrong type {type(n_threads)}, expected {int}.")
+        if not isinstance(n_jobs, int):
+            raise TypeError(f"the 'n_jobs' specified was of wrong type {type(n_jobs)}, expected {int}.")
         self._manager = manager
-        self._worker_pool = WorkerThreadPool(
-            manager=manager, devices=devices, n_threads=n_threads, verbose=self.verbose - 2)
+        self._worker_pool = WorkerPool(
+            manager=manager, devices=devices, n_jobs=n_jobs, verbose=self.verbose - 2)
         # evolver
         self.evolver = evolver
         self.evolver.verbose = self.verbose > 2
         # create training function
         self.step_function = Step(
             model_class=model_class, optimizer_class=optimizer_class, train_data=datasets.train, test_data=datasets.eval,
-            loss_functions=self.loss_functions, loss_metric=self.loss_metric, batch_size=batch_size, step_size=1)
+            loss_functions=self.loss_functions, loss_metric=self.loss_metric, batch_size=batch_size, step_size=train_steps)
         # creating test function if test set is provided
         self.test_function = Evaluator(
             model_class=model_class, test_data=datasets.test, loss_functions=self.loss_functions,
             batch_size=batch_size, loss_group='test') if datasets.test else None
-        self.train_steps = train_steps
         self.__n_steps = 0
 
     def _print_prefix(self) -> str:
@@ -328,26 +329,22 @@ class PBTController(Controller):
         # create procedures
         procedure = PBTProcedure(
             generation=generation, evolver=self.evolver, train_function=self.step_function,
-            test_function=self.test_function, train_steps=self.train_steps, verbose=self.verbose > 3)
-        # start training
-        self._whisper(f"start training generation...")
-        [self._worker_pool.apply_async(function=procedure, parameter=member) for member in generation]
+            is_ready_function=is_ready, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
-            for _ in range(self.population_size):
-                # receive next member
-                member = self._worker_pool.get()
-                # increment steps
+            for member in self._worker_pool.imap(procedure, list(generation), True):
+                # increment n steps
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
-                self._worker_pool.apply_async(function=procedure, parameter=member)
             yield list(generation)
 
 
 class PBTProcedure(DeviceCallable):
-    def __init__(self, generation: Generation, evolver: ExploitAndExplore, train_function, train_steps: int, test_function=None, verbose: bool = False):
+    def __init__(
+            self, generation: Generation, evolver: ExploitAndExplore, train_function: Callable[[Checkpoint, str], None],
+            is_ready_function: Callable[[Checkpoint], bool], test_function: Callable[[Checkpoint, str], None] = None, verbose: bool = False):
         super().__init__(verbose)
         if not isinstance(generation, Generation):
             raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
@@ -361,10 +358,7 @@ class PBTProcedure(DeviceCallable):
         self.evolver = evolver
         self.train_function = train_function
         self.test_function = test_function
-        self.train_steps = train_steps
-
-    def __is_ready(self, member: Checkpoint):
-        return member.steps % self.train_steps == 0
+        self.is_ready_function = is_ready_function
 
     def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
         if not isinstance(member, Checkpoint):
@@ -376,7 +370,7 @@ class PBTProcedure(DeviceCallable):
         self.train_function(checkpoint=member, device=device)
         # exploit and explore
         self._print(f"mutating member {member.uid}...")
-        if self.__is_ready(member):
+        if self.is_ready_function(member):
             member = self.evolver.mutate(member=member, generation=self.generation)
             # measure test set performance if available
             if self.test_function is not None:
@@ -475,13 +469,11 @@ class DEController(Controller):
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
             for member in self._worker_pool.imap(mutate_procedure, list(generation), True):
+                # increment n steps
+                self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
-                # update generation
-                generation.update(member)
-                # increment n steps
-                self.__n_steps += 1
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
             yield list(generation)
@@ -489,8 +481,8 @@ class DEController(Controller):
 
 class DEProcedure(DeviceCallable):
     def __init__(
-            self, generation: Generation, evolver: DifferentialEvolveEngine, step_function: Callable[[Checkpoint, str], Checkpoint],
-            fitness_function: Callable[[Checkpoint, str], Checkpoint], test_function: Callable[[Checkpoint, str], Checkpoint] = None, verbose: bool = False):
+            self, generation: Generation, evolver: DifferentialEvolveEngine, step_function: Callable[[Checkpoint, str], None],
+            fitness_function: Callable[[Checkpoint, str], None], test_function: Callable[[Checkpoint, str], None] = None, verbose: bool = False):
         super().__init__(verbose)
         if not isinstance(generation, Generation):
             raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
@@ -524,4 +516,6 @@ class DEProcedure(DeviceCallable):
         if self.test_function is not None:
             self._print(f"testing member {member.uid}...")
             self.test_function(checkpoint=member, device=device)
+        # update generation
+        generation.update(member)
         return member

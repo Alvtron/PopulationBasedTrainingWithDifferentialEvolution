@@ -317,7 +317,7 @@ def run(
             batch_size=batch_size,
             train_steps=train_steps,
             devices=devices,
-            n_threads=n_jobs,
+            n_jobs=n_jobs,
             history_limit=history,
             tensorboard=tensorboard_writer,
             verbose=verbose,
