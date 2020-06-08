@@ -2,7 +2,13 @@ import math
 from abc import abstractmethod
 
 import torch
-from sklearn.metrics import f1_score, precision_score, recall_score
+
+def confusion_matrix(y_pred: torch.Tensor, y_true: torch.Tensor, n_classes: int) -> torch.Tensor:
+    conf_matrix = torch.zeros([n_classes, n_classes], dtype=torch.int)
+    y_pred = torch.argmax(y_pred, 1)
+    for t, p in zip(y_true.view(-1), y_pred.view(-1)):
+        conf_matrix[t.long(), p.long()] += 1
+    return conf_matrix
 
 
 class _Loss(torch.nn.Module):
@@ -123,9 +129,18 @@ class F1(_Loss):
         self.epsilon = epsilon
         
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-        # convert from class probability to class labels
-        y_pred = torch.argmax(y_pred, 1)
-        return f1_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro')
+        conf_matrix = confusion_matrix(y_pred, y_true, self.classes)
+        TP = conf_matrix.diag()
+        f1_scores = torch.zeros(self.classes, dtype=torch.float)
+        for c in range(self.classes):
+            idx = torch.ones(self.classes, dtype=torch.long)
+            idx[c] = 0
+            FP = conf_matrix[c, idx].sum()
+            FN = conf_matrix[idx, c].sum()
+            sensitivity = TP[c] / (TP[c] + FN + self.epsilon)
+            precision = TP[c] / (TP[c] + FP + self.epsilon)
+            f1_scores[c] = 2.0 * ((precision * sensitivity) / (precision + sensitivity + self.epsilon))
+        return f1_scores.mean()
 
 
 class Sensitivity(_Loss):
@@ -144,9 +159,42 @@ class Sensitivity(_Loss):
         self.epsilon = epsilon
         
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-        # convert from class probability to class labels
-        y_pred = torch.argmax(y_pred, 1)
-        return recall_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro')
+        conf_matrix = confusion_matrix(y_pred, y_true, self.classes)
+        TP = conf_matrix.diag()
+        sensitivity = torch.zeros(self.classes, dtype=torch.float)
+        for c in range(self.classes):
+            idx = torch.ones(self.classes, dtype=torch.long)
+            idx[c] = 0
+            FN = conf_matrix[idx, c].sum()
+            sensitivity[c] = TP[c] / (TP[c] + FN + self.epsilon)
+        return sensitivity.mean()
+
+
+class Specificity(_Loss):
+    '''
+    Calculate the specificity score.
+    Specificity is also called the true negative rate.
+    It measures the proportion of actual negatives that are correctly identified.
+    '''
+    def __init__(self, classes: int, epsilon: float = 1e-12):
+        super().__init__(name="Specificity", iso="spec", minimum=0.0, maximum=1.0, minimize=False)
+        if not isinstance(classes, int):
+            raise TypeError(f"the 'classes' specified was of wrong type {type(classes)}, expected {int}.")
+        if not isinstance(epsilon, float):
+            raise TypeError(f"the 'epsilon' specified was of wrong type {type(epsilon)}, expected {float}.")
+        self.classes = classes
+        self.epsilon = epsilon
+        
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        conf_matrix = confusion_matrix(y_pred, y_true, self.classes)
+        specificity = torch.zeros(self.classes, dtype=torch.float)
+        for c in range(self.classes):
+            idx = torch.ones(self.classes, dtype=torch.long)
+            idx[c] = 0
+            TN = conf_matrix[idx.nonzero()[:,None], idx.nonzero()].sum()
+            FP = conf_matrix[c, idx].sum()
+            specificity[c] = TN / (TN + FP + self.epsilon)
+        return specificity.mean()
 
 
 class Precision(_Loss):
@@ -165,6 +213,12 @@ class Precision(_Loss):
         self.epsilon = epsilon
         
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-        # convert from class probability to class labels
-        y_pred = torch.argmax(y_pred, 1)
-        return precision_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro')
+        conf_matrix = confusion_matrix(y_pred, y_true, self.classes)
+        TP = conf_matrix.diag()
+        precision = torch.zeros(self.classes, dtype=torch.float)
+        for c in range(self.classes):
+            idx = torch.ones(self.classes, dtype=torch.long)
+            idx[c] = 0
+            FP = conf_matrix[c, idx].sum()
+            precision[c] = TP[c] / (TP[c] + FP + self.epsilon)
+        return precision.mean()
