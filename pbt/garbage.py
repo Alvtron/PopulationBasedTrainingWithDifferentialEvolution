@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Any
 
 from pbt.database import Database
 from pbt.member import Generation
@@ -21,7 +21,9 @@ class GarbageCollector:
             return
         print(f"GC: {message}")
 
-    def collect(self) -> None:
+    def collect(self, exclude: Sequence[Any] = None) -> None:
+        if exclude is not None and not isinstance(exclude, (list, tuple)):
+            raise TypeError(f"the 'exclude' specified was of wrong type {type(exclude)}, expected {list} or {tuple}.")
         if self.history_limit is None:
             return
         for uid, keys in self.database.identy_records().items():
@@ -31,6 +33,9 @@ class GarbageCollector:
                     # skipping the member as it has already been processed
                     continue
                 member = self.database.entry(uid, key)
+                if exclude is not None and member in exclude:
+                    # skipping the member as it is requsted to be excluded
+                    continue
                 if not member.has_state():
                     # skipping the member as it has no state to delete
                     continue
