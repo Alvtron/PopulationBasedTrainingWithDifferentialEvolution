@@ -83,7 +83,7 @@ class ExploitAndExplore(EvolveEngine):
             raise TypeError(f"the 'exploit_factor' specified was of wrong type {type(exploit_factor)}, expected {float}.")
         if not(0.0 <= exploit_factor <= 1.0):
             raise ValueError(f"the 'exploit_factor' specified was not in range [0.0, 1.0].")
-        if not isinstance(explore_factors, float):
+        if not isinstance(explore_factors, (list, tuple)):
             raise TypeError(f"the 'explore_factors' specified was of wrong type {type(explore_factors)}, expected {list} or {tuple}.")
         if not all(isinstance(factor, float) for factor in explore_factors):
             raise ValueError(f"the 'explore_factors' specified was not a sequence of floats.")
