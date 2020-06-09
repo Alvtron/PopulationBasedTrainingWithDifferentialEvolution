@@ -10,11 +10,12 @@ import warnings
 import itertools
 from abc import abstractmethod
 from functools import partial
-from typing import List, Dict, Tuple, Sequence, Callable, Union
+from typing import List, Dict, Tuple, Sequence, Callable, Union, Generator, Any
 from functools import partial
 from dataclasses import dataclass
 from multiprocessing.managers import EventProxy
 from multiprocessing.queues import Queue
+from multiprocessing.pool import ThreadPool
 
 import torch
 import numpy as np
@@ -38,21 +39,29 @@ torch.backends.cudnn.enabled = True
 STOP_FLAG = None
 
 
-class Trial:
+def map_to_threads(function, parameters):
+    with ThreadPool(processes=len(parameters)) as pool:
+        yield from pool.imap_unordered(function, parameters)
+
+
+class ThreadTask:
     def __init__(self, return_queue, function: DeviceCallable, parameters):
         if return_queue is None:
             raise TypeError(f"the 'return_queue' specified was None.")
         if not isinstance(function, DeviceCallable):
             raise TypeError(f"the 'function' specified was of wrong type {type(function)}, expected {DeviceCallable}.")
-        if parameters is None:
-            raise TypeError(f"the 'parameters' specified was None.")
+        if parameters is not None and not isinstance(parameters, (list, tuple)):
+            raise TypeError(f"the 'parameters' specified was of wrong type {type(parameters)}, expected {list} or {tuple}.")
         self.return_queue = return_queue
         self.function: DeviceCallable = function
         self.parameters = parameters
 
-    def __call__(self, device: str):
-        return self.function(self.parameters, device=device)
-
+    def run(self, device: str) -> Generator[Any, None, None]:
+        device_function = partial(self.function, device=device)
+        if not device.startswith('cuda'):
+            yield from map_to_threads(device_function, self.parameters)
+        with torch.cuda.device(device):
+            yield from map_to_threads(device_function, self.parameters)
 
 @dataclass
 class FailMessage:
@@ -61,7 +70,7 @@ class FailMessage:
     exception: str = None
 
 
-class Worker(torch.multiprocessing.Process):
+class DeviceWorker(torch.multiprocessing.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
 
     def __init__(self, uid: Union[int, str], end_event: EventProxy, receive_queue: Queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
@@ -92,13 +101,6 @@ class Worker(torch.multiprocessing.Process):
         full_message = f"{prefix}: {message}"
         print(full_message)
 
-    def __process_trial(self, trial: Trial):
-        if self.device.startswith('cuda'):
-            with torch.cuda.device(self.device):
-                return trial(self.device)
-        else:
-            return trial(self.device)
-
     def run(self):
         self.__log("running...")
         # set random state for reproducibility
@@ -107,31 +109,33 @@ class Worker(torch.multiprocessing.Process):
         torch.manual_seed(self.random_seed)
         torch.cuda.manual_seed(self.random_seed)
         torch.cuda.manual_seed_all(self.random_seed)
+        # create threadpool
         while not self.end_event.is_set():
             # get next checkpoint from train queue
-            self.__log("awaiting trial...")
-            trial = self.receive_queue.get()
-            if trial == STOP_FLAG:
+            self.__log("awaiting task...")
+            task = self.receive_queue.get()
+            if task == STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
-            if not isinstance(trial, Trial):
-                self.__log("Received wrong trial-type.")
-                raise TypeError(f"the 'trial' received was of wrong type {type(trial)}, expected {Trial}.", )
+            if not isinstance(task, ThreadTask):
+                self.__log("Received wrong task-type.")
+                raise TypeError(f"the 'task' received was of wrong type {type(task)}, expected {ThreadTask}.", )
             try:
-                self.__log("running trial...")
-                result = self.__process_trial(trial)
-                self.__log("returning trial result...")
-                trial.return_queue.put(result)
+                self.__log("running task...")
+                results = task.run(self.device)
+                for task_nr, result in enumerate(results, 1):
+                    self.__log(f"returning task result {task_nr} of {len(task.parameters)}...")
+                    task.return_queue.put(result)
             except Exception:
                 import traceback
-                self.__log("trial excecution failed! Exception:")
+                self.__log("task excecution failed! Exception:")
                 traceback_stacktrace = traceback.format_exc()
                 self.__log(str(traceback_stacktrace))
                 fail_message = FailMessage(
-                    self.uid, "trial excecution failed!", str(traceback_stacktrace))
-                trial.return_queue.put(fail_message)
-                # delete failed trial
-                del trial
+                    self.uid, "task excecution failed!", str(traceback_stacktrace))
+                task.return_queue.put(fail_message)
+                # delete failed task
+                del task
                 break
             finally:
                 # Explicitly trigger garbage collection to make sure that all destructors are called...

@@ -11,14 +11,14 @@ from collections.abc import Iterable
 from functools import partial
 from typing import List, Sequence, Iterable, Callable, Generator, Any
 from multiprocessing.managers import SyncManager
+from multiprocessing.pool import ThreadPool
 
 import numpy as np
 import torch
-from multiprocessing.pool import ThreadPool
 
-from pbt.utils.iterable import is_iterable
-from .worker import STOP_FLAG, FailMessage, Trial, Worker
-from .utils.cuda import get_gpu_memory_stats
+from pbt.utils.iterable import is_iterable, split
+from pbt.worker import STOP_FLAG, FailMessage, ThreadTask, DeviceWorker
+from pbt.utils.cuda import get_gpu_memory_stats
 
 
 # various settings for reproducibility
@@ -32,7 +32,6 @@ torch.cuda.manual_seed_all(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = True
-
 
 class WorkerPool:
     def __init__(self, manager: SyncManager, devices: Sequence[str] = ('cpu',), n_jobs: int = 1, verbose: int = 0):
@@ -52,8 +51,8 @@ class WorkerPool:
         self._manager = manager
         self._end_event = manager.Event()
         send_queues = [torch.multiprocessing.Queue() for _ in devices]
-        self._workers: List[Worker] = [
-            Worker(uid=uid, end_event=self._end_event, receive_queue=send_queue,
+        self._workers: List[DeviceWorker] = [
+            DeviceWorker(uid=uid, end_event=self._end_event, receive_queue=send_queue,
                    device=device, random_seed=uid, verbose=verbose > 1)
             for uid, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
@@ -78,11 +77,11 @@ class WorkerPool:
         self._stop_worker(worker)
         # spawn new worker
         self._print(f"spawning new worker with uid {worker.uid}...")
-        self._workers[worker_id] = Worker(uid=worker.uid, end_event=self._end_event, receive_queue=worker.receive_queue,
+        self._workers[worker_id] = DeviceWorker(uid=worker.uid, end_event=self._end_event, receive_queue=worker.receive_queue,
                                           device=worker.device, random_seed=worker.uid, verbose=self.verbose > 1)
         self._workers[worker_id].start()
 
-    def _stop_worker(self, worker: Worker) -> None:
+    def _stop_worker(self, worker: DeviceWorker) -> None:
         worker.terminate()
         worker.join()
         worker.close()
@@ -109,7 +108,7 @@ class WorkerPool:
             self.__async_return_queue = self._manager.Queue()
         worker = next(self._workers_iterator)
         self._print(f"pushing job to worker receive queue...")
-        trial = Trial(return_queue=self.__async_return_queue, function=function, parameters=parameters)
+        trial = ThreadTask(return_queue=self.__async_return_queue, function=function, parameters=[parameters])
         worker.receive_queue.put(trial)
 
     def get(self) -> object:
@@ -134,11 +133,14 @@ class WorkerPool:
         n_returned = 0
         failed_workers = set()
         return_queue = self._manager.Queue()
+        parameters_chunks = split(parameters, len(self._workers))
         self._print(f"queuing parameters...")
-        for param, worker in zip(parameters, self._workers_iterator):
-            trial = Trial(return_queue=return_queue, function=function, parameters=param)
-            worker.receive_queue.put(trial)
-            n_sent += 1
+        for params, worker in zip(parameters_chunks, self._workers_iterator):
+            if len(params) == 0:
+                continue
+            task = ThreadTask(return_queue=return_queue, function=function, parameters=params)
+            worker.receive_queue.put(task)
+            n_sent += len(params)
         self._print(f"awaiting results...")
         while n_returned != n_sent and len(failed_workers) < len(self._workers):
             result = return_queue.get()

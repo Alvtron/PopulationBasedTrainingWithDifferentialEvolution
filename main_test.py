@@ -27,9 +27,9 @@ if __name__ == "__main__":
         batch_size=64,
         train_steps=250,
         fitness_steps=0,
-        end_steps=30 * 40,
+        end_steps=30*40,
         n_jobs=8,
         devices=['cuda:0'],
         tensorboard=False,
-        verbose=3,
+        verbose=2,
         logging=True)

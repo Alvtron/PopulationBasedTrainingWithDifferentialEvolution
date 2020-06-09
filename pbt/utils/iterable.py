@@ -88,10 +88,14 @@ def merge_dictionaries(dicts) -> defaultdict:
                 result[key].append(d[key])
     return result
 
-def chunks(sequence, n):
+def chunks(sequence: Sequence[Any], n: int):
     """Return a generator that yields successive n-sized chunks from a sequence."""
     for i in range(0, len(sequence), n):
         yield sequence[i:i + n]
+
+def split(sequence: Sequence[Any], n: int):
+    k, m = divmod(len(sequence), n)
+    return (sequence[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 
 def insert_sequence(index, seq1, seq2):
     """Inserts the second sequence on the index in the first sequence."""

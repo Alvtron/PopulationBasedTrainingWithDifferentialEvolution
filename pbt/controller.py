@@ -280,7 +280,7 @@ class PBTController(Controller):
             raise TypeError(f"the 'n_jobs' specified was of wrong type {type(n_jobs)}, expected {int}.")
         self._manager = manager
         self._worker_pool = WorkerPool(
-            manager=manager, devices=devices, n_jobs=n_jobs, verbose=self.verbose - 2)
+            manager=manager, devices=devices, n_jobs=n_jobs, verbose=self.verbose - 3)
         # evolver
         self.evolver = evolver
         self.evolver.verbose = self.verbose > 2
@@ -292,7 +292,6 @@ class PBTController(Controller):
         self.test_function = Evaluator(
             model_class=model_class, test_data=datasets.test, loss_functions=self.loss_functions,
             batch_size=batch_size, loss_group='test') if datasets.test else None
-        self.__n_steps = 0
 
     def _print_prefix(self) -> str:
         if self.end_criteria['steps']:
@@ -326,14 +325,20 @@ class PBTController(Controller):
         # spawn members
         spawned_members = self.evolver.spawn(initial)
         # create generation
-        generation = Generation(dict_constructor=self._manager.dict, members=spawned_members)
+        generation = Generation(dict_constructor=dict, members=spawned_members)
         # create procedures
-        procedure = PBTProcedure(
-            generation=generation, evolver=self.evolver, train_function=self.step_function,
-            is_ready_function=is_ready, test_function=self.test_function, verbose=self.verbose > 3)
+        train_procedure = PBTTrainer(
+            train_function=self.step_function, verbose=self.verbose > 3)
+        evolve_procedure = PBTEvolver(
+            generation=generation, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
+        # start training
+        self._whisper(f"start training generation...")
         # loop until finished
         while not self._is_finished(generation):
-            for member in self._worker_pool.imap(procedure, list(generation), True):
+            self._say("training generation...")
+            [generation.update(member) for member in self._worker_pool.imap(train_procedure, list(generation), True)]
+            self._say("evolving generation...")
+            for member in self._worker_pool.imap(evolve_procedure, list(generation), True):
                 # increment n steps
                 self.__n_steps += 1
                 # report member performance
@@ -343,38 +348,44 @@ class PBTController(Controller):
                 generation.update(member)
             yield list(generation)
 
+class PBTTrainer(DeviceCallable):
+    def __init__(self, train_function, verbose: bool = False):
+        super().__init__(verbose)
+        if not callable(train_function):
+            raise TypeError(f"the 'train_function' specified was not callable.")
+        self.train_function = train_function
 
-class PBTProcedure(DeviceCallable):
-    def __init__(
-            self, generation: Generation, evolver: ExploitAndExplore, train_function: Callable[[Checkpoint, str], None],
-            is_ready_function: Callable[[Checkpoint], bool], test_function: Callable[[Checkpoint, str], None] = None, verbose: bool = False):
+    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+        if not isinstance(member, Checkpoint):
+            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+        if not isinstance(device, str):
+            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.") 
+        # train
+        self._print(f"training member {member.uid}...")
+        self.train_function(checkpoint=member, device=device)
+        return member
+
+class PBTEvolver(DeviceCallable):
+    def __init__(self, generation: Generation, evolver: ExploitAndExplore, test_function=None, verbose: bool = False):
         super().__init__(verbose)
         if not isinstance(generation, Generation):
             raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
         if not isinstance(evolver, ExploitAndExplore):
             raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {ExploitAndExplore}.")
-        if not callable(train_function):
-            raise TypeError(f"the 'train_function' specified was not callable.")
         if test_function is not None and not callable(test_function):
             raise TypeError(f"the 'test_function' specified was not callable.")
         self.generation = generation
         self.evolver = evolver
-        self.train_function = train_function
         self.test_function = test_function
-        self.is_ready_function = is_ready_function
 
     def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
         if not isinstance(member, Checkpoint):
             raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        # train
-        self._print(f"training member {member.uid}...")
-        self.train_function(checkpoint=member, device=device)
         # exploit and explore
         self._print(f"mutating member {member.uid}...")
-        if self.is_ready_function(member):
-            member = self.evolver.mutate(member=member, generation=self.generation)
+        member = self.evolver.mutate(member=member, generation=self.generation)
         # measure test set performance if available
         if self.test_function is not None:
             self._print(f"testing member {member.uid}...")
@@ -410,7 +421,7 @@ class DEController(Controller):
             raise TypeError(f"the 'n_jobs' specified was of wrong type {type(n_jobs)}, expected {int}.")
         self._manager = manager
         self._worker_pool = WorkerPool(
-            manager=manager, devices=devices, n_jobs=n_jobs, verbose=self.verbose - 2)
+            manager=manager, devices=devices, n_jobs=n_jobs, verbose=self.verbose - 3)
         # evolver
         self.evolver = evolver
         self.evolver.verbose = self.verbose > 2
