@@ -64,11 +64,8 @@ class ThreadTask:
         self.parameters = parameters
 
     def run(self, device: str) -> Generator[Any, None, None]:
-        device_function = partial(self.function, device=device)
-        if not device.startswith('cuda'):
-            yield from map_to_threads(device_function, self.parameters)
-        with torch.cuda.device(device):
-            yield from map_to_threads(device_function, self.parameters)
+        device_function = partial(self.function, device)
+        yield from map_to_threads(device_function, self.parameters)
 
 @dataclass
 class FailMessage:

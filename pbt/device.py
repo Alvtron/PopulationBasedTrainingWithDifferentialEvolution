@@ -1,5 +1,9 @@
 import os
 from abc import abstractmethod
+from typing import Any
+
+import torch
+
 
 class DeviceCallable(object):
     def __init__(self, verbose: bool = False):
@@ -14,5 +18,11 @@ class DeviceCallable(object):
         print(full_message)
 
     @abstractmethod
-    def __call__(self, checkpoint: object, device: str, **kwargs) -> object:
-        raise NotImplementedError
+    def function(self, device: str, argument: Any) -> Any:
+        raise NotImplementedError()
+
+    def __call__(self, device: str, argument: Any) -> Any:
+        if not device.startswith('cuda'):
+            return self.function(device, argument)
+        with torch.cuda.device(device):
+            return self.function(device, argument)

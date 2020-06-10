@@ -354,7 +354,7 @@ class PBTTrainer(DeviceCallable):
             raise TypeError(f"the 'train_function' specified was not callable.")
         self.train_function = train_function
 
-    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+    def function(self, device: str, member: Checkpoint) -> Checkpoint:
         if not isinstance(member, Checkpoint):
             raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
         if not isinstance(device, str):
@@ -379,7 +379,7 @@ class PBTEvolver(DeviceCallable):
         self.evolver = evolver
         self.test_function = test_function
 
-    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+    def function(self, device: str, member: Checkpoint) -> Checkpoint:
         if not isinstance(member, Checkpoint):
             raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
         if not isinstance(device, str):
@@ -519,7 +519,7 @@ class DEProcedure(DeviceCallable):
         self.fitness_function = fitness_function
         self.test_function = test_function
 
-    def __call__(self, member: Checkpoint, device: str) -> Checkpoint:
+    def function(self, device: str, member: Checkpoint) -> Checkpoint:
         if not isinstance(member, Checkpoint):
             raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
         if not isinstance(device, str):
