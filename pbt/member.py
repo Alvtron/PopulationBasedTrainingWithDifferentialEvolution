@@ -8,6 +8,7 @@ from pathlib import Path
 from abc import abstractmethod
 from collections import defaultdict, deque
 from itertools import islice, chain
+from datetime import datetime
 from typing import List, Dict, Iterable, Sequence, Generator, Iterator
 
 import torch
@@ -63,7 +64,7 @@ class Checkpoint(object):
         self.eval_metric: str = eval_metric
         self.minimize: bool = minimize
         self.loss: Dict[str, dict] = dict()
-        self.time: Dict[str, dict] = dict()
+        self.time: Dict[str, float] = dict()
         self.steps: int = 0
         self.epochs: int = 0
 
@@ -241,6 +242,19 @@ class Checkpoint(object):
 
     def copy(self) -> Checkpoint:
         return copy.deepcopy(self)
+
+    def register_time(self, tag: str, start: datetime, end: datetime) -> None:
+        """Register a time duration on the specified tag by providing the start- and end datetime."""
+        if not isinstance(tag, str):
+            raise TypeError(f"the 'tag' specified was of wrong type {type(tag)}, expected {str}.")
+        if not isinstance(start, datetime):
+            raise TypeError(f"the 'start' specified was of wrong type {type(start)}, expected {datetime}.")
+        if not isinstance(end, datetime):
+            raise TypeError(f"the 'end' specified was of wrong type {type(end)}, expected {datetime}.")
+        if start > end:
+            raise ValueError("the start time was higher, or later, than the end time.")
+        duration = end - start
+        self.time[tag] = duration.total_seconds()
 
     def performance_details(self) -> str:
         strings = list()
