@@ -129,7 +129,7 @@ class Controller(object):
 
     def __update_tensorboard(self, member: Checkpoint) -> None:
         """Plots member data to tensorboard."""
-        if not self.__tensorboard:
+        if self.__tensorboard is None:
             return
         # plot eval metrics
         for eval_metric_group, eval_metrics in member.loss.items():
@@ -331,12 +331,11 @@ class PBTController(Controller):
             train_function=self.step_function, verbose=self.verbose > 3)
         evolve_procedure = PBTEvolver(
             generation=generation, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
-        # start training
-        self._whisper(f"start training generation...")
         # loop until finished
         while not self._is_finished(generation):
             self._say("training generation...")
-            [generation.update(member) for member in self._worker_pool.imap(train_procedure, list(generation), True)]
+            for member in self._worker_pool.imap(train_procedure, list(generation), True):
+                generation.update(member)
             self._say("evolving generation...")
             for member in self._worker_pool.imap(evolve_procedure, list(generation), True):
                 # increment n steps
@@ -362,7 +361,9 @@ class PBTTrainer(DeviceCallable):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.") 
         # train
         self._print(f"training member {member.uid}...")
+        train_start_time = datetime.now()
         self.train_function(checkpoint=member, device=device)
+        member.register_time(tag='training', start=train_start_time, end=datetime.now())
         return member
 
 class PBTEvolver(DeviceCallable):
@@ -385,11 +386,15 @@ class PBTEvolver(DeviceCallable):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         # exploit and explore
         self._print(f"mutating member {member.uid}...")
+        evolve_start_time = datetime.now()
         member = self.evolver.mutate(member=member, generation=self.generation)
+        member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
         # measure test set performance if available
         if self.test_function is not None:
+            test_start_time = datetime.now()
             self._print(f"testing member {member.uid}...")
             self.test_function(member, device)
+            member.register_time(tag='testing', start=test_start_time, end=datetime.now())
         return member
 
 
@@ -520,14 +525,20 @@ class DEProcedure(DeviceCallable):
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         self._print(f"training member {member.uid}...")
+        step_start_time = datetime.now()
         self.step_function(checkpoint=member, device=device)
-        self._print(f"mutating member {member.uid}...")
+        member.register_time(tag='training', start=step_start_time, end=datetime.now())
+        self._print(f"evolving member {member.uid}...")
+        evolve_start_time = datetime.now()
         member = self.evolver.mutate(
             parent=member,
             generation=self.generation,
             fitness_function=partial(self.fitness_function, device=device))
+        member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
         # measure test set performance if available
         if self.test_function is not None:
+            test_start_time = datetime.now()
             self._print(f"testing member {member.uid}...")
             self.test_function(checkpoint=member, device=device)
+            member.register_time(tag='testing', start=test_start_time, end=datetime.now())
         return member

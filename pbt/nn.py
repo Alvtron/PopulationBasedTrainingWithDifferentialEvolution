@@ -106,7 +106,6 @@ class Trainer(object):
             raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        start_train_time_ns = time.time_ns()
         # preparing model and optimizer
         model = self.__create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
         optimizer = self.__create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
@@ -149,7 +148,6 @@ class Trainer(object):
         del model
         del optimizer
         torch.cuda.empty_cache()
-        checkpoint.time[self.LOSS_GROUP] = float(time.time_ns() - start_train_time_ns) * float(10**(-9))
 
 
 class Evaluator(object):
@@ -195,7 +193,6 @@ class Evaluator(object):
             raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        start_eval_time_ns = time.time_ns()
         # preparing model
         model = self.__create_model(model_state=checkpoint.model_state, device=device)
         # prepare batches
@@ -218,8 +215,6 @@ class Evaluator(object):
         # clean GPU memory
         del model
         torch.cuda.empty_cache()
-        # save time
-        checkpoint.time[self.loss_group] = float(time.time_ns() - start_eval_time_ns) * float(10**(-9))
 
 
 class Step():
@@ -231,7 +226,7 @@ class Step():
             batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric)
         # n random batches for evaluation
         self.evaluator = Evaluator(
-            model_class=model_class, test_data=test_data, batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
+            model_class=model_class, test_data=test_data, batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=False)
 
     def __call__(self, checkpoint: Checkpoint, device: str):
         if not isinstance(checkpoint, Checkpoint):
