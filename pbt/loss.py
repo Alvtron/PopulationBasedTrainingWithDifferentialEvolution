@@ -125,7 +125,7 @@ class F1(_Loss):
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         # convert from class probability to class labels
         y_pred = torch.argmax(y_pred, 1)
-        return f1_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro')
+        return f1_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro', zero_division=0)
 
 
 class Sensitivity(_Loss):
@@ -146,7 +146,7 @@ class Sensitivity(_Loss):
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         # convert from class probability to class labels
         y_pred = torch.argmax(y_pred, 1)
-        return recall_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro')
+        return recall_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro', zero_division=0)
 
 
 class Precision(_Loss):
@@ -167,4 +167,4 @@ class Precision(_Loss):
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         # convert from class probability to class labels
         y_pred = torch.argmax(y_pred, 1)
-        return precision_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro')
+        return precision_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), labels=list(range(self.classes)), average='macro', zero_division=0)
