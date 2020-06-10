@@ -20,16 +20,27 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.enabled = True
 
-    run(
-        task='fashionmnist_lenet5',
-        evolver='pbt',
-        population_size=30,
-        batch_size=64,
-        train_steps=250,
-        fitness_steps=0,
-        end_steps=30*40,
-        n_jobs=8,
-        devices=['cuda:0'],
-        tensorboard=False,
-        verbose=2,
-        logging=True)
+    times=5
+
+    tasks=(
+        'fashionmnist_lenet5',
+        'mnist_lenet5',
+        'fashionmnist_mlp',
+        'mnist_mlp')
+
+    evolvers=(
+        'pbt',
+        'de',
+        'shade',
+        'lshade')
+
+    n_tasks = times * len(tasks) * len(evolvers)
+
+    for i in range(times):
+        for task in tasks:
+            for evolver in evolvers:
+                print(f"({i} of {n_tasks}) running '{task}' with '{evolver}'...")
+                run(task=task, evolver=evolver, population_size=30, batch_size=64,
+                    train_steps=250, fitness_steps=0, end_steps=30*40,
+                    n_jobs=8, devices=['cuda:0'], tensorboard=False,
+                    verbose=2, logging=True)
