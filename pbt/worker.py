@@ -43,6 +43,13 @@ def map_to_threads(function, parameters):
     with ThreadPool(processes=len(parameters)) as pool:
         yield from pool.imap_unordered(function, parameters)
 
+def initialize_cude_device(device: str):
+    if not torch.cuda.is_available():
+        raise Exception("cannot initialize CUDA because is not available")
+    if not device.startswith('cuda'):
+        raise Exception(f"cannot initialize CUDA with the provided device '{device}'")
+    torch.cuda.set_device(device)
+    torch.cuda.init()
 
 class ThreadTask:
     def __init__(self, return_queue, function: DeviceCallable, parameters):
@@ -91,6 +98,9 @@ class DeviceWorker(torch.multiprocessing.Process):
         self.end_event = end_event
         self.receive_queue = receive_queue
         self.device = device
+        # initialize CUDA if device is a GPU
+        if device.startswith('cuda'):
+            initialize_cude_device(device)
         self.random_seed = random_seed
         self.verbose = verbose
 
@@ -108,7 +118,6 @@ class DeviceWorker(torch.multiprocessing.Process):
         np.random.seed(self.random_seed)
         torch.manual_seed(self.random_seed)
         torch.cuda.manual_seed(self.random_seed)
-        torch.cuda.manual_seed_all(self.random_seed)
         # create threadpool
         while not self.end_event.is_set():
             # get next checkpoint from train queue
@@ -118,7 +127,7 @@ class DeviceWorker(torch.multiprocessing.Process):
                 self.__log("STOP FLAG received. Stopping...")
                 break
             if not isinstance(task, ThreadTask):
-                self.__log("Received wrong task-type.")
+                self.__log("received wrong task-type.")
                 raise TypeError(f"the 'task' received was of wrong type {type(task)}, expected {ThreadTask}.", )
             try:
                 self.__log("running task...")
