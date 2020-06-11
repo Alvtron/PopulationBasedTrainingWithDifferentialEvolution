@@ -228,6 +228,8 @@ class Analyzer(object):
             nan_df = pd.DataFrame()
             for column_name in df.loc[:, df.isna().any()]:
                 index = df[column_name].last_valid_index()
+                if index is None:
+                    continue
                 nan_df.at[index, 'end'] = df.at[index, column_name]
             if not nan_df.empty:
                 nan_df.plot(ax=ax, legend=True, kind='line', ls='none', marker=NAN_MARKER, ms=NAN_MARKER_SIZE, color=NAN_COLOR)
