@@ -256,7 +256,7 @@ def run(
     # prepare database
     print(f"Preparing database...")
     database = Database(
-        directory_path=f"{directory}/{task}_p{population_size}_train{train_steps}_fitness{fitness_steps}_batch{batch_size}_{evolver}",
+        directory_path=f"{directory}/{task}/p{population_size}_train{train_steps}_fitness{fitness_steps}_batch{batch_size}_{evolver}",
         read_function=torch.load, write_function=torch.save)
     # prepare tensorboard writer
     tensorboard_writer = None
