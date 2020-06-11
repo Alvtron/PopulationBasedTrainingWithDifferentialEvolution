@@ -16,6 +16,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from pbt.database import ReadOnlyDatabase
 from pbt.nn import Evaluator
+from pbt.member import Checkpoint
 from pbt.hyperparameters import ContiniousHyperparameter, Hyperparameters
 from pbt.utils.constraint import clip
 from pbt.utils.iterable import flatten_dict
@@ -69,20 +70,13 @@ class Analyzer(object):
         raise Exception
 
     def __get_latest_members(self):
-        max_steps = max(max(int(key) for key in keys) for keys in self.database.identy_records().values())
-        for uid, keys in self.database.identy_records().items():
-            max_key = max(int(key) for key in keys)
-            if max_key < max_steps:
-                continue
-            yield self.database.entry(uid, max_key)
+        yield from self.database.get_last()
 
-    def __get_best_member(self):
-        get_best = min if self.__minimize_score() else max
-        return get_best(self.__get_latest_members(), key=lambda x: x.test_score() if x.test_score() is not None else x.eval_score())
+    def __get_best_member(self) -> Checkpoint:
+        return max(self.database.get_last())
 
-    def __get_worst_member(self):
-        get_worst = max if self.__minimize_score() else min
-        return get_worst(self.__get_latest_members(), key=lambda x: x.test_score() if x.test_score() else x.eval_score())
+    def __get_worst_member(self) -> Checkpoint:
+        return min(self.database.get_last())
 
     def test(self, evaluator: Evaluator, save_directory: str, device: str = 'cpu'):
         self.__print(f"Finding best member in population...")
