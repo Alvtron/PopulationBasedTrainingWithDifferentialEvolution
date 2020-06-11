@@ -51,8 +51,8 @@ if __name__ == "__main__":
         for task in tasks:
             for evolver in evolvers:
                 print(f"({n_done + 1} of {n_tasks}) running '{task}' with '{evolver}'...")
-                run(task=task, evolver=evolver, population_size=30, batch_size=64,
-                    train_steps=250, fitness_steps=0, end_steps=30*40,
-                    n_jobs=8, devices=['cuda:0'], tensorboard=False,
-                    verbose=2, logging=True)
+                run(task=task, evolver=evolver, population_size=population_size, batch_size=batch_size,
+                    train_steps=train_steps, fitness_steps=fitness_steps, end_steps=end_steps,
+                    n_jobs=n_jobs, devices=devices, tensorboard=tensorboard,
+                    verbose=verbose, logging=logging)
                 n_done += 1
