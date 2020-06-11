@@ -45,12 +45,14 @@ if __name__ == "__main__":
     times=5
 
     n_tasks = times * len(tasks) * len(evolvers)
+    n_done = 0
 
     for i in range(times):
         for task in tasks:
             for evolver in evolvers:
-                print(f"({i} of {n_tasks}) running '{task}' with '{evolver}'...")
-                run(task=task, evolver=evolver, population_size=population_size, batch_size=batch_size,
-                    train_steps=train_steps, fitness_steps=fitness_steps, end_steps=end_steps,
-                    n_jobs=n_jobs, devices=devices, tensorboard=tensorboard,
-                    verbose=verbose, logging=logging)
+                print(f"({n_done + 1} of {n_tasks}) running '{task}' with '{evolver}'...")
+                run(task=task, evolver=evolver, population_size=30, batch_size=64,
+                    train_steps=250, fitness_steps=0, end_steps=30*40,
+                    n_jobs=8, devices=['cuda:0'], tensorboard=False,
+                    verbose=2, logging=True)
+                n_done += 1
