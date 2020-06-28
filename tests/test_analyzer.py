@@ -10,7 +10,7 @@ import numpy as np
 from pbt.analyze import Analyzer 
 from pbt.database import ReadOnlyDatabase
 from pbt.loss import CategoricalCrossEntropy, Accuracy, F1
-from pbt.evaluator import Evaluator
+from pbt.nn import Evaluator
 from pbt.task.mnist import Mnist
 from pbt.task.fashionmnist import FashionMnist
 
@@ -18,7 +18,7 @@ class TestAnalyzer(unittest.TestCase):
     def test_analyzer(self):
         batch_size = 64
         device = 'cuda'
-        data_path = 'tests/checkpoint/lshade_20200422231243'
+        data_path = 'F:/PBT_DATA/2020-06-11/checkpoints/fashionmnist_lenet5/p30_train242_fitness8_batch64_shade/20200615003119'
         task = FashionMnist(model='lenet5')
         tester = Evaluator(
             model_class=task.model_class,
