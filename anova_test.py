@@ -2,15 +2,21 @@ import itertools
 from functools import partial
 from typing import Sequence, Tuple
 from pathlib import Path
+from collections import namedtuple
 
 import torch
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
+import scipy.special as special
 import statsmodels.api as sm
 from statsmodels.stats.multicomp import MultiComparison
 from statsmodels.formula.api import ols
 import researchpy as rp
+
+from pingouin import pairwise_gameshowell
+from pingouin import welch_anova
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
@@ -43,13 +49,14 @@ models_rename_dict = {'mlp': 'MLP', 'lenet5': 'LeNet-5'}
 datasets = ['mnist', 'fashionmnist']
 
 def power_of_notation(value: float):
-    scientific = f"{value:0.5E}"
+    if (value.is_integer()):
+        return f"{int(value)}"
+    scientific = f"{value:0.2E}"
     number, exponent = tuple(scientific.split('E'))
     exponent = int(exponent)
-    if (exponent < -2):
+    if (exponent < -4):
         return f"${number} \\times 10^" + '{' + str(exponent) + "}$"
-    else:
-        return f"{value:0.5f}"
+    return f"{value:0.5f}"
 
 # BOXPLOT: loss for train, eval and test across steps for pbt, de, shade, lshade on the average
 def perform_full_anova_test():
@@ -64,6 +71,8 @@ def perform_full_anova_test():
     multi_index_dataset_model = pd.MultiIndex.from_product([datasets, models], names=['Dataset', 'Model'])
     df_levene = pd.DataFrame(columns=statistic_labels, index=multi_index_dataset_model)
     df_oneway_anova = pd.DataFrame(columns=statistic_labels, index=multi_index_dataset_model)
+    welch_statistic_labels = ['d.f.N.', 'd.f.D.', 'F-value', 'p-value']
+    df_welch_anova = pd.DataFrame(columns=welch_statistic_labels, index=multi_index_dataset_model)
     post_hoc_groups = [
         'PBT \& PBT-DE',
         'PBT \& PBT-SHADE',
@@ -73,6 +82,7 @@ def perform_full_anova_test():
         'PBT-LSHADE \& PBT-SHADE']
     multi_index_post_hoc = pd.MultiIndex.from_product([datasets, models, post_hoc_groups], names=['Dataset', 'Model', 'Procedures'])
     df_post_hoc = pd.DataFrame(columns=['meandiff', 'lower', 'upper', 'reject'], index=multi_index_post_hoc)
+    df_games_howell_post_hoc = pd.DataFrame(columns=['S.E.', 'T-value', 'd.f.', 'p-value'], index=multi_index_post_hoc)
     normality_figure, normality_axes = plt.subplots(nrows=4, ncols=4, figsize=(DOCUMENT_MAX_COLUMN_WIDTH, DOCUMENT_MAX_COLUMN_WIDTH), sharex=True)
     for index, task_path in enumerate(directories):
         dataset, model = tuple(task_path.stem.split('_'))
@@ -84,6 +94,7 @@ def perform_full_anova_test():
             continue
         df[evolver_tag] = pd.Categorical(df[evolver_tag], groups)
         df.sort_values(by=evolver_tag, inplace=True)
+        df_original = df
         df = df.pivot_table(values=dependent_variable, index=df.index, columns=evolver_tag, aggfunc='first')
         df = df.apply(lambda x: pd.Series(x.dropna().values))
         # NORMALITY test
@@ -117,7 +128,10 @@ def perform_full_anova_test():
         # ONE-WAY ANOVA
         oneway_result = stats.f_oneway(*(df[evolver] for evolver in evolvers))
         df_oneway_anova.loc[dataset, model] = oneway_result
-        # POST-HOC
+        # ONE-WAY WELCH ANOVA
+        welch_result = welch_anova(data=df_original, dv='test_f1', between='evolver')
+        df_welch_anova.loc[dataset, model] = welch_result.drop(['Source', 'np2'], axis =1).values
+        # POST-HOC TUKEY
         stacked_data = df.stack().reset_index()
         stacked_data.rename(columns={'level_0': 'id','evolver': 'procedure', 0:'result'}, inplace=True)
         multi_comparison = MultiComparison(stacked_data['result'], stacked_data['procedure'])
@@ -126,6 +140,12 @@ def perform_full_anova_test():
         for index, row in post_hoc_df.iterrows():
             group = f"{row[0]} \& {row[1]}"
             df_post_hoc.loc[dataset, model, group] = row[2:]
+        # POST-HOC Games Howell
+        gameshowell_result = pairwise_gameshowell(data=df_original, dv='test_f1', between='evolver', alpha=0.01)
+        for index, row in gameshowell_result.iterrows():
+            group = f"{row[0]} \& {row[1]}"
+            df_games_howell_post_hoc.loc[dataset, model, group] = row.drop(['A', 'B', 'mean(A)', 'mean(B)', 'diff', 'tail', 'hedges']).values
+
     normality_figure.tight_layout(rect=(0.0, 0.05, 1.0, 1.0))
     normality_figure.text(0.5, 0.035, "Theoretical quantiles", ha='center')
     normality_figure.savefig(fname=Path(statistic_path, f"normality.png"), format='png', transparent=False)
@@ -155,11 +175,24 @@ def perform_full_anova_test():
         index=True, multirow=True, multicolumn=True, escape=False,
         caption=f"The one-way ANOVA test results for each task for assessing whether there is a statistically significant difference between the procedures.",
         label=f"tab:oneway_anova_test")
+    df_welch_anova.rename(index=rename_dict, inplace=True)
+    df_welch_anova.to_latex(
+        Path(statistic_path, "welch_anova.tex"), float_format=power_of_notation,
+        index=True, multirow=True, multicolumn=True, escape=False,
+        caption=f"The Welch ANOVA test results for each task for assessing whether there is a statistically significant difference between the procedures.",
+        label=f"tab:welch_anova_test")
     df_post_hoc.rename(index=rename_dict, inplace=True)
     df_post_hoc.to_latex(
         Path(statistic_path, "post_hoc.tex"),
         index=True, multirow=True, multicolumn=True, escape=False,
-        caption=f"The results from using the Tukey Honestly Significant Difference (HSD) test with a significance level of 0.05, rejecting or accepting whether there is a here is a statistically significant difference between each procedure.",
+        caption=f"The results from using the Tukey Honestly Significant Difference (HSD) test with a significance level of 0.01, rejecting or accepting whether there is a statistically significant difference between each procedure.",
         label=f"tab:post_hoc_test")
+    df_games_howell_post_hoc.rename(index=rename_dict, inplace=True)
+    df_games_howell_post_hoc.to_latex(
+        Path(statistic_path, "games_howell_post_hoc.tex"), float_format=power_of_notation,
+        index=True, multirow=True, multicolumn=True, escape=False,
+        caption=f"The results from using the Pairwise Games-Howell post-hoc test, used for rejecting or accepting whether there is a statistically significant difference between each procedure.",
+        label=f"tab:games_howell_post_hoc_test")
+
 if __name__ == "__main__":
     perform_full_anova_test()
