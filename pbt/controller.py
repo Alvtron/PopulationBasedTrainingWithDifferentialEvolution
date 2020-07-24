@@ -314,12 +314,12 @@ class PBTController(Controller):
         # create generation
         generation = Generation(dict_constructor=dict, members=spawned_members)
         # create asynchronous procedure
-        procedure = self.AsyncProcedure(
+        async_procedure = self.AsyncProcedure(
             generation=generation, step_function=self.step_function, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
             self._say("processing next generation...")
-            for member in self._worker_pool.imap(procedure, list(generation), True):
+            for member in self._worker_pool.imap(async_procedure, list(generation), True):
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
@@ -450,13 +450,13 @@ class DEController(Controller):
             dict_constructor=self._manager.dict,
             members=spawned_members)
         # create asynchronous procedure
-        procedure = self.AsyncProcedure(generation=generation, evolver=self.evolver, step_function=self.step_function,
+        async_procedure = self.AsyncProcedure(generation=generation, evolver=self.evolver, step_function=self.step_function,
             fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
         while not self._is_finished(generation):
             # increment n steps
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
-            for member in self._worker_pool.imap(procedure, list(generation), True):
+            for member in self._worker_pool.imap(async_procedure, list(generation), True):
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
