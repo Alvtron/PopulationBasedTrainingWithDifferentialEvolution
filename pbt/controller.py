@@ -315,7 +315,7 @@ class PBTController(Controller):
         generation = Generation(dict_constructor=dict, members=spawned_members)
         # create asynchronous procedure
         async_procedure = self.AsyncProcedure(
-            generation=generation, step_function=self.step_function, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
+            generation=generation, train_function=self.step_function, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
             self._say("processing next generation...")
