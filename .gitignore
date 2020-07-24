@@ -1,8 +1,6 @@
 # Ignore folders
 data/
 checkpoints/
-tests/checkpoint/
-tests/analyzer_output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
