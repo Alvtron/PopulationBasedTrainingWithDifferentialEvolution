@@ -313,19 +313,13 @@ class PBTController(Controller):
         spawned_members = self.evolver.spawn(initial)
         # create generation
         generation = Generation(dict_constructor=dict, members=spawned_members)
-        # create procedures
-        train_procedure = PBTTrainer(
-            train_function=self.step_function, verbose=self.verbose > 3)
-        evolve_procedure = PBTEvolver(
-            generation=generation, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
+        # create asynchronous procedure
+        procedure = self.AsyncProcedure(
+            generation=generation, step_function=self.step_function, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
-            self._say("training generation...")
-            for member in self._worker_pool.imap(train_procedure, list(generation), True):
-                generation.update(member)
-            self._say("evolving generation...")
-            for member in self._worker_pool.imap(evolve_procedure, list(generation), True):
-                # increment n steps
+            self._say("processing next generation...")
+            for member in self._worker_pool.imap(procedure, list(generation), True):
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
@@ -334,55 +328,44 @@ class PBTController(Controller):
                 generation.update(member)
             yield list(generation)
 
-class PBTTrainer(DeviceCallable):
-    def __init__(self, train_function, verbose: bool = False):
-        super().__init__(verbose)
-        if not callable(train_function):
-            raise TypeError(f"the 'train_function' specified was not callable.")
-        self.train_function = train_function
+    class AsyncProcedure(DeviceCallable):
+        def __init__(self, generation: Generation, train_function, evolver: ExploitAndExplore, test_function=None, verbose: bool = False):
+            super().__init__(verbose)
+            if not isinstance(generation, Generation):
+                raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+            if not callable(train_function):
+                raise TypeError(f"the 'train_function' specified was not callable.")
+            if not isinstance(evolver, ExploitAndExplore):
+                raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {ExploitAndExplore}.")
+            if test_function is not None and not callable(test_function):
+                raise TypeError(f"the 'test_function' specified was not callable.")
+            self.generation = generation
+            self.train_function = train_function
+            self.evolver = evolver
+            self.test_function = test_function
 
-    def function(self, device: str, member: Checkpoint) -> Checkpoint:
-        if not isinstance(member, Checkpoint):
-            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
-        if not isinstance(device, str):
-            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.") 
-        # train
-        self._print(f"training member {member.uid}...")
-        train_start_time = datetime.now()
-        self.train_function(checkpoint=member, device=device)
-        member.register_time(tag='training', start=train_start_time, end=datetime.now())
-        return member
-
-class PBTEvolver(DeviceCallable):
-    def __init__(self, generation: Generation, evolver: ExploitAndExplore, test_function=None, verbose: bool = False):
-        super().__init__(verbose)
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        if not isinstance(evolver, ExploitAndExplore):
-            raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {ExploitAndExplore}.")
-        if test_function is not None and not callable(test_function):
-            raise TypeError(f"the 'test_function' specified was not callable.")
-        self.generation = generation
-        self.evolver = evolver
-        self.test_function = test_function
-
-    def function(self, device: str, member: Checkpoint) -> Checkpoint:
-        if not isinstance(member, Checkpoint):
-            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
-        if not isinstance(device, str):
-            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        # exploit and explore
-        self._print(f"mutating member {member.uid}...")
-        evolve_start_time = datetime.now()
-        member = self.evolver.mutate(member=member, generation=self.generation)
-        member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
-        # measure test set performance if available
-        if self.test_function is not None:
-            test_start_time = datetime.now()
-            self._print(f"testing member {member.uid}...")
-            self.test_function(member, device)
-            member.register_time(tag='testing', start=test_start_time, end=datetime.now())
-        return member
+        def function(self, device: str, member: Checkpoint) -> Checkpoint:
+            if not isinstance(member, Checkpoint):
+                raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+            if not isinstance(device, str):
+                raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+            # train and evaluate
+            self._print(f"training member {member.uid}...")
+            train_start_time = datetime.now()
+            self.train_function(checkpoint=member, device=device)
+            member.register_time(tag='training', start=train_start_time, end=datetime.now())
+            # exploit and explore
+            self._print(f"mutating member {member.uid}...")
+            evolve_start_time = datetime.now()
+            member = self.evolver.mutate(member=member, generation=self.generation)
+            member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
+            # measure test set performance if available
+            if self.test_function is not None:
+                test_start_time = datetime.now()
+                self._print(f"testing member {member.uid}...")
+                self.test_function(member, device)
+                member.register_time(tag='testing', start=test_start_time, end=datetime.now())
+            return member
 
 
 class DEController(Controller):
@@ -466,14 +449,14 @@ class DEController(Controller):
         generation = Generation(
             dict_constructor=self._manager.dict,
             members=spawned_members)
-        mutate_procedure = DEProcedure(generation=generation, evolver=self.evolver, step_function=self.step_function,
+        # create asynchronous procedure
+        procedure = self.AsyncProcedure(generation=generation, evolver=self.evolver, step_function=self.step_function,
             fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
         while not self._is_finished(generation):
             # increment n steps
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
-            for member in self._worker_pool.imap(mutate_procedure, list(generation), True):
-                # increment n steps
+            for member in self._worker_pool.imap(procedure, list(generation), True):
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
@@ -484,48 +467,47 @@ class DEController(Controller):
             self.evolver.on_generation_end(generation)
             yield list(generation)
 
+    class AsyncProcedure(DeviceCallable):
+        def __init__(
+                self, generation: Generation, evolver: DifferentialEvolveEngine, step_function: Callable[[Checkpoint, str], None],
+                fitness_function: Callable[[Checkpoint, str], None], test_function: Callable[[Checkpoint, str], None] = None, verbose: bool = False):
+            super().__init__(verbose)
+            if not isinstance(generation, Generation):
+                raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+            if not isinstance(evolver, DifferentialEvolveEngine):
+                raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {DifferentialEvolveEngine}.")
+            if not callable(step_function):
+                raise TypeError(f"the 'step_function' specified was not callable.")
+            if not callable(fitness_function):
+                raise TypeError(f"the 'fitness_function' specified was not callable.")
+            if test_function is not None and not callable(test_function):
+                raise TypeError(f"the 'test_function' specified was not callable.")
+            self.generation = generation
+            self.evolver = evolver
+            self.step_function = step_function
+            self.fitness_function = fitness_function
+            self.test_function = test_function
 
-class DEProcedure(DeviceCallable):
-    def __init__(
-            self, generation: Generation, evolver: DifferentialEvolveEngine, step_function: Callable[[Checkpoint, str], None],
-            fitness_function: Callable[[Checkpoint, str], None], test_function: Callable[[Checkpoint, str], None] = None, verbose: bool = False):
-        super().__init__(verbose)
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        if not isinstance(evolver, DifferentialEvolveEngine):
-            raise TypeError(f"the 'evolver' specified was of wrong type {type(evolver)}, expected {DifferentialEvolveEngine}.")
-        if not callable(step_function):
-            raise TypeError(f"the 'step_function' specified was not callable.")
-        if not callable(fitness_function):
-            raise TypeError(f"the 'fitness_function' specified was not callable.")
-        if test_function is not None and not callable(test_function):
-            raise TypeError(f"the 'test_function' specified was not callable.")
-        self.generation = generation
-        self.evolver = evolver
-        self.step_function = step_function
-        self.fitness_function = fitness_function
-        self.test_function = test_function
-
-    def function(self, device: str, member: Checkpoint) -> Checkpoint:
-        if not isinstance(member, Checkpoint):
-            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
-        if not isinstance(device, str):
-            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        self._print(f"training member {member.uid}...")
-        step_start_time = datetime.now()
-        self.step_function(checkpoint=member, device=device)
-        member.register_time(tag='training', start=step_start_time, end=datetime.now())
-        self._print(f"evolving member {member.uid}...")
-        evolve_start_time = datetime.now()
-        member = self.evolver.mutate(
-            parent=member,
-            generation=self.generation,
-            fitness_function=partial(self.fitness_function, device=device))
-        member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
-        # measure test set performance if available
-        if self.test_function is not None:
-            test_start_time = datetime.now()
-            self._print(f"testing member {member.uid}...")
-            self.test_function(checkpoint=member, device=device)
-            member.register_time(tag='testing', start=test_start_time, end=datetime.now())
-        return member
+        def function(self, device: str, member: Checkpoint) -> Checkpoint:
+            if not isinstance(member, Checkpoint):
+                raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+            if not isinstance(device, str):
+                raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+            self._print(f"training member {member.uid}...")
+            step_start_time = datetime.now()
+            self.step_function(checkpoint=member, device=device)
+            member.register_time(tag='training', start=step_start_time, end=datetime.now())
+            self._print(f"evolving member {member.uid}...")
+            evolve_start_time = datetime.now()
+            member = self.evolver.mutate(
+                parent=member,
+                generation=self.generation,
+                fitness_function=partial(self.fitness_function, device=device))
+            member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
+            # measure test set performance if available
+            if self.test_function is not None:
+                test_start_time = datetime.now()
+                self._print(f"testing member {member.uid}...")
+                self.test_function(checkpoint=member, device=device)
+                member.register_time(tag='testing', start=test_start_time, end=datetime.now())
+            return member
