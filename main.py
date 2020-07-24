@@ -4,8 +4,6 @@ import argparse
 
 import torch
 import numpy as np
-from tensorboard import program
-from torch.utils.tensorboard import SummaryWriter
 
 from main_helper import run
 

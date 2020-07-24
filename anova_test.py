@@ -1,10 +1,5 @@
-import itertools
-from functools import partial
-from typing import Sequence, Tuple
 from pathlib import Path
-from collections import namedtuple
 
-import torch
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
@@ -12,28 +7,19 @@ import scipy.special as special
 import statsmodels.api as sm
 from statsmodels.stats.multicomp import MultiComparison
 from statsmodels.formula.api import ols
-import researchpy as rp
-
 from pingouin import pairwise_gameshowell
 from pingouin import welch_anova
-
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.colors as mcolors
-import matplotlib.font_manager
 import matplotlib.ticker as ticker
 import matplotlib.gridspec as gridspec
 from matplotlib import rc
-from matplotlib.lines import Line2D
 from matplotlib.ticker import FormatStrFormatter
 
+# Set matplotlib settings
 rc('font', family='serif')
 rc('font', serif='Computer Modern Roman')
 rc('text', usetex=True)
 rc('text.latex', preamble=r"\usepackage[T1]{fontenc} \catcode`\_=12")
-
-from pbt.database import ReadOnlyDatabase
-from pbt.utils.iterable import flatten_dict
 
 origin_path = Path('F:/PBT_DATA/2020-06-11')
 checkpoints_path = Path(origin_path, 'checkpoints')

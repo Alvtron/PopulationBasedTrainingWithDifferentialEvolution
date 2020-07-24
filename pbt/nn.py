@@ -1,22 +1,17 @@
 import os
-import time
 import random
 import itertools
 import collections
-from abc import abstractmethod
 from copy import deepcopy
 from warnings import warn
 
-import numpy as np
 import torch
 import torchvision
 from torch.nn import Module
 from torch.utils.data import Dataset, Subset, DataLoader
-from torchvision.datasets import VisionDataset
-from torchvision.datasets.vision import StandardTransform
 from torch.optim import Optimizer
 
-from pbt.member import Checkpoint, MissingStateError
+from pbt.member import Checkpoint
 from pbt.hyperparameters import Hyperparameters
 from pbt.models.hypernet import HyperNet
 from pbt.utils.data import create_subset, create_subset_by_size

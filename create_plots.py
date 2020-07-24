@@ -10,7 +10,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
-import matplotlib.font_manager
 import matplotlib.ticker as ticker
 import matplotlib.gridspec as gridspec
 from scipy.interpolate import griddata
@@ -19,6 +18,7 @@ from matplotlib.collections import PolyCollection
 from matplotlib import rc
 from matplotlib.lines import Line2D
 
+# set matplotlib settings
 rc('font', family='serif')
 rc('font', serif='Computer Modern Roman')
 rc('text', usetex=True)
@@ -1072,14 +1072,14 @@ def create_bar_summary_plot():
     plt.close('all')
 
 if __name__ == "__main__":
-    #create_dataframes()
-    #create_table_df()
-    #create_box_plots()
-    #create_line_plots()
-    #create_time_line_plots()
-    #create_hp_plots('mean')
-    #create_hp_trend_plots()
-    #create_hp_trend_v2_plots()
-    #create_hp_trend_matrix_plots()
-    #create_hp_trend_plots_3D()
+    create_dataframes()
+    create_table_df()
+    create_box_plots()
+    create_line_plots()
+    create_time_line_plots()
+    create_hp_plots('mean')
+    create_hp_trend_plots()
+    create_hp_trend_v2_plots()
+    create_hp_trend_matrix_plots()
+    create_hp_trend_plots_3D()
     create_bar_summary_plot()

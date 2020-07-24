@@ -1,9 +1,6 @@
-import math
-from abc import abstractmethod, abstractstaticmethod
-
 import torch.nn as nn
 
-from .hypernet import HyperNet
+from pbt.models.hypernet import HyperNet
 
 class MLP(HyperNet):
     def __init__(self, output_size: int):

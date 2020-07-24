@@ -1,17 +1,12 @@
 import random
-import math
 import copy
-from collections import defaultdict
-from typing import Iterable, Dict, Sequence
+from typing import Dict, Sequence
 
-import numpy as np
-import torch
 import torchvision
 from torch.utils.data import Dataset, Subset
-from torchvision.datasets import VisionDataset
 from torchvision.datasets.vision import StandardTransform
 
-from .hyperparameters import ContiniousHyperparameter, Hyperparameters
+from .hyperparameters import ContiniousHyperparameter
 
 class Datasets(object):
     def __init__(self, train_data: Dataset, eval_data: Dataset, test_data: Dataset = None):

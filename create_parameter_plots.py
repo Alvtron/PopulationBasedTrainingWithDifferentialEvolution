@@ -1,20 +1,15 @@
-import itertools
-from functools import partial
-from typing import Sequence, Tuple
 from pathlib import Path
 
 import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.colors as mcolors
-import matplotlib.font_manager
 import matplotlib.ticker as ticker
 import matplotlib.gridspec as gridspec
 from matplotlib import rc
 from matplotlib.lines import Line2D
 
+# set matplotlib settings
 rc('font', family='serif')
 rc('font', serif='Computer Modern Roman')
 rc('text', usetex=True)

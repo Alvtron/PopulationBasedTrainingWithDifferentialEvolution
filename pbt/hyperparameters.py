@@ -4,7 +4,7 @@ import math
 import copy
 import warnings
 from functools import partial
-from typing import Dict, Union, Tuple, Iterable, TypeVar, Generic
+from typing import Dict, Union, Tuple, Iterable, TypeVar
 from abc import abstractmethod
 
 from .utils.constraint import translate, clip, reflect

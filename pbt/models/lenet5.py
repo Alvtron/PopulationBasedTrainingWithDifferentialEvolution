@@ -1,12 +1,7 @@
-import math
-from abc import abstractmethod, abstractstaticmethod
-
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from .hypernet import HyperNet, Print
-from ..hyperparameters import ContiniousHyperparameter
+from pbt.models.hypernet import HyperNet
+from pbt.hyperparameters import ContiniousHyperparameter
 
 class LeNet5(HyperNet):
     def __init__(self, output_size: int):

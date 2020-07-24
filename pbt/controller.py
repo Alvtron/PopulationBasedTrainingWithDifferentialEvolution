@@ -1,31 +1,18 @@
 import os
-import sys
-import math
 import time
 import dill
-import random
 import copy
-import pickle
-import shutil
-import warnings
-import itertools
 from datetime import datetime, timedelta
 from abc import abstractmethod
-from typing import List, Dict, Sequence, Iterator, Iterable, Tuple, Callable, Generator
+from typing import List, Sequence, Iterable, Callable, Generator
 from functools import partial
 from multiprocessing.managers import SyncManager
 
-import torch
-import torchvision
-import torch.utils.data
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from torch.utils.tensorboard import SummaryWriter
-from torch.multiprocessing import Process
-import matplotlib.pyplot as plt
 
-import pbt.member
 from pbt.device import DeviceCallable
-from pbt.worker_pool import WorkerPool, WorkerThreadPool
+from pbt.worker_pool import WorkerPool
 from pbt.member import Checkpoint, Generation
 from pbt.utils.date import get_datetime_string
 from pbt.hyperparameters import DiscreteHyperparameter, Hyperparameters, hyper_parameter_change_details

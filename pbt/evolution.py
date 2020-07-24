@@ -3,19 +3,17 @@ import math
 import heapq
 import random
 import warnings
-import collections
 from abc import abstractmethod
-from typing import Tuple, List, Dict, Iterable, Sequence, Callable, Generator, Any
+from typing import Tuple, Iterable, Sequence, Callable
 from multiprocessing.managers import SyncManager
 
 from pbt.utils.multiprocessing import Counter
 from pbt.member import Checkpoint, Generation
-from pbt.hyperparameters import Hyperparameters
 from pbt.de.mutation import de_rand_1, de_current_to_best_1
 from pbt.de.constraint import halving
 from pbt.utils.constraint import clip
 from pbt.utils.distribution import randn, randc, mean_wl
-from pbt.utils.iterable import grid, random_from_list, average
+from pbt.utils.iterable import random_from_list
 
 
 def best(members: Iterable[Checkpoint], n: int = 1) -> Sequence[Checkpoint]:

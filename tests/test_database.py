@@ -6,9 +6,12 @@ import torch
 
 from pbt.database import ReadOnlyDatabase
 
+DATABASE_PATH = "path/to/database/"
+
 class TestDatabase(unittest.TestCase):
+    
     def setUp(self):
-        self.database = ReadOnlyDatabase("tests/checkpoint/20200323100808", read_function=torch.load)
+        self.database = ReadOnlyDatabase(DATABASE_PATH, read_function=torch.load)
 
     def test_database(self):
         self.assertTrue(self.database.exists)

@@ -4,7 +4,6 @@ from typing import Any
 
 import torch
 
-
 class DeviceCallable(object):
     def __init__(self, verbose: bool = False):
         if not isinstance(verbose, bool):

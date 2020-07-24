@@ -1,17 +1,13 @@
 from functools import partial
 
-import torch
 import torchvision
 from torch import nn
-from torchvision.datasets import (EMNIST, KMNIST, MNIST, QMNIST, FashionMNIST)
-from torch.optim import Optimizer
-from torch.utils.data import Dataset
+from torchvision.datasets import EMNIST
 
-from .task import Task
 from .mnist import Mnist
-from ..models import hypernet, lenet5, mlp, vgg, resnet
+from ..models import hypernet, lenet5, mlp
 from ..utils.data import split, random_split, stratified_split
-from ..hyperparameters import ContiniousHyperparameter, DiscreteHyperparameter, Hyperparameters
+from ..hyperparameters import Hyperparameters
 from ..dataset import Datasets
 
 class EMnist(Mnist):
@@ -47,10 +43,6 @@ class EMnist(Mnist):
             return partial(lenet5.LeNet5, self.num_classes)
         elif self.model == 'mlp':
             return partial(mlp.MLP, self.num_classes)
-        elif self.model == 'vgg16':
-            return partial(vgg.VGG16, self.num_classes, 1)
-        elif self.model == 'resnet18':
-            return partial(resnet.ResNet18, self.num_classes, 1)
         else:
             raise NotImplementedError
 

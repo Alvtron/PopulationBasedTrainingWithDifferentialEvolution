@@ -1,7 +1,6 @@
 from typing import Sequence, Any
 
 from pbt.database import Database
-from pbt.member import Generation
 
 class GarbageCollector:
     def __init__(self, database: Database, history_limit: int = None, verbose: bool = False):

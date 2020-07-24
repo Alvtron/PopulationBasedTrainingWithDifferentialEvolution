@@ -1,14 +1,11 @@
-from functools import partial
 from abc import ABC
 from typing import Dict
 
-import torch.utils.data
 from torch.optim import Optimizer
 from torch.utils.data import Dataset
 
 from ..models.hypernet import HyperNet
-from ..utils.data import split, random_split, stratified_split
-from ..hyperparameters import ContiniousHyperparameter, Hyperparameters
+from ..hyperparameters import Hyperparameters
 from ..loss import _Loss
 from ..dataset import Datasets
 

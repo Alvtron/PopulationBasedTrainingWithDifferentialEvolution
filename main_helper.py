@@ -1,50 +1,24 @@
 import os
-import copy
-import random
 import time
-import argparse
 import multiprocessing
-from typing import List, Sequence
-from functools import partial
+from typing import Sequence
 from dataclasses import dataclass
 
 import torch
-import numpy as np
 from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 
 import pbt.evolution
 from pbt.controller import PBTController, DEController
-from pbt.task import mnist, emnist, fashionmnist, creditfraud, cifar
+from pbt.task import mnist, emnist, fashionmnist
 from pbt.analyze import Analyzer
 from pbt.database import Database
-from pbt.nn import Trainer, Evaluator, RandomFitnessApproximation
+from pbt.nn import Evaluator
 
 
 def import_task(task_name: str):
-    # CREDIT CARD FRAUD
-    if task_name == "creditfraud":
-        return creditfraud.CreditCardFraud()
-    # CIFAR 10
-    elif task_name == "cifar10_mlp":
-        return cifar.CIFAR10('mlp')
-    elif task_name == "cifar10_lenet5":
-        return cifar.CIFAR10('lenet5')
-    elif task_name == "cifar10_vgg16":
-        return cifar.CIFAR10('vgg16')
-    elif task_name == "cifar10_resnet18":
-        return cifar.CIFAR10('resnet18')
-    # CIFAR 100
-    elif task_name == "cifar100_mlp":
-        return cifar.CIFAR100('mlp')
-    elif task_name == "cifar100_lenet5":
-        return cifar.CIFAR100('lenet5')
-    elif task_name == "cifar100_vgg16":
-        return cifar.CIFAR100('vgg16')
-    elif task_name == "cifar100_resnet18":
-        return cifar.CIFAR100('resnet18')
     # MNIST
-    elif task_name == "mnist_mlp":
+    if task_name == "mnist_mlp":
         return mnist.Mnist('mlp')
     elif task_name == "mnist_lenet5":
         return mnist.Mnist('lenet5')
