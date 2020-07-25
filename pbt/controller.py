@@ -314,7 +314,7 @@ class PBTController(Controller):
         # create generation
         generation = Generation(dict_constructor=dict, members=spawned_members)
         # create asynchronous procedure
-        async_procedure = self.AsyncProcedure(
+        async_procedure = self.AsyncThreadTask(
             generation=generation, train_function=self.step_function, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
@@ -328,7 +328,7 @@ class PBTController(Controller):
                 generation.update(member)
             yield list(generation)
 
-    class AsyncProcedure(DeviceCallable):
+    class AsyncThreadTask(DeviceCallable):
         def __init__(self, generation: Generation, train_function, evolver: ExploitAndExplore, test_function=None, verbose: bool = False):
             super().__init__(verbose)
             if not isinstance(generation, Generation):
@@ -450,7 +450,7 @@ class DEController(Controller):
             dict_constructor=self._manager.dict,
             members=spawned_members)
         # create asynchronous procedure
-        async_procedure = self.AsyncProcedure(generation=generation, evolver=self.evolver, step_function=self.step_function,
+        async_procedure = self.AsyncThreadTask(generation=generation, evolver=self.evolver, step_function=self.step_function,
             fitness_function=self.partial_fitness_function(), test_function=self.test_function, verbose=self.verbose > 3)
         while not self._is_finished(generation):
             # increment n steps
@@ -467,7 +467,7 @@ class DEController(Controller):
             self.evolver.on_generation_end(generation)
             yield list(generation)
 
-    class AsyncProcedure(DeviceCallable):
+    class AsyncThreadTask(DeviceCallable):
         def __init__(
                 self, generation: Generation, evolver: DifferentialEvolveEngine, step_function: Callable[[Checkpoint, str], None],
                 fitness_function: Callable[[Checkpoint, str], None], test_function: Callable[[Checkpoint, str], None] = None, verbose: bool = False):
