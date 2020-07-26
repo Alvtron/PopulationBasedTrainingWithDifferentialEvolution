@@ -33,9 +33,9 @@ if __name__ == "__main__":
 
     tasks=(
         'fashionmnist_lenet5',
-        #'mnist_lenet5',
-        #'fashionmnist_mlp',
-        #'mnist_mlp'
+        'mnist_lenet5',
+        'fashionmnist_mlp',
+        'mnist_mlp'
         )
 
     evolvers=(
