@@ -312,20 +312,25 @@ class PBTController(Controller):
         # spawn members
         spawned_members = self.evolver.spawn(initial)
         # create generation
-        generation = Generation(dict_constructor=dict, members=spawned_members)
+        generation = Generation(
+            dict_constructor=self._manager.dict,
+            members=spawned_members)
         # create asynchronous procedure
         async_procedure = self.AsyncThreadTask(
             generation=generation, train_function=self.step_function, evolver=self.evolver, test_function=self.test_function, verbose=self.verbose > 3)
         # loop until finished
         while not self._is_finished(generation):
-            self._say("processing next generation...")
+            next_generation = list()
+            self._say("training and adapting next generation...")
             for member in self._worker_pool.imap(async_procedure, list(generation), True):
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
-                # update generation
-                generation.update(member)
+                # temporary store new members
+                next_generation.append(member)
+            # update generation
+            [generation.update(member) for member in next_generation]
             yield list(generation)
 
     class AsyncThreadTask(DeviceCallable):
@@ -456,13 +461,17 @@ class DEController(Controller):
             # increment n steps
             self._whisper("on generation start...")
             self.evolver.on_generation_start(generation)
+            self._whisper("training and adapting next generation...")
+            next_generation = list()
             for member in self._worker_pool.imap(async_procedure, list(generation), True):
                 self.__n_steps += 1
                 # report member performance
                 self._say(f"{member}, {member.performance_details()}")
                 self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
-                # update generation
-                generation.update(member)
+                # temporary store new members
+                next_generation.append(member)
+            # update generation
+            [generation.update(member) for member in next_generation]
             self._whisper("on generation end...")
             self.evolver.on_generation_end(generation)
             yield list(generation)
