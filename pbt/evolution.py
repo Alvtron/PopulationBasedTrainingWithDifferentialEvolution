@@ -29,10 +29,10 @@ class EvolveFunction(object):
     Base class for all evolve functions.
     """
     def __init__(self, verbose) -> None:
-        self.__verbose = verbose
+        self.verbose = verbose
     
     def _log(self, text: str) -> None:
-        if not self.__verbose:
+        if not self.verbose:
             return
         print(f"{self.__class__.__name__}: {text}")
 
@@ -45,7 +45,7 @@ class EvolutionEngine(object):
     Base class for all evolvers.
     """
     def __init__(self, verbose: bool = False) -> None:
-        self.__verbose = verbose
+        self.verbose = verbose
         self._generation = None
 
     def next(self, generation: Generation):
@@ -368,7 +368,7 @@ class ExternalArchive():
         self.__lock = manager.Lock()
         self.__size = manager.Value('i', size)
         self.__records = manager.list()
-        self.__verbose = verbose
+        self.verbose = verbose
 
     @property
     def records(self):
@@ -376,7 +376,7 @@ class ExternalArchive():
             return list(self.__records)
 
     def __print(self, message: str):
-        if not self.__verbose:
+        if not self.verbose:
             return
         print(f"ExternalArchive: {message}")
 
