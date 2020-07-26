@@ -22,6 +22,10 @@ from pbt.database import Database
 from pbt.dataset import Datasets
 from pbt.garbage import GarbageCollector
 
+def always_ready(member: Checkpoint):
+    """Returns always true. Can be replaced with more sophisticated is-ready-function."""
+    return True
+
 class Controller(object):
     def __init__(
             self, manager: SyncManager, population_size: int, hyper_parameters: Hyperparameters,
@@ -274,8 +278,9 @@ class Controller(object):
         while not self._is_finished(generation):
             with self.evolver.next(generation) as evolve_function:
                 # construct asynchronous thread task
-                async_thread_task = self.AsyncThreadTask(
-                    evolve_function=evolve_function, step_function=self.step_function,
+                async_thread_task = self.AsyncAdaptation(
+                    generation=generation, evolve_function=evolve_function,
+                    step_function=self.step_function, is_ready=always_ready,
                     test_function=self.test_function, verbose=self.verbose > 3)
                 # train and adapt
                 self._whisper("training and adapting next generation...")
@@ -308,38 +313,45 @@ class Controller(object):
             self._say("finished.")
             self._on_stop()
 
-    class AsyncThreadTask(DeviceCallable):
-        def __init__(self, evolve_function: Callable[[Checkpoint], Checkpoint], step_function: Callable[[Checkpoint, str], None],
-            test_function: Callable[[Checkpoint, str], None] = None,
-            verbose: float = False):
-            super().__init__(verbose)
+    class AsyncAdaptation(DeviceCallable):
+        def __init__(self, generation: Generation, evolve_function: Callable[[Checkpoint], Checkpoint],
+            step_function: Callable[[Checkpoint, str], None], is_ready: Callable[[Checkpoint], bool],
+            test_function: Callable[[Checkpoint, str], None] = None, **kwargs):
+            super().__init__(**kwargs)
             if not callable(evolve_function):
                 raise TypeError(f"the 'evolve_function' specified was not callable.")
             if not callable(step_function):
                 raise TypeError(f"the 'step_function' specified was not callable.")
             if test_function is not None and not callable(test_function):
                 raise TypeError(f"the 'test_function' specified was not callable.")
-            self.evolve_function = evolve_function
-            self.step_function = step_function
-            self.test_function = test_function
+            self.__generation = generation
+            self.__evolve_function = evolve_function
+            self.__step_function = step_function
+            self.__test_function = test_function
+            self.__is_ready = is_ready
 
         def function(self, device: str, member: Checkpoint) -> Checkpoint:
             if not isinstance(member, Checkpoint):
                 raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
             if not isinstance(device, str):
                 raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+            # train member
             self._print(f"training member {member.uid}...")
             step_start_time = datetime.now()
-            self.step_function(checkpoint=member, device=device)
+            self.__step_function(checkpoint=member, device=device)
             member.register_time(tag='training', start=step_start_time, end=datetime.now())
-            self._print(f"evolving member {member.uid}...")
-            evolve_start_time = datetime.now()
-            member = self.evolve_function(member)
-            member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
+            # update generation
+            self.__generation.update(member)
+            if self.__is_ready(member):
+                # evolve member
+                self._print(f"evolving member {member.uid}...")
+                evolve_start_time = datetime.now()
+                member = self.__evolve_function(member)
+                member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
             # measure test set performance if available
-            if self.test_function is not None:
+            if self.__test_function is not None:
                 test_start_time = datetime.now()
                 self._print(f"testing member {member.uid}...")
-                self.test_function(checkpoint=member, device=device)
+                self.__test_function(checkpoint=member, device=device)
                 member.register_time(tag='testing', start=test_start_time, end=datetime.now())
             return member
