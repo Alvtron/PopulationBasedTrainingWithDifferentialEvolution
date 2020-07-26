@@ -28,13 +28,17 @@ class EvolveFunction(object):
     """
     Base class for all evolve functions.
     """
-    def __init__(self, verbose) -> None:
+    def __init__(self, name: str = None, verbose: bool = False) -> None:
+        self._name = name
         self.verbose = verbose
     
     def _log(self, text: str) -> None:
         if not self.verbose:
             return
-        print(f"{self.__class__.__name__}: {text}")
+        if self._name is None:
+            print(text)
+        else:
+            print(f"{self._name}: {text}")
 
     def __call__(self, member: Checkpoint) -> Checkpoint:
         raise NotImplementedError()
@@ -44,14 +48,18 @@ class EvolutionEngine(object):
     """
     Base class for all evolvers.
     """
-    def __init__(self, verbose: bool = False) -> None:
+    def __init__(self, name: str = None, verbose: bool = False) -> None:
+        self._name = name
         self.verbose = verbose
         self._generation = None
 
     def _log(self, text: str) -> None:
         if not self.verbose:
             return
-        print(f"{self.__class__.__name__}: {text}")
+        if self._name is None:
+            print(text)
+        else:
+            print(f"{self._name}: {text}")
 
     def next(self, generation: Generation):
         if not isinstance(generation, Generation):
@@ -94,7 +102,7 @@ class ExploitAndExplore(EvolutionEngine):
     PERTURB_METHODS = ('choice', 'sample')
 
     def __init__(self, exploit_factor: float = 0.2, explore_factors: Tuple[float, ...] = (0.8, 1.2), perturb_method: str = 'choice', **kwargs) -> None:
-        super().__init__(**kwargs)
+        super().__init__(name='PBT', **kwargs)
         if not isinstance(exploit_factor, float):
             raise TypeError(f"the 'exploit_factor' specified was of wrong type {type(exploit_factor)}, expected {float}.")
         if not(0.0 <= exploit_factor <= 1.0):
@@ -133,7 +141,7 @@ class ExploitAndExplore(EvolutionEngine):
 
     class _Evolve(EvolveFunction):
         def __init__(self, generation: Generation, exploit_factor: float, explore_factors: Tuple[float, ...], perturb_method: str, **kwargs) -> None:
-            super().__init__(**kwargs)
+            super().__init__(name='PBT', **kwargs)
             if not isinstance(generation, Generation):
                 raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
             if len(generation) < 2:
@@ -199,7 +207,7 @@ class DifferentialEvolution(EvolutionEngine):
     """
 
     def __init__(self, fitness_function_provider: FitnessFunctionProvider, F: float = 0.2, Cr: float = 0.8, **kwargs) -> None:
-        super().__init__(**kwargs)
+        super().__init__(name='DE', **kwargs)
         if not isinstance(fitness_function_provider, FitnessFunctionProvider):
             raise TypeError(f"the 'fitness_function' specified was of wrong type {type(fitness_function_provider)}, expected {FitnessFunctionProvider}.")
         if not isinstance(F, float):
@@ -233,7 +241,7 @@ class DifferentialEvolution(EvolutionEngine):
 
     class _Evolve(EvolveFunction):
         def __init__(self, generation: Generation, F: float, Cr: float, fitness_function: Callable[[Checkpoint], None], **kwargs):
-            super().__init__(**kwargs)
+            super().__init__(name='DE', **kwargs)
             if not isinstance(generation, Generation):
                 raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
             if len(generation) < 3:
@@ -441,8 +449,11 @@ class SHADE(EvolutionEngine):
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
 
-    def __init__(self, manager, fitness_function_provider: FitnessFunctionProvider, N_INIT: int, r_arc: float = 2.0, p: float = 0.1, memory_size: int = 5, f_min: float = 0.0, f_max: float = 1.0, state_sharing: bool = False, **kwargs) -> None:
-        super().__init__(**kwargs)
+    def __init__(
+        self, manager, fitness_function_provider: FitnessFunctionProvider,
+        N_INIT: int, r_arc: float = 2.0, p: float = 0.1, memory_size: int = 5,
+        f_min: float = 0.0, f_max: float = 1.0, state_sharing: bool = False, **kwargs) -> None:
+        super().__init__(name='SHADE', **kwargs)
         if not isinstance(manager, SyncManager):
             raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
         if not isinstance(fitness_function_provider, FitnessFunctionProvider):
@@ -512,7 +523,7 @@ class SHADE(EvolutionEngine):
 
     class _Evolve(EvolveFunction):
         def __init__(self, generation: Generation, fitness_function: Callable[[Checkpoint], None], memory: HistoricalMemory, archive: ExternalArchive, p: float, f_min:float, f_max: float, state_sharing: bool, **kwargs):
-            super().__init__(**kwargs)
+            super().__init__(name='SHADE', **kwargs)
             if not isinstance(generation, Generation):
                 raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
             if len(generation) < 3:
@@ -663,6 +674,7 @@ class LSHADE(SHADE):
 
     def __init__(self, manager: SyncManager, MAX_NFE: int, **kwargs) -> None:
         super().__init__(manager, **kwargs)
+        self._name = 'LSHADE'
         if not isinstance(MAX_NFE, int):
             raise TypeError(f"the 'MAX_NFE' specified was of wrong type {type(MAX_NFE)}, expected {int}.")
         self.N_MIN = 4
@@ -697,7 +709,7 @@ class LSHADE(SHADE):
 
     class _Evolve(SHADE._Evolve):
         def __init__(self, nfe_counter: Counter, **kwargs) -> None:
-            super().__init__(**kwargs)
+            super().__init__(name='LSHADE', **kwargs)
             self._nfe = nfe_counter
 
         def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
