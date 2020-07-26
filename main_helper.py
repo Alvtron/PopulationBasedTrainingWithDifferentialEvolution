@@ -9,11 +9,12 @@ from tensorboard import program
 from torch.utils.tensorboard import SummaryWriter
 
 import pbt.evolution
-from pbt.controller import PBTController, DEController
+from pbt.controller import Controller
 from pbt.task import mnist, emnist, fashionmnist
 from pbt.analyze import Analyzer
 from pbt.database import Database
 from pbt.nn import Evaluator
+from pbt.fitness import RandomFitnessApproximation
 
 
 def import_task(task_name: str):
@@ -94,64 +95,49 @@ def import_task(task_name: str):
             f"Your requested task '{task_name}'' is not available.")
 
 
-def create_evolver(manager, evolver_name, population_size, end_nfe): 
-    if evolver_name == 'pbt':
-        return pbt.evolution.ExploitAndExplore(
-            exploit_factor=0.2, explore_factors=(0.8, 1.2))
+def create_pbt_evolver():
+    return pbt.evolution.ExploitAndExplore(
+        exploit_factor=0.2, explore_factors=(0.8, 1.2))
+
+def create_de_evolver(manager, evolver_name, population_size, end_nfe, fitness_function_provider):
     if evolver_name == 'de':
         return pbt.evolution.DifferentialEvolution(
+            fitness_function_provider=fitness_function_provider,
             F=0.2, Cr=0.8)
     if evolver_name == 'shade':
         return pbt.evolution.SHADE(
-            manager=manager, N_INIT=population_size,
+            manager=manager, fitness_function_provider=fitness_function_provider,
+            N_INIT=population_size,
             r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade':
         return pbt.evolution.LSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
+            manager=manager, fitness_function_provider=fitness_function_provider,
+            N_INIT=population_size, MAX_NFE=end_nfe,
             r_arc=2.0, p=0.2, memory_size=5)
     if evolver_name == 'lshade_conservative':
         return pbt.evolution.LSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
+            manager=manager, fitness_function_provider=fitness_function_provider,
+            N_INIT=population_size, MAX_NFE=end_nfe,
             r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5)
     if evolver_name == 'lshade_very_conservative':
         return pbt.evolution.LSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
+            manager=manager, fitness_function_provider=fitness_function_provider,
+            N_INIT=population_size, MAX_NFE=end_nfe,
             r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.1)
     if evolver_name == 'lshade_explorative':
         return pbt.evolution.LSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
+            manager=manager, fitness_function_provider=fitness_function_provider,
+            N_INIT=population_size, MAX_NFE=end_nfe,
             r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=2.0)
-    if evolver_name == 'lshade_decay_linear':
-        return pbt.evolution.DecayingLSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
-            r_arc=2.0, p=0.2, memory_size=5, decay_type='linear')
-    if evolver_name == 'lshade_decay_curve':
-        return pbt.evolution.DecayingLSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
-            r_arc=2.0, p=0.2, memory_size=5, decay_type='curve')
-    if evolver_name == 'lshade_decay_logistic':
-        return pbt.evolution.DecayingLSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
-            r_arc=2.0, p=0.2, memory_size=5, decay_type='logistic')
-    if evolver_name == 'lshade_guide_linear':
-        return pbt.evolution.GuidedLSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
-            r_arc=2.0, p=0.2, memory_size=5, guide_type='linear', strength=0.5)
-    if evolver_name == 'lshade_guide_curve':
-        return pbt.evolution.GuidedLSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
-            r_arc=2.0, p=0.2, memory_size=5, guide_type='curve', strength=0.5)
-    if evolver_name == 'lshade_guide_logistic':
-        return pbt.evolution.GuidedLSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
-            r_arc=2.0, p=0.2, memory_size=5, guide_type='logistic', strength=0.5)
     if evolver_name == 'lshade_state_sharing':
         return pbt.evolution.LSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
+            manager=manager, fitness_function_provider=fitness_function_provider,
+            N_INIT=population_size, MAX_NFE=end_nfe,
             r_arc=2.0, p=0.2, memory_size=5, state_sharing=True)
     if evolver_name == 'lshade_state_sharing_conservative':
         return pbt.evolution.LSHADE(
-            manager=manager, N_INIT=population_size, MAX_NFE=end_nfe,
+            manager=manager, fitness_function_provider=fitness_function_provider, 
+            N_INIT=population_size, MAX_NFE=end_nfe,
             r_arc=2.0, p=0.2, memory_size=5, f_min=0.0, f_max=0.5, state_sharing=True)
     else:
         raise NotImplementedError(
@@ -271,55 +257,39 @@ def run(
         tag="info", file_name="information.txt").write_text(obj_info)
     # define controller
     print(f"Creating evolver...")
-    EVOLVER = create_evolver(manager, evolver, population_size, end_steps)
-    # create controller
     if evolver == 'pbt':
-        print(f"Creating PBT controller...")
-        controller = PBTController(
-            manager=manager,
-            population_size=population_size,
-            hyper_parameters=_task.hyper_parameters,
-            evolver=EVOLVER,
-            loss_metric=_task.loss_metric,
-            eval_metric=_task.eval_metric,
-            loss_functions=_task.loss_functions,
-            database=database,
-            end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score},
-            model_class=_task.model_class,
-            optimizer_class=_task.optimizer_class,
-            datasets=_task.datasets,
-            batch_size=batch_size,
-            train_steps=train_steps,
-            devices=devices,
-            n_jobs=n_jobs,
-            history_limit=history,
-            tensorboard=tensorboard_writer,
-            verbose=verbose,
-            logging=logging)
+        EVOLVER = create_pbt_evolver()
     else:
-        print(f"Creating DE controller...")
-        controller = DEController(
-            manager=manager,
-            population_size=population_size,
-            hyper_parameters=_task.hyper_parameters,
-            evolver=EVOLVER,
-            loss_metric=_task.loss_metric,
-            eval_metric=_task.eval_metric,
-            loss_functions=_task.loss_functions,
-            database=database,
-            end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score},
-            model_class=_task.model_class,
-            optimizer_class=_task.optimizer_class,
-            datasets=_task.datasets,
-            batch_size=batch_size,
-            train_steps=train_steps,
-            fitness_steps=fitness_steps,
-            devices=devices,
-            n_jobs=n_jobs,
-            history_limit=history,
-            tensorboard=tensorboard_writer,
-            verbose=verbose,
-            logging=logging)
+        # creating fitness function
+        fitness_function_provider = RandomFitnessApproximation(
+            model_class=_task.model_class, optimizer_class=_task.optimizer_class, train_data=_task.datasets.train, test_data=_task.datasets.eval,
+            loss_functions=_task.loss_functions, loss_metric=_task.loss_metric, batch_size=batch_size, batches=fitness_steps)
+        EVOLVER = create_de_evolver(
+            manager=manager, evolver_name=evolver, population_size=population_size,
+            end_nfe=end_steps, fitness_function_provider=fitness_function_provider)
+    # create controller
+    print(f"Creating controller...")
+    controller = Controller(
+        manager=manager,
+        population_size=population_size,
+        hyper_parameters=_task.hyper_parameters,
+        evolver=EVOLVER,
+        loss_metric=_task.loss_metric,
+        eval_metric=_task.eval_metric,
+        loss_functions=_task.loss_functions,
+        database=database,
+        end_criteria={'steps': end_steps, 'time': end_time, 'score': end_score},
+        model_class=_task.model_class,
+        optimizer_class=_task.optimizer_class,
+        datasets=_task.datasets,
+        batch_size=batch_size,
+        train_steps=train_steps,
+        devices=devices,
+        n_jobs=n_jobs,
+        history_limit=history,
+        tensorboard=tensorboard_writer,
+        verbose=verbose,
+        logging=logging)
     # run controller
     print(f"Starting controller...")
     best = controller.start()

@@ -20,7 +20,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.enabled = True
 
-    population_size=30
+    population_size=10
     batch_size=64
     train_steps=242
     fitness_steps=8
@@ -33,16 +33,18 @@ if __name__ == "__main__":
 
     tasks=(
         'fashionmnist_lenet5',
-        'mnist_lenet5',
-        'fashionmnist_mlp',
-        'mnist_mlp')
+        #'mnist_lenet5',
+        #'fashionmnist_mlp',
+        #'mnist_mlp'
+        )
 
     evolvers=(
         'de',
-        'shade',
-        'lshade')
+        #'shade',
+        #'lshade'
+        )
 
-    times=5
+    times=1
 
     n_tasks = times * len(tasks) * len(evolvers)
     n_done = 0

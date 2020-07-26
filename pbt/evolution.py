@@ -14,6 +14,7 @@ from pbt.de.constraint import halving
 from pbt.utils.constraint import clip
 from pbt.utils.distribution import randn, randc, mean_wl
 from pbt.utils.iterable import random_from_list
+from pbt.fitness import FitnessFunctionProvider
 
 
 def best(members: Iterable[Checkpoint], n: int = 1) -> Sequence[Checkpoint]:
@@ -23,60 +24,64 @@ def worst(members: Iterable[Checkpoint], n: int = 1) -> Sequence[Checkpoint]:
     return heapq.nsmallest(n=n, iterable=members)
 
 
-class EvolveEngine(object):
+class EvolveFunction(object):
+    """
+    Base class for all evolve functions.
+    """
+    def __init__(self, verbose) -> None:
+        self.verbose = verbose
+    
+    def _log(self, text: str) -> None:
+        if not self.__verbose:
+            return
+        print(f"{self.__class__.__name__}: {text}")
+
+    def __call__(self, member: Checkpoint) -> Checkpoint:
+        raise NotImplementedError()
+
+
+class EvolutionEngine(object):
     """
     Base class for all evolvers.
     """
+    def __init__(self, verbose: bool = False) -> None:
+        self.__verbose = verbose
+        self._generation = None
 
-    def __init__(self, verbose: bool = False):
-        self.verbose = verbose
+    def next(self, generation: Generation):
+        if not isinstance(generation, Generation):
+            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+        self.__generation = generation
+        return self
 
-    def logger(self, text: str) -> None:
-        if not self.verbose:
-            return
-        print(text)
+    def __enter__(self) -> EvolveFunction:
+        if self.__generation is None:
+            raise AttributeError("next() must be called!")
+        self._on_evolution_start(self.__generation)
+        return self._create_evolution_callable(self.__generation)
+
+    def __exit__(self, type, value, traceback):
+        self._on_evolution_end(self.__generation)
+
+    @abstractmethod
+    def _create_evolution_callable(self, generation: Generation):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _on_evolution_start(self, generation: Generation):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _on_evolution_end(self, generation: Generation):
+        raise NotImplementedError()
 
     @abstractmethod
     def spawn(self, members: Iterable[Checkpoint]) -> Generation:
         """Create initial generation."""
-        pass
-
-    @abstractmethod
-    def mutate(self, member: Checkpoint, generation: Generation, **kwargs) -> Checkpoint:
-        """Called for each member in generation. Returns one candidate or multiple candidates."""
-        pass
+        raise NotImplementedError()
 
 
-class DifferentialEvolveEngine(EvolveEngine):
-    """
-    Base class for all differential evolvers.
-    """
-
-    def __init__(self, verbose: bool = False):
-        super().__init__(verbose)
-
-    @abstractmethod
-    def spawn(self, members: Iterable[Checkpoint]) -> Generation:
-        """Create initial generation."""
-        pass
-
-    @abstractmethod
-    def on_generation_start(self, generation: Generation) -> None:
-        """Called before each generation."""
-        pass
-
-    @abstractmethod
-    def mutate(self, member: Checkpoint, generation: Generation, fitness_function: Callable[[Checkpoint], None]) -> Checkpoint:
-        """Called for each member in generation. Returns one candidate or multiple candidates."""
-        pass
-
-    @abstractmethod
-    def on_generation_end(self, generation: Generation) -> None:
-        """Called at the end of each generation."""
-        pass
-
-
-class ExploitAndExplore(EvolveEngine):
+class ExploitAndExplore(EvolutionEngine):
     """
     A general, modifiable implementation of PBTs exploitation and exploration method.
     """
@@ -97,9 +102,20 @@ class ExploitAndExplore(EvolveEngine):
             raise TypeError(f"the 'perturb_method' specified was of wrong type {type(perturb_method)}, expected {str}.")
         if perturb_method not in ExploitAndExplore.PERTURB_METHODS:
             raise NotImplementedError(f"perturb method '{perturb_method}' is not supported, expected {ExploitAndExplore.PERTURB_METHODS}.")
-        self.exploit_factor = exploit_factor
-        self.explore_factors = explore_factors
-        self.perturb_method = perturb_method
+        self.__exploit_factor = exploit_factor
+        self.__explore_factors = explore_factors
+        self.__perturb_method = perturb_method
+
+    def _create_evolution_callable(self, generation: Generation):
+        return self._Evolve(
+            generation=generation, exploit_factor=self.__exploit_factor, explore_factors=self.__explore_factors,
+            perturb_method=self.__perturb_method, verbose=self.verbose)
+
+    def _on_evolution_start(self, generation: Generation) -> None:
+        pass
+
+    def _on_evolution_end(self, generation: Generation) -> None:
+        pass
 
     def spawn(self, members: Iterable[Checkpoint]) -> Generation:
         """Create initial generation."""
@@ -110,72 +126,95 @@ class ExploitAndExplore(EvolveEngine):
             generation.append(member)
         return generation
 
-    def mutate(self, member: Checkpoint, generation: Generation) -> Checkpoint:
-        """
-        Exploit best peforming members and explores all search spaces with random perturbation.
-        A fraction of the bottom performing members exploit the top performing members.
-        If member exploits, the hyper-parameters are parturbed.
-        """
-        if not isinstance(member, Checkpoint):
-            raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        if len(generation) < 2:
-            raise ValueError("generation size must be at least 2 or higher")
-        if member not in generation:
-            raise ValueError("member is required to be present in the specified generation")
-        n_elitists = max(1, round(len(generation) * self.exploit_factor))
-        elitists = best(generation, n_elitists)
-        # exploit if member is not elitist
-        if member not in elitists:
+    class _Evolve(EvolveFunction):
+        def __init__(self, generation: Generation, exploit_factor: float, explore_factors: Tuple[float, ...], perturb_method: str, **kwargs) -> None:
+            super().__init__(**kwargs)
+            if not isinstance(generation, Generation):
+                raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+            if len(generation) < 2:
+                raise ValueError("generation size must be at least 2 or higher")
+            self.__generation = generation
+            self.__exploit_factor = exploit_factor
+            self.__explore_factors = explore_factors
+            self.__perturb_method = perturb_method
+
+        def __call__(self, member: Checkpoint):
+            """
+            Exploit best peforming members and explores all search spaces with random perturbation.
+            A fraction of the bottom performing members exploit the top performing members.
+            If member exploits, the hyper-parameters are parturbed.
+            """
+            if not isinstance(member, Checkpoint):
+                raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+            if member not in self.__generation:
+                raise ValueError("member is required to be present in the specified generation")
+            return self.__exploit_and_explore(member)
+        
+        def __exploit_and_explore(self, member):
+            n_elitists = max(1, round(len(self.__generation) * self.__exploit_factor))
+            elitists = best(self.__generation, n_elitists)
+            # exploit if member is not elitist
+            if member not in elitists:
+                self.__exploit()
+            else:
+                self._log(f"member {member.uid} remains itself...")
+                return member
+
+        def __exploit(self, member: Checkpoint, elitists: Sequence[Checkpoint]):
             elitist = random.choice(elitists)
             if not elitist.has_state():
-                self.logger(f"member {member.uid} remains itself; elitist {elitist.uid} does not have state to share.")
+                self._log(f"member {member.uid} remains itself; elitist {elitist.uid} does not have state to share.")
                 return member
-            self.logger(f"member {member.uid} exploits and explores member {elitist.uid}...")
+            self._log(f"member {member.uid} exploits and explores member {elitist.uid}...")
             member.copy_parameters(elitist)
             member.copy_state(elitist)
             member.copy_score(elitist)
             self.__explore(member)
             return member
-        else:
-            self.logger(f"member {member.uid} remains itself...")
-            return member
 
-    def __explore(self, member: Checkpoint):
-        """Perturb all parameters by the defined explore_factors."""
-        assert isinstance(member, Checkpoint)
-        for parameter in member.parameters:
-            perturb_factor = self._get_perturb_factor()
-            parameter *= perturb_factor
+        def __explore(self, member: Checkpoint):
+            """Perturb all parameters by the defined explore_factors."""
+            assert isinstance(member, Checkpoint)
+            for parameter in member.parameters:
+                perturb_factor = self._get_perturb_factor()
+                parameter *= perturb_factor
 
-    def _get_perturb_factor(self):
-        if self.perturb_method == 'choice':
-            return random.choice(self.explore_factors)
-        elif self.perturb_method == 'sample':
-            return random.uniform(self.explore_factors[0], self.explore_factors[1])
-        else:
-            raise NotImplementedError()
+        def _get_perturb_factor(self):
+            if self.__perturb_method == 'choice':
+                return random.choice(self.__explore_factors)
+            elif self.__perturb_method == 'sample':
+                return random.uniform(self.__explore_factors[0], self.__explore_factors[1])
+            else:
+                raise NotImplementedError()
 
 
-class DifferentialEvolution(DifferentialEvolveEngine):
+class DifferentialEvolution(EvolutionEngine):
     """
     A general, modifiable implementation of Differential Evolution (DE)
     """
 
-    def __init__(self, F: float = 0.2, Cr: float = 0.8, **kwargs) -> None:
+    def __init__(self, fitness_function_provider: FitnessFunctionProvider, F: float = 0.2, Cr: float = 0.8, **kwargs) -> None:
         super().__init__(**kwargs)
+        if not isinstance(fitness_function_provider, FitnessFunctionProvider):
+            raise TypeError(f"the 'fitness_function' specified was of wrong type {type(fitness_function_provider)}, expected {FitnessFunctionProvider}.")
         if not isinstance(F, float):
             raise TypeError(f"the 'F' specified was of wrong type {type(F)}, expected {float}.")
         if not isinstance(Cr, float):
             raise TypeError(f"the 'Cr' specified was of wrong type {type(Cr)}, expected {float}.")
         self.F = F
         self.Cr = Cr
+        self.fitness_function_provider = fitness_function_provider
 
-    def on_generation_start(self, generation: Generation) -> None:
+    def _create_evolution_callable(self, generation: Generation):
+        with self.fitness_function_provider as fitness_function:
+            return self._Evolve(
+                generation=generation, F=self.F, Cr=self.Cr,
+                fitness_function=fitness_function, verbose=self.verbose)
+
+    def _on_evolution_start(self, generation: Generation) -> None:
         pass
 
-    def on_generation_end(self, generation: Generation) -> None:
+    def _on_evolution_end(self, generation: Generation) -> None:
         pass
 
     def spawn(self, members: Iterable[Checkpoint]) -> Generation:
@@ -187,68 +226,79 @@ class DifferentialEvolution(DifferentialEvolveEngine):
             generation.append(member)
         return generation
 
-    def mutate(self, parent: Checkpoint, generation: Generation, fitness_function: Callable[[Checkpoint], None]) -> Checkpoint:
-        """
-        Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
-        implementation of differential evolution.
-        """
-        if not isinstance(parent, Checkpoint):
-            raise TypeError(f"the 'parent' specified was of wrong type {type(parent)}, expected {Checkpoint}.")
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        if len(generation) < 3:
-            raise ValueError("generation size must be at least 3 or higher")
-        if parent not in generation:
-            raise ValueError("parent is required to be present in the specified generation")
-        if not callable(fitness_function):
-            raise ValueError("fitness_function is not callable")
-        # copy parent
-        parent = parent.copy()
-        dimensions = len(parent.parameters)
-        x_r0, x_r1, x_r2 = random_from_list(generation, k=3, exclude=(parent,))
-        j_rand = random.randrange(0, dimensions)
-        self._print_mutation_parameters(parent=parent, x_r0=x_r0, x_r1=x_r1, x_r2=x_r2, j_rand=j_rand)
-        self.logger(f"generating trial member {parent.uid}")
-        trial = parent.copy()
-        for j in range(dimensions):
-            CR_ri = random.uniform(0.0, 1.0)
-            if CR_ri <= self.Cr or j == j_rand:
-                self.logger(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
-                mutant = de_rand_1(F=self.F, x_r0=x_r0[j], x_r1=x_r1[j], x_r2=x_r2[j])
-                constrained = clip(mutant, 0.0, 1.0)
-                trial[j] = constrained
-                self.logger(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
-            else:
-                trial[j] = parent[j]
-        # measure fitness
-        self.logger(f"M{parent.uid}: measuring fitness score of parent and trial")
-        fitness_function(parent)
-        fitness_function(trial)
-        # select best
-        self.logger(f"M{parent.uid}: selecting between evaluated parent and trial")
-        return self._select(parent, trial)
+    class _Evolve(EvolveFunction):
+        def __init__(self, generation: Generation, F: float, Cr: float, fitness_function: Callable[[Checkpoint], None], **kwargs):
+            super().__init__(**kwargs)
+            if not isinstance(generation, Generation):
+                raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+            if len(generation) < 3:
+                raise ValueError("generation size must be at least 3 or higher")
+            if not callable(fitness_function):
+                raise ValueError("fitness_function is not callable")
+            self.F = F
+            self.Cr = Cr
+            self.__generation = generation
+            self.__fitness_function = fitness_function
 
-    def _select(self, parent: Checkpoint, trial: Checkpoint) -> Checkpoint:
-        """Evaluates candidate, compares it to the base and returns the best performer."""
-        if parent <= trial:
-            self.logger(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} <= u {trial.eval_score():.4f}).")
-            return trial
-        else:
-            self.logger(f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
-            return parent
-    
-    def _print_mutation_parameters(self, parent, x_r0, x_r1, x_r2, j_rand):
-        if not self.verbose:
-            return
-        lines = [
-            f"M{parent.uid} mutation parameters:",
-            f"control parameters: CR {self.Cr:.4f}, F {self.F:.4f}",
-            f"x_r0: {x_r0} with score {x_r0.eval_score()}",
-            f"x_r1: {x_r1} with score {x_r1.eval_score()}",
-            f"x_r2: {x_r2} with score {x_r2.eval_score()}",
-            f"random crossover dimension (j_rand): {j_rand}"]
-        text = '\n\t'.join(lines)
-        self.logger(text)
+        def __call__(self, member: Checkpoint) -> Checkpoint:
+            if not isinstance(member, Checkpoint):
+                raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+            return self._mutate(member)
+
+        def _mutate(self, parent: Checkpoint) -> Checkpoint:
+            """
+            Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
+            implementation of differential evolution.
+            """
+            if parent not in generation:
+                raise ValueError("parent is required to be present in the specified generation")
+            # crossover and mutation
+            parent = parent.copy()
+            dimensions = len(parent.parameters)
+            x_r0, x_r1, x_r2 = random_from_list(self.__generation, k=3, exclude=(parent,))
+            j_rand = random.randrange(0, dimensions)
+            self._print_mutation_parameters(parent=parent, x_r0=x_r0, x_r1=x_r1, x_r2=x_r2, j_rand=j_rand)
+            self._log(f"generating trial member {parent.uid}")
+            trial = parent.copy()
+            for j in range(dimensions):
+                CR_ri = random.uniform(0.0, 1.0)
+                if CR_ri <= self.Cr or j == j_rand:
+                    self._log(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
+                    mutant = de_rand_1(F=self.F, x_r0=x_r0[j], x_r1=x_r1[j], x_r2=x_r2[j])
+                    constrained = clip(mutant, 0.0, 1.0)
+                    trial[j] = constrained
+                    self._log(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
+                else:
+                    trial[j] = parent[j]
+            # measure fitness
+            self._log(f"M{parent.uid}: measuring fitness score of parent and trial")
+            self.__fitness_function(parent)
+            self.__fitness_function(trial)
+            # select best
+            self._log(f"M{parent.uid}: selecting between evaluated parent and trial")
+            return self._select(parent, trial)
+
+        def _select(self, parent: Checkpoint, trial: Checkpoint) -> Checkpoint:
+            """Evaluates candidate, compares it to the base and returns the best performer."""
+            if parent <= trial:
+                self._log(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} <= u {trial.eval_score():.4f}).")
+                return trial
+            else:
+                self._log(f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
+                return parent
+        
+        def _print_mutation_parameters(self, parent, x_r0, x_r1, x_r2, j_rand):
+            if not self.verbose:
+                return
+            lines = [
+                f"M{parent.uid} mutation parameters:",
+                f"control parameters: CR {self.Cr:.4f}, F {self.F:.4f}",
+                f"x_r0: {x_r0} with score {x_r0.eval_score()}",
+                f"x_r1: {x_r1} with score {x_r1.eval_score()}",
+                f"x_r2: {x_r2} with score {x_r2.eval_score()}",
+                f"random crossover dimension (j_rand): {j_rand}"]
+            text = '\n\t'.join(lines)
+            self._log(text)
 
 
 class HistoricalMemory(object):
@@ -372,7 +422,7 @@ class ExternalArchive():
             self.__records[:] = []
 
 
-class SHADE(DifferentialEvolveEngine):
+class SHADE(EvolutionEngine):
     """
     A general, modifiable implementation of Success-History based Adaptive Differential Evolution (SHADE).
 
@@ -386,10 +436,12 @@ class SHADE(DifferentialEvolveEngine):
         memory_size: historical memory size (H) {2, 3, ..., 10}.
     """
 
-    def __init__(self, manager, N_INIT: int, r_arc: float = 2.0, p: float = 0.1, memory_size: int = 5, f_min: float = 0.0, f_max: float = 1.0, state_sharing: bool = False, **kwargs) -> None:
+    def __init__(self, manager, fitness_function_provider: FitnessFunctionProvider, N_INIT: int, r_arc: float = 2.0, p: float = 0.1, memory_size: int = 5, f_min: float = 0.0, f_max: float = 1.0, state_sharing: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
         if not isinstance(manager, SyncManager):
             raise TypeError(f"the 'manager' specified was of wrong type {type(manager)}, expected {SyncManager}.")
+        if not isinstance(fitness_function_provider, FitnessFunctionProvider):
+            raise TypeError(f"the 'fitness_function' specified was of wrong type {type(fitness_function_provider)}, expected {FitnessFunctionProvider}.")
         if not isinstance(N_INIT, int):
             raise TypeError(f"the 'N_INIT' specified was of wrong type {type(N_INIT)}, expected {int}.")
         if N_INIT < 4:
@@ -418,17 +470,30 @@ class SHADE(DifferentialEvolveEngine):
             raise ValueError("the 'f_max' specified was less than 'f_min'.")
         if not isinstance(state_sharing, bool):
             raise TypeError(f"the 'state_sharing' specified was of wrong type {type(state_sharing)}, expected {bool}.")
-        self.archive = ExternalArchive(
+        self.__archive = ExternalArchive(
             manager=manager, size=round(N_INIT * r_arc), verbose=self.verbose)
-        self.memory = HistoricalMemory(
+        self.__memory = HistoricalMemory(
             manager=manager, size=memory_size, default=(f_max - f_min) / 2.0)
+        self.fitness_function_provider = fitness_function_provider
         self.F_MIN = f_min
         self.F_MAX = f_max
         self.N_INIT = N_INIT
         self.r_arc = r_arc
         self.p = p
         self.state_sharing = state_sharing
+    
+    def _create_evolution_callable(self, generation: Generation) -> EvolveFunction:
+        with self.fitness_function_provider as fitness_function:
+            return self._Evolve(
+                generation=generation, fitness_function=fitness_function,
+                memory=self.__memory, archive=self.__archive, verbose=self.verbose)
 
+    def _on_evolution_start(self, generation: Generation) -> None:
+        self.__memory.reset()
+
+    def _on_evolution_end(self, generation: Generation) -> None:
+        self.__memory.update()
+        
     def spawn(self, members: Iterable[Checkpoint]) -> Generation:
         """Create initial generation."""
         generation = Generation()
@@ -438,138 +503,142 @@ class SHADE(DifferentialEvolveEngine):
             generation.append(member)
         return generation
 
-    def on_generation_start(self, generation: Generation) -> None:
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        self.memory.reset()
+    class _Evolve(EvolveFunction):
+        def __init__(self, generation: Generation, fitness_function: Callable[[Checkpoint], None], memory: HistoricalMemory, archive: ExternalArchive, p: float, f_min:float, f_max: float, state_sharing: bool, **kwargs):
+            super().__init__(**kwargs)
+            if not isinstance(generation, Generation):
+                raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
+            if len(generation) < 3:
+                raise ValueError("generation size must be at least 3 or higher")
+            if not callable(fitness_function):
+                raise ValueError("fitness_function is not callable")
+            self.__generation = generation
+            self.__fitness_function = fitness_function
+            self.__memory = memory
+            self.__archive = archive
+            self.p = p
+            self.F_MIN = f_min
+            self.F_MAX = f_max
+            self.state_sharing = state_sharing
 
-    def mutate(self, parent: Checkpoint, generation: Generation, fitness_function: Callable[[Checkpoint], None]) -> Checkpoint:
-        """
-        Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
-        implementation of differential evolution, with adapted CR and F parameters.
-        """
-        if not isinstance(parent, Checkpoint):
-            raise TypeError(f"the 'parent' specified was of wrong type {type(parent)}, expected {Checkpoint}.")
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        if len(generation) < 4:
-            raise ValueError("generation size must be at least 4 or higher")
-        if parent not in generation:
-            raise ValueError("parent is required to be present in the specified generation")
-        if not callable(fitness_function):
-            raise ValueError("fitness_function is not callable")
-        # copy parent
-        parent = parent.copy()
-        # control parameter assignment
-        CR_i, F_i = self._get_control_parameters()
-        # select random unique members from the union of the generation and archive
-        x_r1, x_r2 = self._sample_r1_and_r2(parent, generation)
-        # select random best member
-        x_pbest = self._sample_pbest_member(generation)
-        # hyper-parameter dimension size
-        dimensions = len(parent.parameters)
-        # choose random parameter dimension
-        j_rand = random.randrange(0, dimensions)
-        self._print_mutation_parameters(parent=parent, CR_i=CR_i, F_i=F_i, x_r1=x_r1, x_r2=x_r2, x_pbest=x_pbest, j_rand=j_rand)
-        # make a copy of the member
-        trial = parent.copy()
-        if self.state_sharing:
-            self.logger(f"M{parent.uid}: copying state from x_pbest member {x_pbest.uid}")
-            trial.copy_state(x_pbest)
-        self.logger(f"M{parent.uid}: generating trial member")
-        for j in range(dimensions):
-            CR_ri = random.uniform(0.0, 1.0)
-            if CR_ri <= CR_i or j == j_rand:
-                self.logger(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
-                mutant = de_current_to_best_1(F=F_i, x_base=parent[j], x_best=x_pbest[j], x_r1=x_r1[j], x_r2=x_r2[j])
-                constrained = halving(base=parent[j], mutant=mutant, lower_bounds=0.0, upper_bounds=1.0)
-                trial[j] = constrained
-                self.logger(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
+        def __call__(self, member: Checkpoint) -> Checkpoint:
+            if not isinstance(member, Checkpoint):
+                raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+            return self._mutate(member)
+
+        def _mutate(self, parent: Checkpoint) -> Checkpoint:
+            """
+            Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
+            implementation of differential evolution, with adapted CR and F parameters.
+            """
+            if parent not in generation:
+                raise ValueError("parent is required to be present in the specified generation")
+            # copy parent
+            parent = parent.copy()
+            # control parameter assignment
+            CR_i, F_i = self._get_control_parameters()
+            # select random unique members from the union of the generation and archive
+            x_r1, x_r2 = self._sample_r1_and_r2(parent, self.__generation)
+            # select random best member
+            x_pbest = self._sample_pbest_member(self.__generation)
+            # hyper-parameter dimension size
+            dimensions = len(parent.parameters)
+            # choose random parameter dimension
+            j_rand = random.randrange(0, dimensions)
+            self._print_mutation_parameters(parent=parent, CR_i=CR_i, F_i=F_i, x_r1=x_r1, x_r2=x_r2, x_pbest=x_pbest, j_rand=j_rand)
+            # make a copy of the member
+            trial = parent.copy()
+            if self.state_sharing:
+                self.logger(f"M{parent.uid}: copying state from x_pbest member {x_pbest.uid}")
+                trial.copy_state(x_pbest)
+            self.logger(f"M{parent.uid}: generating trial member")
+            for j in range(dimensions):
+                CR_ri = random.uniform(0.0, 1.0)
+                if CR_ri <= CR_i or j == j_rand:
+                    self.logger(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
+                    mutant = de_current_to_best_1(F=F_i, x_base=parent[j], x_best=x_pbest[j], x_r1=x_r1[j], x_r2=x_r2[j])
+                    constrained = halving(base=parent[j], mutant=mutant, lower_bounds=0.0, upper_bounds=1.0)
+                    trial[j] = constrained
+                    self.logger(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
+                else:
+                    trial[j] = parent[j]
+            # measure fitness
+            self.logger(f"M{parent.uid}: measuring fitness score of parent and trial")
+            self.__fitness_function(parent)
+            self.__fitness_function(trial)
+            # select
+            self.logger(f"M{parent.uid}: selecting between measured parent and trial")
+            return self._select(parent, trial, CR_i, F_i)
+
+        def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
+            """Evaluates candidate, compares it to the original member and returns the best performer."""
+            if parent <= trial:
+                if parent < trial:
+                    self.logger(f"M{parent.uid}: adding parent to archive.")
+                    self.__archive.append(parent.copy())
+                    w_i = abs(trial.eval_score() - parent.eval_score())
+                    self.logger(f"M{parent.uid}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
+                    self.__memory.record(CR_i, F_i, w_i)
+                self.logger(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
+                return trial
             else:
-                trial[j] = parent[j]
-        # measure fitness
-        self.logger(f"M{parent.uid}: measuring fitness score of parent and trial")
-        fitness_function(parent)
-        fitness_function(trial)
-        # select
-        self.logger(f"M{parent.uid}: selecting between measured parent and trial")
-        return self._select(parent, trial, CR_i, F_i)
+                self.logger(
+                    f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
+                return parent
 
-    def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
-        """Evaluates candidate, compares it to the original member and returns the best performer."""
-        if parent <= trial:
-            if parent < trial:
-                self.logger(f"M{parent.uid}: adding parent to archive.")
-                self.archive.append(parent.copy())
-                w_i = abs(trial.eval_score() - parent.eval_score())
-                self.logger(f"M{parent.uid}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
-                self.memory.record(CR_i, F_i, w_i)
-            self.logger(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
-            return trial
-        else:
-            self.logger(
-                f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
-            return parent
+        def _get_control_parameters(self) -> Tuple[float, float]:
+            """
+            The crossover probability CRi is generated according to a normal distribution
+            of mean μCR and standard deviation 0.1 and then truncated to [0, 1].
 
-    def on_generation_end(self, generation: Generation):
-        if not isinstance(generation, Generation):
-            raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
-        self.memory.update()
+            The mutation factor Fi is generated according to a Cauchy distribution
+            with location parameter μF and scale parameter 0.1 and then
+            truncated to be 1 if Fi >= 1 or regenerated if Fi <= 0.
+            """
+            # select random from memory
+            r1 = random.randrange(0, self.__memory.size)
+            MF_i = self.__memory.m_f[r1]
+            MCR_i = self.__memory.m_cr[r1]
+            assert not math.isnan(MF_i), "MF_i is NaN."
+            assert not math.isnan(MCR_i), "MCR_i is NaN."
+            # generate MCR_i
+            if MCR_i == None:
+                CR_i = 0.0
+            else:
+                CR_i = clip(randn(MCR_i, 0.1), 0.0, 1.0)
+            # generate MF_i
+            while True:
+                F_i = randc(MF_i, 0.1)
+                if F_i < self.F_MIN:
+                    continue
+                if F_i > self.F_MAX:
+                    F_i = self.F_MAX
+                break
+            return CR_i, F_i
 
-    def _get_control_parameters(self) -> Tuple[float, float]:
-        """
-        The crossover probability CRi is generated according to a normal distribution
-        of mean μCR and standard deviation 0.1 and then truncated to [0, 1].
+        def _sample_r1_and_r2(self, member: Checkpoint) -> Tuple[Checkpoint, Checkpoint]:
+            x_r1 = random_from_list(list(self.__generation), k=1, exclude=(member,))
+            x_r2 = random_from_list(self.__archive.records + list(self.__generation), k=1, exclude=(member, x_r1))
+            return x_r1, x_r2
 
-        The mutation factor Fi is generated according to a Cauchy distribution
-        with location parameter μF and scale parameter 0.1 and then
-        truncated to be 1 if Fi >= 1 or regenerated if Fi <= 0.
-        """
-        # select random from memory
-        r1 = random.randrange(0, self.memory.size)
-        MF_i = self.memory.m_f[r1]
-        MCR_i = self.memory.m_cr[r1]
-        assert not math.isnan(MF_i), "MF_i is NaN."
-        assert not math.isnan(MCR_i), "MCR_i is NaN."
-        # generate MCR_i
-        if MCR_i == None:
-            CR_i = 0.0
-        else:
-            CR_i = clip(randn(MCR_i, 0.1), 0.0, 1.0)
-        # generate MF_i
-        while True:
-            F_i = randc(MF_i, 0.1)
-            if F_i < self.F_MIN:
-                continue
-            if F_i > self.F_MAX:
-                F_i = self.F_MAX
-            break
-        return CR_i, F_i
+        def _sample_pbest_member(self) -> Checkpoint:
+            """Sample a random top member from the popualtion."""
+            n_elitists = max(1, round(len(self.__generation) * self.p))
+            elitists = best(self.__generation, n_elitists)
+            return random.choice(elitists)
 
-    def _sample_r1_and_r2(self, member: Checkpoint, generation: Generation) -> Tuple[Checkpoint, Checkpoint]:
-        x_r1 = random_from_list(list(generation), k=1, exclude=(member,))
-        x_r2 = random_from_list(self.archive.records + list(generation), k=1, exclude=(member, x_r1))
-        return x_r1, x_r2
-
-    def _sample_pbest_member(self, generation: Generation) -> Checkpoint:
-        """Sample a random top member from the popualtion."""
-        n_elitists = max(1, round(len(generation) * self.p))
-        elitists = best(generation, n_elitists)
-        return random.choice(elitists)
-
-    def _print_mutation_parameters(self, parent, CR_i, F_i, x_r1, x_r2, x_pbest, j_rand):
-        if not self.verbose:
-            return
-        lines = [
-            f"M{parent.uid} mutation parameters:",
-            f"control parameters: CR_i {CR_i:.4f}, F_i {F_i:.4f}",
-            f"x_r1: {x_r1} with score {x_r1.eval_score()}",
-            f"x_r2: {x_r2} with score {x_r2.eval_score()}",
-            f"x_pbest: {x_pbest} with score {x_pbest.eval_score()}",
-            f"random crossover dimension (j_rand): {j_rand}"]
-        text = '\n\t'.join(lines)
-        self.logger(text)
-
+        def _print_mutation_parameters(self, parent, CR_i, F_i, x_r1, x_r2, x_pbest, j_rand):
+            if not self.verbose:
+                return
+            lines = [
+                f"M{parent.uid} mutation parameters:",
+                f"control parameters: CR_i {CR_i:.4f}, F_i {F_i:.4f}",
+                f"x_r1: {x_r1} with score {x_r1.eval_score()}",
+                f"x_r2: {x_r2} with score {x_r2.eval_score()}",
+                f"x_pbest: {x_pbest} with score {x_pbest.eval_score()}",
+                f"random crossover dimension (j_rand): {j_rand}"]
+            text = '\n\t'.join(lines)
+            self.logger(text)
 
 class LSHADE(SHADE):
     """
@@ -593,12 +662,15 @@ class LSHADE(SHADE):
         self.MAX_NFE = MAX_NFE
         self._nfe = Counter(manager=manager, value=0)
 
-    def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
-        self._nfe.increment()  # increment the number of fitness evaluations
-        return super()._select(parent, trial, CR_i, F_i)
+    def _create_evolution_callable(self, generation: Generation) -> EvolveFunction:
+        with self.fitness_function as fitness_function:
+            return self._Evolve(
+                generation=generation, nfe_counter=self._nfe,
+                fitness_function=fitness_function, memory=self.__memory,
+                archive=self.__archive, verbose=self.verbose)
 
-    def on_generation_end(self, generation: Generation):
-        super().on_generation_end(generation)
+    def _on_evolution_end(self, generation: Generation):
+        super()._on_generation_end(generation)
         self._adjust_generation_size(generation)
 
     def _adjust_generation_size(self, generation: Generation):
@@ -616,60 +688,11 @@ class LSHADE(SHADE):
             self.logger(
                 f"member {member.uid} with score {member.eval_score():.4f} was removed from the generation.")
 
+    class _Evolve(SHADE._Evolve):
+        def __init__(self, nfe_counter: Counter, **kwargs) -> None:
+            super().__init__(**kwargs)
+            self.__nfe = nfe_counter
 
-def logistic(x: float, k: float = 20) -> float:
-    return 1 / (1 + math.exp(-k * (x - 0.5)))
-
-
-def curve(x: float, k: float = 5) -> float:
-    return x**k
-
-
-class DecayingLSHADE(LSHADE):
-    """
-    Decays the F-value by multiplying it with a guide. The guide can be a line, a box curve or a logistic curve.\n
-    The guide starts at 1.0 and moves towards 0.0.
-    """
-
-    def __init__(self, decay_type: str = 'linear', **kwargs) -> None:
-        super().__init__(**kwargs)
-        if decay_type == 'linear':
-            self.decay_function = lambda f, nfe, max_nfe: f * \
-                (1.0 - nfe/max_nfe)
-        elif decay_type == 'curve':
-            self.decay_function = lambda f, nfe, max_nfe: f * \
-                (1.0 - curve(nfe/max_nfe))
-        elif decay_type == 'logistic':
-            self.decay_function = lambda f, nfe, max_nfe: f * \
-                (1.0 - logistic(nfe/max_nfe))
-        else:
-            raise NotImplementedError(f"'{decay_type}' is not implemented.'")
-
-    def _get_control_parameters(self) -> Tuple[float, float]:
-        cr, f = super()._get_control_parameters()
-        return cr, self.decay_function(f, self._nfe.value, self.MAX_NFE)
-
-
-class GuidedLSHADE(LSHADE):
-    """
-    Guides the F-value along a guide. The guide can be a line, a box curve or a logistic curve.\n
-    The strength determines the guides influence on F. A strength of 1.0 perfectly maps it to the guide.
-    """
-
-    def __init__(self, guide_type: str = 'linear', strength: int = 0.5, **kwargs) -> None:
-        super().__init__(**kwargs)
-        if guide_type == 'linear':
-            self.guide_function = lambda f, nfe, max_nfe: f + \
-                ((1.0 - nfe/max_nfe) - f) * strength
-        elif guide_type == 'curve':
-            self.guide_function = lambda f, nfe, max_nfe: f + \
-                ((1.0 - curve(nfe/max_nfe)) - f) * strength
-        elif guide_type == 'logistic':
-            self.guide_function = lambda f, nfe, max_nfe: f + \
-                ((1.0 - logistic(nfe/max_nfe)) - f) * strength
-        else:
-            raise NotImplementedError(f"'{guide_type}' is not implemented.'")
-
-    def _get_control_parameters(self) -> Tuple[float, float]:
-        cr, f = super()._get_control_parameters()
-        return cr, self.guide_function(f, self._nfe.value, self.MAX_NFE)
+        def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
+            self.__nfe.increment()  # increment the number of fitness evaluations
+            return super()._select(parent, trial, CR_i, F_i)

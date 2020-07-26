@@ -2,8 +2,11 @@ import os
 import random
 import itertools
 import collections
+from abc import ABC
 from copy import deepcopy
 from warnings import warn
+from typing import Callable
+from functools import partial
 
 import torch
 import torchvision
@@ -13,6 +16,7 @@ from torch.optim import Optimizer
 
 from pbt.member import Checkpoint
 from pbt.hyperparameters import Hyperparameters
+from pbt.device import get_global_device
 from pbt.models.hypernet import HyperNet
 from pbt.utils.data import create_subset, create_subset_by_size
 
@@ -96,11 +100,14 @@ class Trainer(object):
         samples_processed = (steps_performed * self.batch_size)
         return samples_processed // len(self.train_data)
 
-    def __call__(self, checkpoint : Checkpoint, device : str = 'cpu'):
+    def __call__(self, checkpoint : Checkpoint, device : str = None):
         if not isinstance(checkpoint, Checkpoint):
             raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
+        if device is None:
+            device = get_global_device()
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+        print(f"(PID {os.getpid()}) training on device: '{device}'")
         # preparing model and optimizer
         model = self.__create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
         optimizer = self.__create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
@@ -182,10 +189,12 @@ class Evaluator(object):
         model.eval()
         return model
 
-    def __call__(self, checkpoint: Checkpoint, device: str):
+    def __call__(self, checkpoint: Checkpoint, device: str = None):
         """Evaluate checkpoint model."""
         if not isinstance(checkpoint, Checkpoint):
             raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
+        if device is None:
+            device = get_global_device()
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         # preparing model
@@ -223,9 +232,11 @@ class Step():
         self.evaluator = Evaluator(
             model_class=model_class, test_data=test_data, batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=False)
 
-    def __call__(self, checkpoint: Checkpoint, device: str):
+    def __call__(self, checkpoint: Checkpoint, device: str = None):
         if not isinstance(checkpoint, Checkpoint):
             raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
+        if device is None:
+            device = get_global_device()
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
         # load checkpoint state
@@ -235,46 +246,3 @@ class Step():
         self.evaluator(checkpoint, device)
         # unload checkpoint state
         checkpoint.unload_state()
-
-
-class RandomFitnessApproximation():
-    def __init__(self, model_class: HyperNet, optimizer_class: Optimizer, train_data: Dataset, test_data: Dataset, batches: int, batch_size: int,
-                 loss_functions: dict, loss_metric: str, verbose: bool = False):
-        # n batches for training
-        self.trainer = Trainer(
-            model_class=model_class, optimizer_class=optimizer_class, train_data=train_data, step_size=batches,
-            batch_size=batch_size, loss_functions=loss_functions, loss_metric=loss_metric)
-        # n random batches for evaluation
-        self.evaluator = Evaluator(
-            model_class=model_class, test_data=test_data, batches=batches,
-            batch_size=batch_size, loss_functions=loss_functions, loss_group='eval', shuffle=True)
-        self.weight = (batches * batch_size) / len(test_data)
-
-    def __adjust_weighted_loss(self, previous_loss: dict, fitness_loss: dict) -> dict:
-        assert isinstance(previous_loss, dict), "previous_loss is wrong type"
-        assert isinstance(fitness_loss, dict), "fitness_loss is wrong type"
-        new_loss = collections.defaultdict(dict)
-        for loss_group in fitness_loss:
-            for loss_type in fitness_loss[loss_group]:
-                previous_loss_value = previous_loss[loss_group][loss_type]
-                fitness_loss_value = fitness_loss[loss_group][loss_type]
-                new_loss[loss_group][loss_type] = (
-                    previous_loss_value * (1 - self.weight)) + (fitness_loss_value * self.weight)
-        return new_loss
-
-    def __call__(self, checkpoint: Checkpoint, device: str):
-        if not isinstance(checkpoint, Checkpoint):
-            raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
-        if not isinstance(device, str):
-            raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        # copy old loss
-        old_loss = deepcopy(checkpoint.loss)
-        # load checkpoint state
-        checkpoint.load_state(device=device, missing_ok=False)
-        # train and evaluate
-        self.trainer(checkpoint, device)
-        self.evaluator(checkpoint, device)
-        # unload checkpoint state
-        checkpoint.unload_state()
-        # correct loss
-        checkpoint.loss = self.__adjust_weighted_loss(old_loss, checkpoint.loss)

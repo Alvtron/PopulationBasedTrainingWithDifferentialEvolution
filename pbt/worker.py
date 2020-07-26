@@ -12,7 +12,7 @@ from multiprocessing.pool import ThreadPool
 import torch
 import numpy as np
 
-from pbt.device import DeviceCallable
+from pbt.device import DeviceCallable, set_global_device, initialize_cuda_device
 
 # set torch multiprocessing settings
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -35,13 +35,6 @@ def map_to_threads(function, parameters):
     with ThreadPool(processes=len(parameters)) as pool:
         yield from pool.imap_unordered(function, parameters)
 
-def initialize_cude_device(device: str):
-    if not torch.cuda.is_available():
-        raise Exception("cannot initialize CUDA because is not available")
-    if not device.startswith('cuda'):
-        raise Exception(f"cannot initialize CUDA with the provided device '{device}'")
-    torch.cuda.set_device(device)
-    torch.cuda.init()
 
 class ThreadTask:
     def __init__(self, return_queue, function: DeviceCallable, parameters):
@@ -55,9 +48,9 @@ class ThreadTask:
         self.function: DeviceCallable = function
         self.parameters = parameters
 
-    def run(self, device: str) -> Generator[Any, None, None]:
-        device_function = partial(self.function, device)
-        yield from map_to_threads(device_function, self.parameters)
+    def run(self) -> Generator[Any, None, None]:
+        yield from map_to_threads(self.function, self.parameters)
+
 
 @dataclass
 class FailMessage:
@@ -86,12 +79,13 @@ class DeviceWorker(torch.multiprocessing.Process):
         self.uid = uid
         self.end_event = end_event
         self.receive_queue = receive_queue
-        self.device = device
-        # initialize CUDA if device is a GPU
-        if device.startswith('cuda'):
-            initialize_cude_device(device)
         self.random_seed = random_seed
         self.verbose = verbose
+        # set global processing device
+        set_global_device(device)
+        # initialize CUDA if device is a GPU
+        if device.startswith('cuda'):
+            initialize_cuda_device(device)
 
     def __log(self, message: str):
         if not self.verbose:
@@ -120,8 +114,7 @@ class DeviceWorker(torch.multiprocessing.Process):
                 raise TypeError(f"the 'task' received was of wrong type {type(task)}, expected {ThreadTask}.", )
             try:
                 self.__log("running task...")
-                results = task.run(self.device)
-                for task_nr, result in enumerate(results, 1):
+                for task_nr, result in enumerate(task.run(), 1):
                     self.__log(f"returning task result {task_nr} of {len(task.parameters)}...")
                     task.return_queue.put(result)
             except Exception:
