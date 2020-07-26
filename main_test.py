@@ -39,9 +39,10 @@ if __name__ == "__main__":
         )
 
     evolvers=(
+        'pbt',
         'de',
-        #'shade',
-        #'lshade'
+        'shade',
+        'lshade'
         )
 
     times=1
@@ -52,9 +53,15 @@ if __name__ == "__main__":
     for i in range(times):
         for task in tasks:
             for evolver in evolvers:
+                if evolver == 'pbt':
+                    t_steps = train_steps + fitness_steps
+                    f_steps = 0
+                else:
+                    t_steps = train_steps
+                    f_steps = fitness_steps
                 print(f"({n_done + 1} of {n_tasks}) running '{task}' with '{evolver}'...")
                 run(task=task, evolver=evolver, population_size=population_size, batch_size=batch_size,
-                    train_steps=train_steps, fitness_steps=fitness_steps, end_steps=end_steps,
+                    train_steps=t_steps, fitness_steps=f_steps, end_steps=end_steps,
                     n_jobs=n_jobs, devices=devices, tensorboard=tensorboard,
                     verbose=verbose, logging=logging)
                 n_done += 1
