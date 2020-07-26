@@ -62,7 +62,7 @@ class FailMessage:
 class DeviceWorker(torch.multiprocessing.Process):
     """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
 
-    def __init__(self, uid: Union[int, str], end_event: EventProxy, receive_queue: Queue, device: str = 'cpu', random_seed: int = 0, verbose: bool = False):
+    def __init__(self, uid: Union[int, str], end_event: EventProxy, receive_queue: Queue, device: str, random_seed: int = 0, verbose: bool = False):
         super().__init__()
         if not isinstance(uid, (int, str)):
             raise TypeError(f"the 'uid' specified was of wrong type {type(uid)}, expected {str} or {int}.")
@@ -80,9 +80,8 @@ class DeviceWorker(torch.multiprocessing.Process):
         self.end_event = end_event
         self.receive_queue = receive_queue
         self.random_seed = random_seed
+        self.device = device
         self.verbose = verbose
-        # set global processing device
-        set_global_device(device)
         # initialize CUDA if device is a GPU
         if device.startswith('cuda'):
             initialize_cuda_device(device)
@@ -101,7 +100,9 @@ class DeviceWorker(torch.multiprocessing.Process):
         np.random.seed(self.random_seed)
         torch.manual_seed(self.random_seed)
         torch.cuda.manual_seed(self.random_seed)
-        # create threadpool
+        # set global processing device
+        set_global_device(self.device)
+        # start worker rutine
         while not self.end_event.is_set():
             # get next checkpoint from train queue
             self.__log("awaiting task...")

@@ -107,7 +107,6 @@ class Trainer(object):
             device = get_global_device()
         if not isinstance(device, str):
             raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
-        print(f"(PID {os.getpid()}) training on device: '{device}'")
         # preparing model and optimizer
         model = self.__create_model(hyper_parameters=checkpoint.parameters, model_state=checkpoint.model_state, device=device)
         optimizer = self.__create_optimizer(model=model, hyper_parameters=checkpoint.parameters, optimizer_state=checkpoint.optimizer_state)
