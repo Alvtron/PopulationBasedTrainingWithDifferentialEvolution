@@ -160,7 +160,7 @@ class ExploitAndExplore(EvolutionEngine):
             elitists = best(self.__generation, n_elitists)
             # exploit if member is not elitist
             if member not in elitists:
-                self.__exploit(member=member, elitists=elitists)
+                return self.__exploit(member=member, elitists=elitists)
             else:
                 self._log(f"member {member.uid} remains itself...")
                 return member
