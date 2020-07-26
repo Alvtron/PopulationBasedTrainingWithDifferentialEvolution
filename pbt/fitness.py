@@ -31,7 +31,7 @@ def adjust_weighted_loss(weight: float, previous_loss: dict, fitness_loss: dict)
                 previous_loss_value * (1 - weight)) + (fitness_loss_value * weight)
     return new_loss
 
-def rfa(trainer: Trainer, evaluator: Evaluator, weight: float, checkpoint: Checkpoint, device: str = None) -> None:
+def rfa(checkpoint: Checkpoint, trainer: Trainer, evaluator: Evaluator, weight: float, device: str = None) -> None:
     if not isinstance(checkpoint, Checkpoint):
         raise TypeError(f"the 'checkpoint' specified was of wrong type {type(checkpoint)}, expected {Checkpoint}.")
     if device is None:

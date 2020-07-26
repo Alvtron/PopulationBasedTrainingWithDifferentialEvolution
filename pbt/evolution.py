@@ -235,10 +235,10 @@ class DifferentialEvolution(EvolutionEngine):
                 raise ValueError("generation size must be at least 3 or higher")
             if not callable(fitness_function):
                 raise ValueError("fitness_function is not callable")
-            self.F = F
-            self.Cr = Cr
             self.__generation = generation
             self.__fitness_function = fitness_function
+            self.F = F
+            self.Cr = Cr
 
         def __call__(self, member: Checkpoint) -> Checkpoint:
             if not isinstance(member, Checkpoint):
