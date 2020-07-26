@@ -250,7 +250,7 @@ class DifferentialEvolution(EvolutionEngine):
             Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
             implementation of differential evolution.
             """
-            if parent not in generation:
+            if parent not in self.__generation:
                 raise ValueError("parent is required to be present in the specified generation")
             # crossover and mutation
             parent = parent.copy()
@@ -531,7 +531,7 @@ class SHADE(EvolutionEngine):
             Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
             implementation of differential evolution, with adapted CR and F parameters.
             """
-            if parent not in generation:
+            if parent not in self.__generation:
                 raise ValueError("parent is required to be present in the specified generation")
             # copy parent
             parent = parent.copy()
