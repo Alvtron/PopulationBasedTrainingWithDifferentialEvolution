@@ -340,8 +340,6 @@ class Controller(object):
             step_start_time = datetime.now()
             self.__step_function(checkpoint=member, device=device)
             member.register_time(tag='training', start=step_start_time, end=datetime.now())
-            # update generation
-            self.__generation.update(member)
             if self.__is_ready(member):
                 # evolve member
                 self._print(f"evolving member {member.uid}...")
