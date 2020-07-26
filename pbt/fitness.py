@@ -54,7 +54,7 @@ class FitnessFunctionProvider(ABC):
     def __enter__(self) -> Callable[[Checkpoint], None]:
         raise NotImplementedError()
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exception_type, exception_value, traceback):
         raise NotImplementedError()
 
 class RandomFitnessApproximation(FitnessFunctionProvider):
@@ -74,5 +74,5 @@ class RandomFitnessApproximation(FitnessFunctionProvider):
     def __enter__(self) -> Callable[[Checkpoint], None]:
         return partial(rfa, trainer=self.__trainer, evaluator=self.__partial_evaluator(), weight=self.weight)
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exception_type, exception_value, traceback):
         pass

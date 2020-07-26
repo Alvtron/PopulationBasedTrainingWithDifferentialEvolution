@@ -60,7 +60,7 @@ class EvolutionEngine(object):
         self._on_evolution_start(self.__generation)
         return self._create_evolution_callable(self.__generation)
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exception_type, exception_value, traceback) -> None:
         self._on_evolution_end(self.__generation)
 
     @abstractmethod
