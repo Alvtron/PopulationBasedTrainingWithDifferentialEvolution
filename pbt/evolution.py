@@ -29,7 +29,7 @@ class EvolveFunction(object):
     Base class for all evolve functions.
     """
     def __init__(self, verbose) -> None:
-        self.verbose = verbose
+        self.__verbose = verbose
     
     def _log(self, text: str) -> None:
         if not self.__verbose:
