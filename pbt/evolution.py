@@ -48,6 +48,11 @@ class EvolutionEngine(object):
         self.verbose = verbose
         self._generation = None
 
+    def _log(self, text: str) -> None:
+        if not self.verbose:
+            return
+        print(f"{self.__class__.__name__}: {text}")
+
     def next(self, generation: Generation):
         if not isinstance(generation, Generation):
             raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
@@ -155,7 +160,7 @@ class ExploitAndExplore(EvolutionEngine):
             elitists = best(self.__generation, n_elitists)
             # exploit if member is not elitist
             if member not in elitists:
-                self.__exploit()
+                self.__exploit(member=member, elitists=elitists)
             else:
                 self._log(f"member {member.uid} remains itself...")
                 return member
@@ -235,8 +240,8 @@ class DifferentialEvolution(EvolutionEngine):
                 raise ValueError("generation size must be at least 3 or higher")
             if not callable(fitness_function):
                 raise ValueError("fitness_function is not callable")
-            self.__generation = generation
-            self.__fitness_function = fitness_function
+            self._generation = generation
+            self._fitness_function = fitness_function
             self.F = F
             self.Cr = Cr
 
@@ -250,12 +255,12 @@ class DifferentialEvolution(EvolutionEngine):
             Perform crossover, mutation and selection according to the initial 'DE/rand/1/bin'
             implementation of differential evolution.
             """
-            if parent not in self.__generation:
+            if parent not in self._generation:
                 raise ValueError("parent is required to be present in the specified generation")
             # crossover and mutation
             parent = parent.copy()
             dimensions = len(parent.parameters)
-            x_r0, x_r1, x_r2 = random_from_list(self.__generation, k=3, exclude=(parent,))
+            x_r0, x_r1, x_r2 = random_from_list(self._generation, k=3, exclude=(parent,))
             j_rand = random.randrange(0, dimensions)
             self._print_mutation_parameters(parent=parent, x_r0=x_r0, x_r1=x_r1, x_r2=x_r2, j_rand=j_rand)
             self._log(f"generating trial member {parent.uid}")
@@ -272,8 +277,8 @@ class DifferentialEvolution(EvolutionEngine):
                     trial[j] = parent[j]
             # measure fitness
             self._log(f"M{parent.uid}: measuring fitness score of parent and trial")
-            self.__fitness_function(parent)
-            self.__fitness_function(trial)
+            self._fitness_function(parent)
+            self._fitness_function(trial)
             # select best
             self._log(f"M{parent.uid}: selecting between evaluated parent and trial")
             return self._select(parent, trial)
@@ -470,9 +475,9 @@ class SHADE(EvolutionEngine):
             raise ValueError("the 'f_max' specified was less than 'f_min'.")
         if not isinstance(state_sharing, bool):
             raise TypeError(f"the 'state_sharing' specified was of wrong type {type(state_sharing)}, expected {bool}.")
-        self.__archive = ExternalArchive(
+        self._archive = ExternalArchive(
             manager=manager, size=round(N_INIT * r_arc), verbose=self.verbose)
-        self.__memory = HistoricalMemory(
+        self._memory = HistoricalMemory(
             manager=manager, size=memory_size, default=(f_max - f_min) / 2.0)
         self.fitness_function_provider = fitness_function_provider
         self.F_MIN = f_min
@@ -486,13 +491,15 @@ class SHADE(EvolutionEngine):
         with self.fitness_function_provider as fitness_function:
             return self._Evolve(
                 generation=generation, fitness_function=fitness_function,
-                memory=self.__memory, archive=self.__archive, verbose=self.verbose)
+                memory=self._memory, archive=self._archive, p=self.p,
+                f_min=self.F_MIN, f_max=self.F_MAX, state_sharing=self.state_sharing,
+                verbose=self.verbose)
 
     def _on_evolution_start(self, generation: Generation) -> None:
-        self.__memory.reset()
+        self._memory.reset()
 
     def _on_evolution_end(self, generation: Generation) -> None:
-        self.__memory.update()
+        self._memory.update()
         
     def spawn(self, members: Iterable[Checkpoint]) -> Generation:
         """Create initial generation."""
@@ -512,10 +519,10 @@ class SHADE(EvolutionEngine):
                 raise ValueError("generation size must be at least 3 or higher")
             if not callable(fitness_function):
                 raise ValueError("fitness_function is not callable")
-            self.__generation = generation
-            self.__fitness_function = fitness_function
-            self.__memory = memory
-            self.__archive = archive
+            self._generation = generation
+            self._fitness_function = fitness_function
+            self._memory = memory
+            self._archive = archive
             self.p = p
             self.F_MIN = f_min
             self.F_MAX = f_max
@@ -531,16 +538,16 @@ class SHADE(EvolutionEngine):
             Perform crossover, mutation and selection according to the initial 'DE/current-to-pbest/1/bin'
             implementation of differential evolution, with adapted CR and F parameters.
             """
-            if parent not in self.__generation:
+            if parent not in self._generation:
                 raise ValueError("parent is required to be present in the specified generation")
             # copy parent
             parent = parent.copy()
             # control parameter assignment
             CR_i, F_i = self._get_control_parameters()
             # select random unique members from the union of the generation and archive
-            x_r1, x_r2 = self._sample_r1_and_r2(parent, self.__generation)
+            x_r1, x_r2 = self._sample_r1_and_r2(parent)
             # select random best member
-            x_pbest = self._sample_pbest_member(self.__generation)
+            x_pbest = self._sample_pbest_member()
             # hyper-parameter dimension size
             dimensions = len(parent.parameters)
             # choose random parameter dimension
@@ -549,40 +556,40 @@ class SHADE(EvolutionEngine):
             # make a copy of the member
             trial = parent.copy()
             if self.state_sharing:
-                self.logger(f"M{parent.uid}: copying state from x_pbest member {x_pbest.uid}")
+                self._log(f"M{parent.uid}: copying state from x_pbest member {x_pbest.uid}")
                 trial.copy_state(x_pbest)
-            self.logger(f"M{parent.uid}: generating trial member")
+            self._log(f"M{parent.uid}: generating trial member")
             for j in range(dimensions):
                 CR_ri = random.uniform(0.0, 1.0)
                 if CR_ri <= CR_i or j == j_rand:
-                    self.logger(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
+                    self._log(f"M{parent.uid}: crossover in dimension {j} with CR_ri {CR_ri:.4f}")
                     mutant = de_current_to_best_1(F=F_i, x_base=parent[j], x_best=x_pbest[j], x_r1=x_r1[j], x_r2=x_r2[j])
                     constrained = halving(base=parent[j], mutant=mutant, lower_bounds=0.0, upper_bounds=1.0)
                     trial[j] = constrained
-                    self.logger(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
+                    self._log(f"M{parent.uid}: mutant value {mutant:.4f}, constrained to {constrained:.4f}")
                 else:
                     trial[j] = parent[j]
             # measure fitness
-            self.logger(f"M{parent.uid}: measuring fitness score of parent and trial")
-            self.__fitness_function(parent)
-            self.__fitness_function(trial)
+            self._log(f"M{parent.uid}: measuring fitness score of parent and trial")
+            self._fitness_function(parent)
+            self._fitness_function(trial)
             # select
-            self.logger(f"M{parent.uid}: selecting between measured parent and trial")
+            self._log(f"M{parent.uid}: selecting between measured parent and trial")
             return self._select(parent, trial, CR_i, F_i)
 
         def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
             """Evaluates candidate, compares it to the original member and returns the best performer."""
             if parent <= trial:
                 if parent < trial:
-                    self.logger(f"M{parent.uid}: adding parent to archive.")
-                    self.__archive.append(parent.copy())
+                    self._log(f"M{parent.uid}: adding parent to archive.")
+                    self._archive.append(parent.copy())
                     w_i = abs(trial.eval_score() - parent.eval_score())
-                    self.logger(f"M{parent.uid}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
-                    self.__memory.record(CR_i, F_i, w_i)
-                self.logger(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
+                    self._log(f"M{parent.uid}: recording CR_i {CR_i:.4f} and F_i {F_i:.4f} with w_i {w_i:.4E} to historical memory.")
+                    self._memory.record(CR_i, F_i, w_i)
+                self._log(f"M{parent.uid}: mutate member (x {parent.eval_score():.4f} < u {trial.eval_score():.4f}).")
                 return trial
             else:
-                self.logger(
+                self._log(
                     f"M{parent.uid}: maintain member (x {parent.eval_score():.4f} > u {trial.eval_score():.4f}).")
                 return parent
 
@@ -596,9 +603,9 @@ class SHADE(EvolutionEngine):
             truncated to be 1 if Fi >= 1 or regenerated if Fi <= 0.
             """
             # select random from memory
-            r1 = random.randrange(0, self.__memory.size)
-            MF_i = self.__memory.m_f[r1]
-            MCR_i = self.__memory.m_cr[r1]
+            r1 = random.randrange(0, self._memory.size)
+            MF_i = self._memory.m_f[r1]
+            MCR_i = self._memory.m_cr[r1]
             assert not math.isnan(MF_i), "MF_i is NaN."
             assert not math.isnan(MCR_i), "MCR_i is NaN."
             # generate MCR_i
@@ -617,14 +624,14 @@ class SHADE(EvolutionEngine):
             return CR_i, F_i
 
         def _sample_r1_and_r2(self, member: Checkpoint) -> Tuple[Checkpoint, Checkpoint]:
-            x_r1 = random_from_list(list(self.__generation), k=1, exclude=(member,))
-            x_r2 = random_from_list(self.__archive.records + list(self.__generation), k=1, exclude=(member, x_r1))
+            x_r1 = random_from_list(list(self._generation), k=1, exclude=(member,))
+            x_r2 = random_from_list(self._archive.records + list(self._generation), k=1, exclude=(member, x_r1))
             return x_r1, x_r2
 
         def _sample_pbest_member(self) -> Checkpoint:
             """Sample a random top member from the popualtion."""
-            n_elitists = max(1, round(len(self.__generation) * self.p))
-            elitists = best(self.__generation, n_elitists)
+            n_elitists = max(1, round(len(self._generation) * self.p))
+            elitists = best(self._generation, n_elitists)
             return random.choice(elitists)
 
         def _print_mutation_parameters(self, parent, CR_i, F_i, x_r1, x_r2, x_pbest, j_rand):
@@ -638,7 +645,7 @@ class SHADE(EvolutionEngine):
                 f"x_pbest: {x_pbest} with score {x_pbest.eval_score()}",
                 f"random crossover dimension (j_rand): {j_rand}"]
             text = '\n\t'.join(lines)
-            self.logger(text)
+            self._log(text)
 
 class LSHADE(SHADE):
     """
@@ -663,36 +670,36 @@ class LSHADE(SHADE):
         self._nfe = Counter(manager=manager, value=0)
 
     def _create_evolution_callable(self, generation: Generation) -> EvolveFunction:
-        with self.fitness_function as fitness_function:
+        with self.fitness_function_provider as fitness_function:
             return self._Evolve(
-                generation=generation, nfe_counter=self._nfe,
-                fitness_function=fitness_function, memory=self.__memory,
-                archive=self.__archive, verbose=self.verbose)
+                generation=generation, fitness_function=fitness_function, nfe_counter=self._nfe,
+                memory=self._memory, archive=self._archive, p=self.p,
+                f_min=self.F_MIN, f_max=self.F_MAX, state_sharing=self.state_sharing,
+                verbose=self.verbose)
 
     def _on_evolution_end(self, generation: Generation):
-        super()._on_generation_end(generation)
+        super()._on_evolution_end(generation)
         self._adjust_generation_size(generation)
 
     def _adjust_generation_size(self, generation: Generation):
         new_size = round(((self.N_MIN - self.N_INIT) / self.MAX_NFE) * self._nfe.value + self.N_INIT)
         if new_size >= len(generation):
+            self._log(f"no reduction in generation size needed.")
             return
-        self.logger(
-            f"adjusting generation size {len(generation)} --> {new_size}")
+        self._log(f"adjusting generation size {len(generation)} --> {new_size}")
         # adjust archive size |A| according to |P|
-        self.archive.resize(round(new_size * self.r_arc))
+        self._archive.resize(round(new_size * self.r_arc))
         # remove Delta-N worst members
         size_delta = len(generation) - new_size
         for member in worst(generation, size_delta):
             generation.remove(member)
-            self.logger(
-                f"member {member.uid} with score {member.eval_score():.4f} was removed from the generation.")
+            self._log(f"member {member.uid} with score {member.eval_score():.4f} was removed from the generation.")
 
     class _Evolve(SHADE._Evolve):
         def __init__(self, nfe_counter: Counter, **kwargs) -> None:
             super().__init__(**kwargs)
-            self.__nfe = nfe_counter
+            self._nfe = nfe_counter
 
         def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
-            self.__nfe.increment()  # increment the number of fitness evaluations
+            self._nfe.increment()  # increment the number of fitness evaluations
             return super()._select(parent, trial, CR_i, F_i)
