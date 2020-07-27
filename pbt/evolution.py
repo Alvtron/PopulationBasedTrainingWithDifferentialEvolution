@@ -120,7 +120,7 @@ class ExploitAndExplore(EvolutionEngine):
         self.__perturb_method = perturb_method
 
     def _create_evolution_callable(self, generation: Generation):
-        return self._Evolve(
+        return self._Evolver(
             generation=generation, exploit_factor=self.__exploit_factor, explore_factors=self.__explore_factors,
             perturb_method=self.__perturb_method, verbose=self.verbose)
 
@@ -139,9 +139,9 @@ class ExploitAndExplore(EvolutionEngine):
             generation.append(member)
         return generation
 
-    class _Evolve(EvolveFunction):
-        def __init__(self, generation: Generation, exploit_factor: float, explore_factors: Tuple[float, ...], perturb_method: str, **kwargs) -> None:
-            super().__init__(name='PBT', **kwargs)
+    class _Evolver(EvolveFunction):
+        def __init__(self, generation: Generation, exploit_factor: float, explore_factors: Tuple[float, ...], perturb_method: str, name: str = 'PBT', **kwargs) -> None:
+            super().__init__(name=name, **kwargs)
             if not isinstance(generation, Generation):
                 raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
             if len(generation) < 2:
@@ -220,7 +220,7 @@ class DifferentialEvolution(EvolutionEngine):
 
     def _create_evolution_callable(self, generation: Generation):
         with self.fitness_function_provider as fitness_function:
-            return self._Evolve(
+            return self._Evolver(
                 generation=generation, F=self.F, Cr=self.Cr,
                 fitness_function=fitness_function, verbose=self.verbose)
 
@@ -239,9 +239,9 @@ class DifferentialEvolution(EvolutionEngine):
             generation.append(member)
         return generation
 
-    class _Evolve(EvolveFunction):
-        def __init__(self, generation: Generation, F: float, Cr: float, fitness_function: Callable[[Checkpoint], None], **kwargs):
-            super().__init__(name='DE', **kwargs)
+    class _Evolver(EvolveFunction):
+        def __init__(self, generation: Generation, F: float, Cr: float, fitness_function: Callable[[Checkpoint], None], name: str = 'DE', **kwargs):
+            super().__init__(name=name, **kwargs)
             if not isinstance(generation, Generation):
                 raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
             if len(generation) < 3:
@@ -500,7 +500,7 @@ class SHADE(EvolutionEngine):
     
     def _create_evolution_callable(self, generation: Generation) -> EvolveFunction:
         with self.fitness_function_provider as fitness_function:
-            return self._Evolve(
+            return self._Evolver(
                 generation=generation, fitness_function=fitness_function,
                 memory=self._memory, archive=self._archive, p=self.p,
                 f_min=self.F_MIN, f_max=self.F_MAX, state_sharing=self.state_sharing,
@@ -521,9 +521,9 @@ class SHADE(EvolutionEngine):
             generation.append(member)
         return generation
 
-    class _Evolve(EvolveFunction):
-        def __init__(self, generation: Generation, fitness_function: Callable[[Checkpoint], None], memory: HistoricalMemory, archive: ExternalArchive, p: float, f_min:float, f_max: float, state_sharing: bool, **kwargs):
-            super().__init__(name='SHADE', **kwargs)
+    class _Evolver(EvolveFunction):
+        def __init__(self, generation: Generation, fitness_function: Callable[[Checkpoint], None], memory: HistoricalMemory, archive: ExternalArchive, p: float, f_min:float, f_max: float, state_sharing: bool, name: str = 'SHADE', **kwargs):
+            super().__init__(name=name, **kwargs)
             if not isinstance(generation, Generation):
                 raise TypeError(f"the 'generation' specified was of wrong type {type(generation)}, expected {Generation}.")
             if len(generation) < 3:
@@ -683,7 +683,7 @@ class LSHADE(SHADE):
 
     def _create_evolution_callable(self, generation: Generation) -> EvolveFunction:
         with self.fitness_function_provider as fitness_function:
-            return self._Evolve(
+            return self._Evolver(
                 generation=generation, fitness_function=fitness_function, nfe_counter=self._nfe,
                 memory=self._memory, archive=self._archive, p=self.p,
                 f_min=self.F_MIN, f_max=self.F_MAX, state_sharing=self.state_sharing,
@@ -707,9 +707,9 @@ class LSHADE(SHADE):
             generation.remove(member)
             self._log(f"member {member.uid} with score {member.eval_score():.4f} was removed from the generation.")
 
-    class _Evolve(SHADE._Evolve):
-        def __init__(self, nfe_counter: Counter, **kwargs) -> None:
-            super().__init__(name='LSHADE', **kwargs)
+    class _Evolver(SHADE._Evolver):
+        def __init__(self, nfe_counter: Counter, name: str = 'LSHADE', **kwargs) -> None:
+            super().__init__(name=name, **kwargs)
             self._nfe = nfe_counter
 
         def _select(self, parent: Checkpoint, trial: Checkpoint, CR_i: float, F_i: float) -> Checkpoint:
