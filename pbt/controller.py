@@ -278,23 +278,23 @@ class Controller(object):
         while not self._is_finished(generation):
             with self.evolver.next(generation) as evolve_function:
                 # construct asynchronous thread task
-                async_thread_task = self.AsyncAdaptation(
-                    generation=generation, evolve_function=evolve_function,
-                    step_function=self.step_function, is_ready=always_ready,
-                    test_function=self.test_function, verbose=self.verbose > 3)
-                # train and adapt
-                self._whisper("training and adapting next generation...")
-                next_generation = list()
-                for member in self._worker_pool.imap(async_thread_task, list(generation), True):
+                async_adapt_task = self.AsyncAdaptation(
+                    evolve_function=evolve_function, is_ready=always_ready, verbose=self.verbose > 3)
+                async_train_task = self.AsyncTraining(
+                    step_function=self.step_function, test_function=self.test_function, verbose=self.verbose > 3)
+                # adapt generation
+                self._whisper("adapting next generation...")
+                adapted_generation = list(self._worker_pool.imap(async_adapt_task, list(generation), True))
+                # train generation
+                self._whisper("training next generation...")
+                for member in self._worker_pool.imap(async_train_task, adapted_generation, True):
                     # increment collective number of steps
                     self.__n_steps += 1
                     # report member performance
                     self._say(f"{member}, {member.performance_details()}")
                     self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
-                    # temporary store new members
-                    next_generation.append(member)
-                # update generation
-                [generation.update(member) for member in next_generation]
+                    # update generation
+                    generation.update(member)
             yield list(generation)
     
     def start(self) -> Checkpoint:
@@ -314,21 +314,35 @@ class Controller(object):
             self._on_stop()
 
     class AsyncAdaptation(DeviceCallable):
-        def __init__(self, generation: Generation, evolve_function: Callable[[Checkpoint], Checkpoint],
-            step_function: Callable[[Checkpoint, str], None], is_ready: Callable[[Checkpoint], bool],
-            test_function: Callable[[Checkpoint, str], None] = None, **kwargs):
+        def __init__(self, evolve_function: Callable[[Checkpoint], Checkpoint], is_ready: Callable[[Checkpoint], bool], **kwargs):
             super().__init__(**kwargs)
             if not callable(evolve_function):
                 raise TypeError(f"the 'evolve_function' specified was not callable.")
+            self.__evolve_function = evolve_function
+            self.__is_ready = is_ready
+
+        def function(self, device: str, member: Checkpoint) -> Checkpoint:
+            if not isinstance(member, Checkpoint):
+                raise TypeError(f"the 'member' specified was of wrong type {type(member)}, expected {Checkpoint}.")
+            if not isinstance(device, str):
+                raise TypeError(f"the 'device' specified was of wrong type {type(device)}, expected {str}.")
+            if self.__is_ready(member):
+                # evolve member
+                self._print(f"evolving member {member.uid}...")
+                evolve_start_time = datetime.now()
+                member = self.__evolve_function(member)
+                member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
+            return member
+
+    class AsyncTraining(DeviceCallable):
+        def __init__(self, step_function: Callable[[Checkpoint, str], None], test_function: Callable[[Checkpoint, str], None] = None, **kwargs):
+            super().__init__(**kwargs)
             if not callable(step_function):
                 raise TypeError(f"the 'step_function' specified was not callable.")
             if test_function is not None and not callable(test_function):
                 raise TypeError(f"the 'test_function' specified was not callable.")
-            self.__generation = generation
-            self.__evolve_function = evolve_function
             self.__step_function = step_function
             self.__test_function = test_function
-            self.__is_ready = is_ready
 
         def function(self, device: str, member: Checkpoint) -> Checkpoint:
             if not isinstance(member, Checkpoint):
@@ -340,12 +354,6 @@ class Controller(object):
             step_start_time = datetime.now()
             self.__step_function(checkpoint=member, device=device)
             member.register_time(tag='training', start=step_start_time, end=datetime.now())
-            if self.__is_ready(member):
-                # evolve member
-                self._print(f"evolving member {member.uid}...")
-                evolve_start_time = datetime.now()
-                member = self.__evolve_function(member)
-                member.register_time(tag='evolving', start=evolve_start_time, end=datetime.now())
             # measure test set performance if available
             if self.__test_function is not None:
                 test_start_time = datetime.now()
