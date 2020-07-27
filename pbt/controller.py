@@ -216,6 +216,9 @@ class Controller(object):
     def __is_n_generations_end(self):
         return 'generations' in self.end_criteria and self.end_criteria['generations'] and self.__n_generations >= self.end_criteria['generations']
 
+    def __is_steps_end(self):
+        return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
+
     def _is_finished(self, generation: Generation) -> bool:
         """With the end_criteria, check if the generation is finished by inspecting the provided member."""
         if self.__is_score_end(generation):
@@ -266,9 +269,6 @@ class Controller(object):
         self._say(f"end criteria has been reached.")
         return max(generation)
 
-    def __is_steps_end(self):
-        return 'steps' in self.end_criteria and self.end_criteria['steps'] and self.__n_steps >= self.end_criteria['steps']
-
     def _train(self, initial: Iterable[Checkpoint]) -> Generator[List[Checkpoint], None, None]:
         # spawn members
         spawned_members = self.evolver.spawn(initial)
@@ -278,16 +278,16 @@ class Controller(object):
         while not self._is_finished(generation):
             with self.evolver.next(generation) as evolve_function:
                 # construct asynchronous thread task
-                async_adapt_task = self.AsyncAdaptation(
-                    evolve_function=evolve_function, is_ready=always_ready, verbose=self.verbose > 3)
                 async_train_task = self.AsyncTraining(
                     step_function=self.step_function, test_function=self.test_function, verbose=self.verbose > 3)
+                async_adapt_task = self.AsyncAdaptation(
+                    evolve_function=evolve_function, is_ready_function=always_ready, verbose=self.verbose > 3)
                 # adapt generation
                 self._whisper("adapting next generation...")
-                adapted_generation = list(self._worker_pool.imap(async_adapt_task, list(generation), True))
+                trained_generation = list(self._worker_pool.imap(async_train_task, list(generation), shuffle=True))
                 # train generation
                 self._whisper("training next generation...")
-                for member in self._worker_pool.imap(async_train_task, adapted_generation, True):
+                for member in self._worker_pool.imap(async_adapt_task, trained_generation, shuffle=True):
                     # increment collective number of steps
                     self.__n_steps += 1
                     # report member performance
@@ -314,12 +314,12 @@ class Controller(object):
             self._on_stop()
 
     class AsyncAdaptation(DeviceCallable):
-        def __init__(self, evolve_function: Callable[[Checkpoint], Checkpoint], is_ready: Callable[[Checkpoint], bool], **kwargs):
+        def __init__(self, evolve_function: Callable[[Checkpoint], Checkpoint], is_ready_function: Callable[[Checkpoint], bool], **kwargs):
             super().__init__(**kwargs)
             if not callable(evolve_function):
                 raise TypeError(f"the 'evolve_function' specified was not callable.")
             self.__evolve_function = evolve_function
-            self.__is_ready = is_ready
+            self.__is_ready = is_ready_function
 
         def function(self, device: str, member: Checkpoint) -> Checkpoint:
             if not isinstance(member, Checkpoint):

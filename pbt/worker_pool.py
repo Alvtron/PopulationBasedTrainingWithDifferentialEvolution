@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 from pbt.utils.iterable import is_iterable, split
-from pbt.worker import STOP_FLAG, FailMessage, ThreadTask, DeviceWorker
+from pbt.worker import STOP_FLAG, FailMessage, AsyncThreadTask, DeviceWorker
 from pbt.utils.cuda import get_gpu_memory_stats
 
 
@@ -50,7 +50,6 @@ class WorkerPool:
                    device=device, random_seed=uid, verbose=verbose > 1)
             for uid, send_queue, device in zip(range(n_jobs), itertools.cycle(send_queues), itertools.cycle(devices))]
         self._workers_iterator = itertools.cycle(self._workers)
-        self.__async_return_queue = None
 
     def _print(self, message: str) -> None:
         if self.verbose < 1:
@@ -97,24 +96,7 @@ class WorkerPool:
         except ValueError:
             warnings.warn("one or more members are not running.")
 
-    def apply_async(self, function: Callable[[object], object], parameters: object) -> None:
-        if self.__async_return_queue is None:
-            self.__async_return_queue = self._manager.Queue()
-        worker = next(self._workers_iterator)
-        self._print(f"pushing job to worker receive queue...")
-        trial = ThreadTask(return_queue=self.__async_return_queue, function=function, parameters=[parameters])
-        worker.receive_queue.put(trial)
-
-    def get(self) -> object:
-        if self.__async_return_queue is None:
-            raise Exception("'apply_async' must be called at least once before 'get'.")
-        result = self.__async_return_queue.get()
-        if isinstance(result, FailMessage):
-            self._on_fail_message(result)
-            raise Exception("worker failed.")
-        return result
-
-    def imap(self, function: Callable[[object], object], parameters: Sequence[object], shuffle: bool = False) -> Generator[object, None, None]:
+    def imap(self, function: Callable[[Any], Any], parameters: Sequence[Any], shuffle: bool = False) -> Generator[Any, None, None]:
         if not callable(function):
             raise TypeError("'function' is not callable")
         if not isinstance(parameters, (list, tuple)):
@@ -132,7 +114,7 @@ class WorkerPool:
         for params, worker in zip(parameters_chunks, self._workers_iterator):
             if len(params) == 0:
                 continue
-            task = ThreadTask(return_queue=return_queue, function=function, parameters=params)
+            task = AsyncThreadTask(return_queue=return_queue, function=function, parameters=params)
             worker.receive_queue.put(task)
             n_sent += len(params)
         self._print(f"awaiting results...")
@@ -158,54 +140,3 @@ class WorkerPool:
             self._respawn(failed_workers)
         else:
             self._print("all parameters were executed successfully.")
-
-class WorkerThreadPool:
-    def __init__(self, manager: SyncManager, devices: Sequence[str] = ('cpu',), n_threads: int = 1, verbose: int = 0):
-        if not isinstance(manager, SyncManager):
-            raise TypeError(f"the manager specified was of wrong type {type(manager)}, expected {SyncManager}.")
-        if not isinstance(devices, (list, tuple)):
-            raise TypeError(f"the devices specified was of wrong type {type(devices)}, expected {list} or {tuple}.")
-        if not is_iterable(devices):
-            raise TypeError(f"the devices specified was not iterable.")
-        if not isinstance(n_threads, int):
-            raise TypeError(f"the n_threads specified was of wrong type {type(n_threads)}, expected {int}.")
-        if n_threads < len(devices):
-            raise ValueError(f"the n_threads specified must be larger or equal the number of devices, i.e. {n_threads} < {len(devices)}.")
-        if not isinstance(verbose, int):
-            raise TypeError(f"the manager specified was of wrong type {type(verbose)}, expected {int}.")
-        self.verbose = verbose
-        self.__devices_iterator = itertools.cycle(devices)
-        self.__pool = ThreadPool(processes=n_threads)
-        self.__results = list()
-
-    def _print(self, message: str) -> None:
-        if self.verbose < 1:
-            return
-        full_message = f"{self.__class__.__name__}: {message}"
-        print(full_message)
-
-    def stop(self) -> None:
-        self.__pool.close()
-        self.__pool.join()
-        
-    def apply_async(self, function: Callable[[Any], Any], parameter: Any) -> None:
-        if not callable(function):
-            raise TypeError("'function' is not callable.")
-        if parameter is None:
-            raise TypeError("'parameters' is None.")
-        device = next(self.__devices_iterator)
-        self._print(f"pushing job to worker receive queue...")
-        async_result = self.__pool.apply_async(func=function, args=(parameter, device))
-        self.__results.append(async_result)
-
-    def get(self) -> object:
-        if not self.__results:
-            raise Exception("no results are waiting to be retrieved.")
-        result = self.__results.pop(0)
-        result_iterator = itertools.cycle(self.__results)
-        while(True):
-            result = next(result_iterator)
-            if result.ready():
-                self.__results.remove(result)
-                return result.get()
-            time.sleep(0.1)

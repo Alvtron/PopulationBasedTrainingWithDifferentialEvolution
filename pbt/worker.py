@@ -3,8 +3,9 @@ import gc
 import sys
 import random
 from functools import partial
-from typing import Callable, Union, Generator, Any
+from typing import Callable, Union, Sequence, Generator, Any
 from dataclasses import dataclass
+from threading import Thread
 from multiprocessing.managers import EventProxy
 from multiprocessing.queues import Queue
 from multiprocessing.pool import ThreadPool
@@ -12,7 +13,7 @@ from multiprocessing.pool import ThreadPool
 import torch
 import numpy as np
 
-from pbt.device import DeviceCallable, set_global_device, initialize_cuda_device
+from pbt.device import set_global_device, initialize_cuda_device
 
 # set torch multiprocessing settings
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -31,25 +32,10 @@ torch.backends.cudnn.enabled = True
 STOP_FLAG = None
 
 
-def map_to_threads(function, parameters):
-    with ThreadPool(processes=len(parameters)) as pool:
+def map_to_threads(function: Callable[..., Any], parameters: Sequence[Any], n_threads: int = None):
+    n_threads = len(parameters) if n_threads is None else n_threads
+    with ThreadPool(processes=n_threads) as pool:
         yield from pool.imap_unordered(function, parameters)
-
-
-class ThreadTask:
-    def __init__(self, return_queue, function: DeviceCallable, parameters):
-        if return_queue is None:
-            raise TypeError(f"the 'return_queue' specified was None.")
-        if not isinstance(function, DeviceCallable):
-            raise TypeError(f"the 'function' specified was of wrong type {type(function)}, expected {DeviceCallable}.")
-        if parameters is not None and not isinstance(parameters, (list, tuple)):
-            raise TypeError(f"the 'parameters' specified was of wrong type {type(parameters)}, expected {list} or {tuple}.")
-        self.return_queue = return_queue
-        self.function: DeviceCallable = function
-        self.parameters = parameters
-
-    def run(self) -> Generator[Any, None, None]:
-        yield from map_to_threads(self.function, self.parameters)
 
 
 @dataclass
@@ -59,9 +45,24 @@ class FailMessage:
     exception: str = None
 
 
-class DeviceWorker(torch.multiprocessing.Process):
-    """A worker process that train and evaluate any available checkpoints provided from the train_queue. """
+class AsyncThreadTask:
+    def __init__(self, return_queue, function: Callable[..., Any], parameters: Sequence[Any]):
+        if return_queue is None:
+            raise TypeError(f"the 'return_queue' specified was None.")
+        if not callable(function):
+            raise TypeError(f"the 'function' specified was not callable.")
+        if not isinstance(parameters, (list, tuple)):
+            raise TypeError(f"the 'parameters' specified was of wrong type {type(parameters)}, expected {list} or {tuple}.")
+        self.return_queue = return_queue
+        self.function = function
+        self.parameters = parameters
 
+    def run(self) -> Generator[Any, None, None]:
+        yield from map_to_threads(self.function, self.parameters)
+
+
+class DeviceWorker(torch.multiprocessing.Process):
+    """A worker process that train and evaluate any available checkpoints provided from the receive_queue. """
     def __init__(self, uid: Union[int, str], end_event: EventProxy, receive_queue: Queue, device: str, random_seed: int = 0, verbose: bool = False):
         super().__init__()
         if not isinstance(uid, (int, str)):
@@ -110,26 +111,25 @@ class DeviceWorker(torch.multiprocessing.Process):
             if task == STOP_FLAG:
                 self.__log("STOP FLAG received. Stopping...")
                 break
-            if not isinstance(task, ThreadTask):
+            if not isinstance(task, AsyncThreadTask):
                 self.__log("received wrong task-type.")
-                raise TypeError(f"the 'task' received was of wrong type {type(task)}, expected {ThreadTask}.", )
+                raise TypeError(f"the 'task' received was of wrong type {type(task)}, expected {AsyncThreadTask}.", )
             try:
-                self.__log("running task...")
-                for task_nr, result in enumerate(task.run(), 1):
-                    self.__log(f"returning task result {task_nr} of {len(task.parameters)}...")
-                    task.return_queue.put(result)
+                # run tasks and return results each by each
+                # the moment they are ready
+                [task.return_queue.put(result) for result in task.run()]
             except Exception:
                 import traceback
                 self.__log("task excecution failed! Exception:")
                 traceback_stacktrace = traceback.format_exc()
                 self.__log(str(traceback_stacktrace))
-                fail_message = FailMessage(
-                    self.uid, "task excecution failed!", str(traceback_stacktrace))
+                fail_message = FailMessage(self.uid, "task excecution failed!", str(traceback_stacktrace))
                 task.return_queue.put(fail_message)
                 # delete failed task
                 del task
                 break
             finally:
-                # Explicitly trigger garbage collection to make sure that all destructors are called...
+                # Explicitly trigger garbage collection to make
+                # sure that all destructors are called
                 gc.collect()
         self.__log("stopped.")
