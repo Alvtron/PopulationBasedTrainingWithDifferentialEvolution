@@ -293,7 +293,7 @@ class Controller(object):
                     generation.update(member)
                 # adapt generation
                 self._whisper("adapting next generation...")
-                for member in self._worker_pool.imap(async_adapt_task, trained_generation, shuffle=True):
+                for member in self._worker_pool.imap(async_adapt_task, list(generation), shuffle=True):
                     # report member performance
                     self._say(f"{member}, {member.performance_details()}")
                     self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
