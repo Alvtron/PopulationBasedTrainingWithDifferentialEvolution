@@ -282,11 +282,11 @@ class Controller(object):
                     step_function=self.step_function, test_function=self.test_function, verbose=self.verbose > 3)
                 async_adapt_task = self.AsyncAdaptation(
                     evolve_function=evolve_function, is_ready_function=always_ready, verbose=self.verbose > 3)
-                # adapt generation
-                self._whisper("adapting next generation...")
-                trained_generation = list(self._worker_pool.imap(async_train_task, list(generation), shuffle=True))
                 # train generation
                 self._whisper("training next generation...")
+                trained_generation = list(self._worker_pool.imap(async_train_task, list(generation), shuffle=True))
+                # adapt generation
+                self._whisper("adapting next generation...")
                 for member in self._worker_pool.imap(async_adapt_task, trained_generation, shuffle=True):
                     # increment collective number of steps
                     self.__n_steps += 1
