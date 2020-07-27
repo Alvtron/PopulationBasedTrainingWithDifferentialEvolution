@@ -41,7 +41,7 @@ def rfa(checkpoint: Checkpoint, trainer: Trainer, evaluator: Evaluator, weight: 
     # copy old loss
     old_loss = deepcopy(checkpoint.loss)
     # load checkpoint state
-    checkpoint.load_state(device=device, missing_ok=False)
+    checkpoint.load_state(device=device, missing_ok=True)
     # train and evaluate
     trainer(checkpoint, device)
     evaluator(checkpoint, device)
