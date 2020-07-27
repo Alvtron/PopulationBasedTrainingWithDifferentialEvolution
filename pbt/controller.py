@@ -284,12 +284,16 @@ class Controller(object):
                     evolve_function=evolve_function, is_ready_function=always_ready, verbose=self.verbose > 3)
                 # train generation
                 self._whisper("training next generation...")
-                trained_generation = list(self._worker_pool.imap(async_train_task, list(generation), shuffle=True))
+                for member in self._worker_pool.imap(async_train_task, list(generation), shuffle=True):
+                    # increment collective number of steps
+                    self.__n_steps += 1
+                    # report member performance
+                    self._say(f"{member}, {member.performance_details()}")
+                    # update generation
+                    generation.update(member)
                 # adapt generation
                 self._whisper("adapting next generation...")
                 for member in self._worker_pool.imap(async_adapt_task, trained_generation, shuffle=True):
-                    # increment collective number of steps
-                    self.__n_steps += 1
                     # report member performance
                     self._say(f"{member}, {member.performance_details()}")
                     self._whisper(f"{member}, {hyper_parameter_change_details(old_hps=generation[member.uid].parameters, new_hps=member.parameters)}")
