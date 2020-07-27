@@ -25,10 +25,12 @@ def adjust_weighted_loss(weight: float, previous_loss: dict, fitness_loss: dict)
     new_loss = collections.defaultdict(dict)
     for loss_group in fitness_loss:
         for loss_type in fitness_loss[loss_group]:
-            previous_loss_value = previous_loss[loss_group][loss_type]
             fitness_loss_value = fitness_loss[loss_group][loss_type]
-            new_loss[loss_group][loss_type] = (
-                previous_loss_value * (1 - weight)) + (fitness_loss_value * weight)
+            # if there is no previous loss value, use the fitness value
+            if loss_group not in previous_loss or loss_type not in previous_loss[loss_group]:
+                new_loss[loss_group][loss_type] = fitness_loss_value
+            previous_loss_value = previous_loss[loss_group][loss_type]
+            new_loss[loss_group][loss_type] = (previous_loss_value * (1 - weight)) + (fitness_loss_value * weight)
     return new_loss
 
 def rfa(checkpoint: Checkpoint, trainer: Trainer, evaluator: Evaluator, weight: float, device: str = None) -> None:
