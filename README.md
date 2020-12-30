@@ -1,4 +1,4 @@
-### Improving Population-Based Training (PBT) for Neural Networks
+## Improving Population-Based Training (PBT) for Neural Networks
 
 In recent years, there has been a rise in complex and computationally expensive machine learning systems with many hyperparameters, such as deep convolutional neural networks. Historically, hyperparameters have provided humans a level of control over the learning process and the performance of the model, and it is well known that different problems require different hyperparameter configurations in order to obtain a good model. However, finding good configurations can be quite challenging, and complexity arises when more hyperparameters are introduced. In addition, research has shown that some tasks may benefit from certain hyperparameter schedules, suggesting that there exists an optimal hyperparameter configuration for every training step.
 
@@ -8,5 +8,5 @@ In this thesis, we set out to improve upon the PBT method by incorporating heuri
 
 In order to assess the predictive performance, PBT and the proposed procedures were compared on the MNIST and Fashion-MNIST datasets using the MLP and LeNet-5 network architectures. The empirical results demonstrate that there is a statistical significant difference between PBT and the proposed procedures on the F1 score. Visual and statistical analysis suggest that each proposed procedure outperform PBT on all tested cases. The result data on the Fashion-MNIST dataset indicate a 0.748% and 0.384% gain on average accuracy with MLP and LeNet-5, respectively, when trained with PBT-LSHADE. On the MNIST dataset, result data shows that PBT-SHADE improved average accuracy with 0.21% using MLP, and PBT-DE improved average accuracy with 0.068% with LeNet-5. Furthermore, additional testing suggest that PBT-SHADE scales better with larger population sizes when compared to PBT.
 
-## References
+### References
 [Population Based Training of Neural Networks, Jaderberg et al. @ DeepMind](https://arxiv.org/abs/1711.09846)
